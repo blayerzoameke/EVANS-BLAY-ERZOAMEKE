@@ -1,0 +1,5 @@
+{
+  "name": "EDU. Timetable Planner",
+  "description": "An intelligent timetable application that generates a smart weekly study plan based on a user's lecture schedule. It helps students organize their study time, manage tasks, and sends reminders for all activities.",
+  "requestFramePermissions": []
+}
