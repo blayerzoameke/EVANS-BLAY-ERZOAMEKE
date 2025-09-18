@@ -1,72 +1,103 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 
-const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
-const minutes = ['00', '15', '30', '45'];
-const periods = ['AM', 'PM'];
+const generateTimeOptions = () => {
+    const times = [];
+    for (let i = 0; i < 24 * 4; i++) { // 4 intervals per hour
+        const totalMinutes = i * 15;
+        const hours24 = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const period = hours24 >= 12 ? 'PM' : 'AM';
+        let hours12 = hours24 % 12;
+        if (hours12 === 0) {
+            hours12 = 12;
+        }
+        times.push(`${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`);
+    }
+    return times;
+};
 
 interface TimeInputProps {
   value: string;
   onChange: (newValue: string) => void;
+  id?: string;
+  disabled?: boolean;
 }
 
-const TimeInput: React.FC<TimeInputProps> = ({ value, onChange }) => {
-  const [hour, setHour] = useState('09');
-  const [minute, setMinute] = useState('00');
-  const [period, setPeriod] = useState('AM');
+const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, id, disabled = false }) => {
+  const [inputValue, setInputValue] = useState(value);
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const timeOptions = useMemo(() => generateTimeOptions().map(t => ({ name: t })), []);
 
   useEffect(() => {
-    // Parse the incoming value prop
-    try {
-        const [time, p] = value.split(' ');
-        const [h, m] = time.split(':');
-        if (hours.includes(h) && minutes.includes(m) && periods.includes(p)) {
-            setHour(h);
-            setMinute(m);
-            setPeriod(p);
-        }
-    } catch(e) {
-        // Handle potential parsing error if value is malformed
-        console.error("Malformed time value:", value);
-    }
+    setInputValue(value);
   }, [value]);
-  
-  const handleChange = (part: 'h' | 'm' | 'p', val: string) => {
-    let newHour = hour, newMinute = minute, newPeriod = period;
-    if (part === 'h') newHour = val;
-    if (part === 'm') newMinute = val;
-    if (part === 'p') newPeriod = val;
-    onChange(`${newHour}:${newMinute} ${newPeriod}`);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+    onChange(newValue);
+    if (!isOpen) {
+      setIsOpen(true);
+    }
   };
 
-  const selectClasses = "w-full appearance-none bg-transparent p-0 text-center focus:outline-none focus:ring-0 border-none text-gray-900 dark:text-gray-100";
+  const handleSelectOption = (option: { name: string }) => {
+    onChange(option.name);
+    setInputValue(option.name);
+    setIsOpen(false);
+  };
+  
+  const filteredOptions = timeOptions.filter(option =>
+    option.name.toLowerCase().includes(inputValue.toLowerCase())
+  );
+  
+  const baseClasses = "h-10 w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
+  const disabledClasses = "disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed";
 
   return (
-    <div className="flex items-center gap-1.5 p-1 h-10 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-sm focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
-      <select 
-        value={hour} 
-        onChange={e => handleChange('h', e.target.value)} 
-        // FIX: Replaced undefined 'time-select-style' with Tailwind classes
-        className={selectClasses}
-      >
-        {hours.map(h => <option key={h} value={h}>{h}</option>)}
-      </select>
-      <span className="text-gray-500 dark:text-gray-400 -ml-1">:</span>
-      <select 
-        value={minute} 
-        onChange={e => handleChange('m', e.target.value)} 
-        // FIX: Replaced undefined 'time-select-style' with Tailwind classes
-        className={selectClasses}
-      >
-        {minutes.map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
-      <select 
-        value={period} 
-        onChange={e => handleChange('p', e.target.value)} 
-        // FIX: Replaced undefined 'time-select-style' with Tailwind classes
-        className={selectClasses}
-      >
-        {periods.map(p => <option key={p} value={p}>{p}</option>)}
-      </select>
+    <div className="relative" ref={dropdownRef}>
+      <input
+        id={id}
+        type="text"
+        value={inputValue}
+        onChange={handleInputChange}
+        onFocus={() => !disabled && setIsOpen(true)}
+        placeholder="HH:MM AM/PM"
+        autoComplete="off"
+        className={`${baseClasses} ${disabledClasses}`}
+        disabled={disabled}
+      />
+      {isOpen && !disabled && (
+        <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-48 overflow-auto">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option, index) => (
+              <li
+                key={index}
+                onClick={() => handleSelectOption(option)}
+                className="px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-200"
+              >
+                {option.name}
+              </li>
+            ))
+          ) : (
+            <li className="px-3 py-2 text-gray-500">No matching times</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 };

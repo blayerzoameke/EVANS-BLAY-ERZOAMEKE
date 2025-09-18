@@ -1,9 +1,10 @@
 import React from 'react';
-import { DayOfWeek } from '../types';
-import type { Lecture, StudyGoal, AgendaItem, BreakPreference } from '../types';
+import { DayOfWeek } from '../types.ts';
+import type { Lecture, StudyGoal, AgendaItem } from '../types.ts';
 import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import TimeInput from './TimeInput';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface TimetableInputProps {
   lectures: Lecture[];
@@ -12,8 +13,6 @@ interface TimetableInputProps {
   setStudyGoals: React.Dispatch<React.SetStateAction<StudyGoal[]>>;
   agendaItems: AgendaItem[];
   setAgendaItems: React.Dispatch<React.SetStateAction<AgendaItem[]>>;
-  breakPreferences: BreakPreference[];
-  setBreakPreferences: React.Dispatch<React.SetStateAction<BreakPreference[]>>;
   generalGoals: string;
   setGeneralGoals: (goals: string) => void;
   disabled?: boolean;
@@ -21,9 +20,10 @@ interface TimetableInputProps {
 
 const TimetableInput: React.FC<TimetableInputProps> = ({
   lectures, setLectures, studyGoals, setStudyGoals,
-  agendaItems, setAgendaItems, breakPreferences, setBreakPreferences,
+  agendaItems, setAgendaItems,
   generalGoals, setGeneralGoals, disabled
 }) => {
+  const { t } = useLanguage();
   
   const createUpdater = <T extends {id: string}>(setter: React.Dispatch<React.SetStateAction<T[]>>) => 
     (id: string, field: keyof T, value: any) => {
@@ -41,100 +41,106 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
   const removeStudyGoal = createRemover(setStudyGoals);
   const updateAgendaItem = createUpdater(setAgendaItems);
   const removeAgendaItem = createRemover(setAgendaItems);
-  const updateBreakPreference = createUpdater(setBreakPreferences);
-  const removeBreakPreference = createRemover(setBreakPreferences);
 
   const addLecture = () => setLectures(p => [...p, { id: Date.now().toString(), subject: '', day: DayOfWeek.Monday, startTime: '09:00 AM', endTime: '10:00 AM' }]);
   const addStudyGoal = () => setStudyGoals(p => [...p, { id: Date.now().toString(), subject: '', hours: 3 }]);
   const addAgendaItem = () => setAgendaItems(p => [...p, { id: Date.now().toString(), title: '', day: DayOfWeek.Monday, startTime: '12:00 PM', endTime: '01:00 PM' }]);
-  const addBreakPreference = () => setBreakPreferences(p => [...p, { id: Date.now().toString(), activity: '' }]);
 
-  const inputClasses = "block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700";
+  const inputClasses = "block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-slate-100 dark:disabled:bg-slate-700";
   const selectClasses = `${inputClasses} pr-8`;
-  const buttonClasses = "flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 dark:disabled:bg-indigo-800";
+  const buttonClasses = "flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-700 border border-transparent rounded-md shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 dark:disabled:bg-blue-800";
   
   return (
     <div className="space-y-8">
       {/* Lectures */}
       <section>
-        <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Fixed Lectures / Classes</h3>
+        <h3 className="text-lg font-semibold mb-2 text-slate-800 dark:text-slate-200">{t('timetableinput.lectures')}</h3>
         <div className="space-y-4">
           {lectures.map(lec => (
-            <div key={lec.id} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border dark:border-gray-700">
-              <input type="text" placeholder="Subject" value={lec.subject} onChange={e => updateLecture(lec.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled} />
-              <select value={lec.day} onChange={e => updateLecture(lec.id, 'day', e.target.value)} className={selectClasses} disabled={disabled}>
-                {Object.values(DayOfWeek).map(day => <option key={day} value={day}>{day}</option>)}
-              </select>
-              <TimeInput value={lec.startTime} onChange={val => updateLecture(lec.id, 'startTime', val)} />
-              <TimeInput value={lec.endTime} onChange={val => updateLecture(lec.id, 'endTime', val)} />
-              <button onClick={() => removeLecture(lec.id)} className="p-2 text-red-500 hover:text-red-700 disabled:text-gray-400" disabled={disabled}><TrashIcon className="w-5 h-5" /></button>
+            <div key={lec.id} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700">
+              <div className="sm:col-span-2 md:col-span-1">
+                  <label htmlFor={`lec-subject-${lec.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('timetableinput.subject')}</label>
+                  <input id={`lec-subject-${lec.id}`} type="text" placeholder={t('timetableinput.subject')} value={lec.subject} onChange={e => updateLecture(lec.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled} />
+              </div>
+              <div>
+                  <label htmlFor={`lec-day-${lec.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('common.day')}</label>
+                  <select id={`lec-day-${lec.id}`} value={lec.day} onChange={e => updateLecture(lec.id, 'day', e.target.value)} className={selectClasses} disabled={disabled}>
+                    {Object.values(DayOfWeek).map(day => <option key={day} value={day}>{day}</option>)}
+                  </select>
+              </div>
+              <div>
+                <label htmlFor={`lec-start-${lec.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('timetableinput.itemStartTime')}</label>
+                <TimeInput id={`lec-start-${lec.id}`} value={lec.startTime} onChange={val => updateLecture(lec.id, 'startTime', val)} />
+              </div>
+              <div>
+                <label htmlFor={`lec-end-${lec.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('timetableinput.itemEndTime')}</label>
+                <TimeInput id={`lec-end-${lec.id}`} value={lec.endTime} onChange={val => updateLecture(lec.id, 'endTime', val)} />
+              </div>
+              <button onClick={() => removeLecture(lec.id)} className="p-2 text-red-500 hover:text-red-700 disabled:text-slate-400" disabled={disabled}><TrashIcon className="w-5 h-5" /></button>
             </div>
           ))}
         </div>
-        <button onClick={addLecture} className={`${buttonClasses} mt-4`} disabled={disabled}><PlusIcon className="w-4 h-4" /> Add Lecture</button>
+        <button onClick={addLecture} className={`${buttonClasses} mt-4`} disabled={disabled}><PlusIcon className="w-4 h-4" /> {t('timetableinput.addLecture')}</button>
       </section>
 
       {/* Study Goals */}
       <section>
-         <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Weekly Study Goals</h3>
+         <h3 className="text-lg font-semibold mb-2 text-slate-800 dark:text-slate-200">{t('timetableinput.studyGoals')}</h3>
         <div className="space-y-4">
           {studyGoals.map(goal => (
-            <div key={goal.id} className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border dark:border-gray-700">
-              <input type="text" placeholder="Subject to Study" value={goal.subject} onChange={e => updateStudyGoal(goal.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled} />
+            <div key={goal.id} className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700">
+              <input type="text" placeholder={t('timetableinput.subjectToStudy')} value={goal.subject} onChange={e => updateStudyGoal(goal.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled} />
               <div className="flex items-center gap-2">
                  <input type="number" placeholder="Hours/week" value={goal.hours} min="1" onChange={e => updateStudyGoal(goal.id, 'hours', parseInt(e.target.value, 10))} className={inputClasses} disabled={disabled} />
-                 <span className="text-sm text-gray-600 dark:text-gray-400">hours/week</span>
+                 <span className="text-sm text-slate-600 dark:text-slate-400">{t('timetableinput.hoursPerWeek')}</span>
               </div>
-              <button onClick={() => removeStudyGoal(goal.id)} className="p-2 text-red-500 hover:text-red-700 disabled:text-gray-400" disabled={disabled}><TrashIcon className="w-5 h-5" /></button>
+              <button onClick={() => removeStudyGoal(goal.id)} className="p-2 text-red-500 hover:text-red-700 disabled:text-slate-400" disabled={disabled}><TrashIcon className="w-5 h-5" /></button>
             </div>
           ))}
         </div>
-         <button onClick={addStudyGoal} className={`${buttonClasses} mt-4`} disabled={disabled}><PlusIcon className="w-4 h-4" /> Add Study Goal</button>
+         <button onClick={addStudyGoal} className={`${buttonClasses} mt-4`} disabled={disabled}><PlusIcon className="w-4 h-4" /> {t('timetableinput.addStudyGoal')}</button>
       </section>
 
       {/* Agenda Items */}
       <section>
-        <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Personal Agenda (Appointments, etc.)</h3>
+        <h3 className="text-lg font-semibold mb-2 text-slate-800 dark:text-slate-200">{t('timetableinput.agenda')}</h3>
         <div className="space-y-4">
           {agendaItems.map(item => (
-            <div key={item.id} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border dark:border-gray-700">
-              <input type="text" placeholder="Activity Title" value={item.title} onChange={e => updateAgendaItem(item.id, 'title', e.target.value)} className={inputClasses} disabled={disabled} />
-              <select value={item.day} onChange={e => updateAgendaItem(item.id, 'day', e.target.value)} className={selectClasses} disabled={disabled}>
-                {Object.values(DayOfWeek).map(day => <option key={day} value={day}>{day}</option>)}
-              </select>
-              <TimeInput value={item.startTime} onChange={val => updateAgendaItem(item.id, 'startTime', val)} />
-              <TimeInput value={item.endTime} onChange={val => updateAgendaItem(item.id, 'endTime', val)} />
-              <button onClick={() => removeAgendaItem(item.id)} className="p-2 text-red-500 hover:text-red-700 disabled:text-gray-400" disabled={disabled}><TrashIcon className="w-5 h-5" /></button>
+            <div key={item.id} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 items-end gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-700">
+              <div className="sm:col-span-2 md:col-span-1">
+                <label htmlFor={`agenda-title-${item.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('timetableinput.activityTitle')}</label>
+                <input id={`agenda-title-${item.id}`} type="text" placeholder={t('timetableinput.activityTitle')} value={item.title} onChange={e => updateAgendaItem(item.id, 'title', e.target.value)} className={inputClasses} disabled={disabled} />
+              </div>
+              <div>
+                <label htmlFor={`agenda-day-${item.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('common.day')}</label>
+                <select id={`agenda-day-${item.id}`} value={item.day} onChange={e => updateAgendaItem(item.id, 'day', e.target.value)} className={selectClasses} disabled={disabled}>
+                  {Object.values(DayOfWeek).map(day => <option key={day} value={day}>{day}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor={`agenda-start-${item.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('timetableinput.itemStartTime')}</label>
+                <TimeInput id={`agenda-start-${item.id}`} value={item.startTime} onChange={val => updateAgendaItem(item.id, 'startTime', val)} />
+              </div>
+              <div>
+                <label htmlFor={`agenda-end-${item.id}`} className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('timetableinput.itemEndTime')}</label>
+                <TimeInput id={`agenda-end-${item.id}`} value={item.endTime} onChange={val => updateAgendaItem(item.id, 'endTime', val)} />
+              </div>
+              <button onClick={() => removeAgendaItem(item.id)} className="p-2 text-red-500 hover:text-red-700 disabled:text-slate-400" disabled={disabled}><TrashIcon className="w-5 h-5" /></button>
             </div>
           ))}
         </div>
-        <button onClick={addAgendaItem} className={`${buttonClasses} mt-4`} disabled={disabled}><PlusIcon className="w-4 h-4" /> Add Agenda Item</button>
+        <button onClick={addAgendaItem} className={`${buttonClasses} mt-4`} disabled={disabled}><PlusIcon className="w-4 h-4" /> {t('timetableinput.addAgendaItem')}</button>
       </section>
 
-      {/* Break Preferences */}
-      <section>
-        <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Break Preferences</h3>
-         <div className="space-y-4">
-          {breakPreferences.map(pref => (
-            <div key={pref.id} className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border dark:border-gray-700">
-              <input type="text" placeholder="e.g., Watch YouTube, Walk" value={pref.activity} onChange={e => updateBreakPreference(pref.id, 'activity', e.target.value)} className={`${inputClasses} md:col-span-1`} disabled={disabled} />
-              <input type="text" placeholder="Optional: relevant link" value={pref.link || ''} onChange={e => updateBreakPreference(pref.id, 'link', e.target.value)} className={`${inputClasses} md:col-span-1`} disabled={disabled} />
-              <button onClick={() => removeBreakPreference(pref.id)} className="p-2 text-red-500 hover:text-red-700 disabled:text-gray-400" disabled={disabled}><TrashIcon className="w-5 h-5" /></button>
-            </div>
-          ))}
-        </div>
-         <button onClick={addBreakPreference} className={`${buttonClasses} mt-4`} disabled={disabled}><PlusIcon className="w-4 h-4" /> Add Break Preference</button>
-      </section>
-      
       {/* General Goals */}
       <section>
-        <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">General Goals for the Week</h3>
+        <h3 className="text-lg font-semibold mb-2 text-slate-800 dark:text-slate-200">{t('timetableinput.generalGoals')}</h3>
         <textarea
           value={generalGoals}
           onChange={(e) => setGeneralGoals(e.target.value)}
           rows={3}
           className={`${inputClasses} resize-y`}
-          placeholder="e.g., Finish Calculus assignment, Prepare for Physics quiz..."
+          placeholder={t('timetableinput.generalGoalsPlaceholder')}
           disabled={disabled}
         />
       </section>

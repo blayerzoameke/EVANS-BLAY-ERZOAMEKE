@@ -1,18 +1,32 @@
 import React from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const About: React.FC = () => {
+  const { t } = useLanguage();
+
   return (
-    <div className="max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 md:p-10 text-center">
-      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">About EDU. Timetable Planner</h2>
-      <p className="text-gray-600 dark:text-gray-400">
-        Version 1.0.0
-      </p>
-      <p className="text-gray-600 dark:text-gray-400 mt-4">
-        This application is designed to help students organize their academic lives with an intelligent planner.
-      </p>
-       <p className="text-gray-600 dark:text-gray-400 mt-2">
-        Created with passion to make learning more structured and productive.
-      </p>
+    <div className="max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 md:p-10">
+      <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-4 text-center">{t('about.title')}</h2>
+      <div className="space-y-6 text-gray-700 dark:text-gray-300">
+        <p className="text-lg font-semibold text-center">{t('about.welcome')}</p>
+        <p>{t('about.creator')}</p>
+        <p>{t('about.intro')}</p>
+        <ul className="list-disc list-inside space-y-2 pl-4">
+            <li>{t('about.feature1')}</li>
+            <li>{t('about.feature2')}</li>
+            <li>{t('about.feature3')}</li>
+            <li>{t('about.feature4')}</li>
+            <li>{t('about.feature5')}</li>
+            <li>{t('about.feature6')}</li>
+            <li>{t('about.feature7')}</li>
+        </ul>
+        <p>{t('about.outro')}</p>
+        <div>
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-white">{t('about.missionTitle')}</h3>
+            <p className="mt-2 italic">{t('about.missionText')}</p>
+        </div>
+        <p className="text-center font-bold text-lg pt-4">{t('about.thankYou')}</p>
+      </div>
     </div>
   );
 };

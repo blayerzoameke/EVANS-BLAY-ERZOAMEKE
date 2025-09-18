@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EDU. Timetable Planner</title>
+    <title>EduBlay - Your Learning Companion</title>
     <script src="https://cdn.tailwindcss.com"></script>
   <script type="importmap">
 {
@@ -21,24 +21,35 @@
   @media print {
     body {
       background-color: white !important;
+      /* Ensures background colors and images are printed */
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
+    
+    /* Hide elements that should not be printed using a class */
     .no-print {
       display: none !important;
     }
+
+    /* A more robust method to isolate only the printable area */
+    body * {
+        visibility: hidden;
+    }
     #printable-area, #printable-area * {
-      visibility: visible;
+        visibility: visible;
     }
     #printable-area {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      padding: 1rem;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        padding: 1rem;
+        margin: 0;
     }
   }
 </style>
 </head>
-  <body class="bg-gray-50 dark:bg-gray-900">
+  <body class="bg-slate-100 dark:bg-slate-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

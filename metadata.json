@@ -1,5 +1,5 @@
 {
-  "name": "EDU. Timetable Planner",
-  "description": "An intelligent timetable application that generates a smart weekly study plan based on a user's lecture schedule. It helps students organize their study time, manage tasks, and sends reminders for all activities.",
+  "name": "EduBlay",
+  "description": "EduBlay is your personalized learning companion. Create smart timetables, get AI-assisted help with study materials, prepare for exams with generated quizzes, and track your progress in real-time.",
   "requestFramePermissions": []
 }

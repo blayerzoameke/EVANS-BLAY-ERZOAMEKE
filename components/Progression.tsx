@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
-import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types';
+// FIX: Added .ts extension to import path.
+import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts';
 import { DAYS_OF_WEEK } from '../constants';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface ProgressionProps {
   plan: SmartPlan | null;
@@ -54,6 +56,7 @@ const DonutChart: React.FC<{ data: { type: string; value: number; color: string 
 };
 
 const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
+  const { t } = useLanguage();
   const stats = useMemo(() => {
     if (!plan) return null;
 
@@ -160,9 +163,9 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
   if (!plan || !stats) {
     return (
       <div className="max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 md:p-10 text-center">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Your Progression</h2>
+        <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">{t('progression.title')}</h2>
         <p className="text-gray-500 dark:text-gray-400">
-          Generate a plan on the Dashboard to see your progress and statistics!
+          {t('progression.noPlan')}
         </p>
       </div>
     );
@@ -174,22 +177,22 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
   return (
     <div className="max-w-7xl mx-auto space-y-8">
        <div>
-         <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Progress & Statistics</h2>
-         <p className="text-gray-500 dark:text-gray-400 mt-1">An overview of your generated weekly plan.</p>
+         <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('progression.title')}</h2>
+         <p className="text-gray-500 dark:text-gray-400 mt-1">{t('progression.subtitle')}</p>
        </div>
        
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <StatsCard title="Weekly Overview" className="lg:col-span-1">
+            <StatsCard title={t('progression.weeklyOverview')} className="lg:col-span-1">
                 <div className="space-y-3">
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">Total Study Hours</span><span className="font-bold text-2xl text-blue-600 dark:text-blue-400">{stats.totalHours.study}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">Total Lecture Hours</span><span className="font-bold text-lg text-red-600 dark:text-red-400">{stats.totalHours.lecture}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">Personal Agenda</span><span className="font-bold text-lg text-yellow-600 dark:text-yellow-400">{stats.totalHours.agenda}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">Total Break Time</span><span className="font-bold text-lg text-green-600 dark:text-green-400">{stats.totalHours.break}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">Total Free Time</span><span className="font-bold text-lg text-gray-500 dark:text-gray-400">{stats.totalHours.free}h</span></div>
+                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalStudy')}</span><span className="font-bold text-2xl text-blue-600 dark:text-blue-400">{stats.totalHours.study}h</span></div>
+                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalLecture')}</span><span className="font-bold text-lg text-red-600 dark:text-red-400">{stats.totalHours.lecture}h</span></div>
+                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.personalAgenda')}</span><span className="font-bold text-lg text-yellow-600 dark:text-yellow-400">{stats.totalHours.agenda}h</span></div>
+                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalBreak')}</span><span className="font-bold text-lg text-green-600 dark:text-green-400">{stats.totalHours.break}h</span></div>
+                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalFree')}</span><span className="font-bold text-lg text-gray-500 dark:text-gray-400">{stats.totalHours.free}h</span></div>
                 </div>
             </StatsCard>
             
-            <StatsCard title="Activity Breakdown" className="lg:col-span-2">
+            <StatsCard title={t('progression.activityBreakdown')} className="lg:col-span-2">
                 <div className="flex flex-col md:flex-row items-center justify-around gap-6">
                     <DonutChart data={stats.activityDistribution} />
                     <div className="space-y-2 text-sm w-full max-w-xs">
@@ -208,7 +211,7 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-             <StatsCard title="Tracked vs. Scheduled Hours">
+             <StatsCard title={t('progression.trackedVsScheduled')}>
                 {stats.trackedVsScheduled.length > 0 ? (
                     <div className="space-y-4">
                         {stats.trackedVsScheduled.map(item => (
@@ -218,27 +221,27 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
                                     <span>{item.trackedHours.toFixed(1)}h / {item.scheduledHours.toFixed(1)}h</span>
                                 </div>
                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 relative">
-                                    <div className="bg-indigo-300 dark:bg-indigo-800 h-4 rounded-full" style={{ width: `${(item.scheduledHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
-                                    <div className="bg-indigo-600 h-4 rounded-full absolute top-0 left-0" style={{ width: `${(item.trackedHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
+                                    <div className="bg-blue-300 dark:bg-blue-800 h-4 rounded-full" style={{ width: `${(item.scheduledHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
+                                    <div className="bg-blue-600 h-4 rounded-full absolute top-0 left-0" style={{ width: `${(item.trackedHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}
                          <div className="flex items-center justify-end space-x-4 text-xs pt-2">
-                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-indigo-600 mr-1.5"></span> Tracked</div>
-                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-indigo-300 dark:bg-indigo-800 mr-1.5"></span> Scheduled</div>
+                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-blue-600 mr-1.5"></span> Tracked</div>
+                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-blue-300 dark:bg-blue-800 mr-1.5"></span> Scheduled</div>
                         </div>
                     </div>
                 ) : (
-                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">No specific study goals were set to track against.</p>
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">{t('progression.noGoals')}</p>
                 )}
             </StatsCard>
-            <StatsCard title="Daily Scheduled Hours">
+            <StatsCard title={t('progression.dailyScheduled')}>
                  <div className="flex justify-between items-end h-56 space-x-2 md:space-x-4" aria-label="Daily scheduled hours chart">
                     {stats.dailyHours.map(item => (
                       <div key={item.day} className="flex-1 flex flex-col items-center group">
                           <div className="relative w-full h-full flex items-end">
                             <div 
-                              className="w-full bg-indigo-400 dark:bg-indigo-600 rounded-t-md group-hover:bg-indigo-500 transition-all duration-300"
+                              className="w-full bg-blue-400 dark:bg-blue-600 rounded-t-md group-hover:bg-blue-500 transition-all duration-300"
                               style={{ height: `${(item.hours / maxDailyHours) * 100}%` }}
                               role="progressbar"
                               aria-valuenow={item.hours}

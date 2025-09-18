@@ -1,16 +1,47 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
-import { Language, translations, getTranslator } from '../lib/i18n';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
+// FIX: Added .ts extension to import path.
+import { Language, translations, getTranslator, supportedLanguages } from '../lib/i18n.ts';
+
+type TranslationKey = keyof typeof translations['en'];
 
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: keyof typeof translations['en']) => string;
+  t: (key: TranslationKey, replacements?: { [key: string]: string | number }) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const rtlLanguages = ['ar'];
+
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguageState] = useState<Language>('en');
+
+  useEffect(() => {
+    const savedLang = localStorage.getItem('language');
+    const browserLang = navigator.language.split('-')[0];
+    const defaultLang = savedLang || browserLang;
+    
+    if (supportedLanguages.some(l => l.code === defaultLang)) {
+      setLanguageState(defaultLang);
+    } else {
+      setLanguageState('en');
+    }
+  }, []);
+  
+  // Effect to handle document directionality for RTL languages
+  useEffect(() => {
+    if (rtlLanguages.includes(language)) {
+      document.documentElement.dir = 'rtl';
+    } else {
+      document.documentElement.dir = 'ltr';
+    }
+  }, [language]);
+  
+  const setLanguage = useCallback((lang: Language) => {
+    setLanguageState(lang);
+    localStorage.setItem('language', lang);
+  }, []);
 
   const t = getTranslator(language);
 

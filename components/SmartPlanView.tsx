@@ -1,37 +1,33 @@
 import React from 'react';
-import type { SmartPlan, PlanSlot } from '../types';
-import { ActivityType } from '../types';
+import type { SmartPlan, PlanSlot } from '../types.ts';
+import { ActivityType } from '../types.ts';
 import { DAYS_OF_WEEK } from '../constants';
-
-interface SmartPlanViewProps {
-  plan: SmartPlan;
-  institution?: string;
-  institutionLogo?: string;
-}
+import { useLanguage } from '../contexts/LanguageContext';
 
 const getActivityColor = (type: ActivityType) => {
   switch (type) {
     case ActivityType.LECTURE:
-      return 'bg-red-100 dark:bg-red-900 border-l-4 border-red-500 print:bg-red-100';
+      return 'bg-violet-100 dark:bg-violet-500/20 border-l-4 border-violet-500 text-violet-900 dark:text-violet-100 print:bg-violet-100';
     case ActivityType.STUDY:
-      return 'bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 print:bg-blue-100';
+      return 'bg-blue-100 dark:bg-blue-500/20 border-l-4 border-blue-500 text-blue-900 dark:text-blue-100 print:bg-blue-100';
     case ActivityType.AGENDA:
-      return 'bg-yellow-100 dark:bg-yellow-900 border-l-4 border-yellow-500 print:bg-yellow-100';
+      return 'bg-amber-100 dark:bg-amber-500/20 border-l-4 border-amber-500 text-amber-900 dark:text-amber-100 print:bg-amber-100';
     case ActivityType.BREAK:
-      return 'bg-green-100 dark:bg-green-900 border-l-4 border-green-500 print:bg-green-100';
+      return 'bg-emerald-100 dark:bg-emerald-500/20 border-l-4 border-emerald-500 text-emerald-900 dark:text-emerald-100 print:bg-emerald-100';
     case ActivityType.FREE:
-      return 'bg-gray-100 dark:bg-gray-700 border-l-4 border-gray-400 print:bg-gray-100';
+      return 'bg-slate-100 dark:bg-slate-700/50 border-l-4 border-slate-400 text-slate-800 dark:text-slate-300 print:bg-slate-100';
     default:
-      return 'bg-gray-50 dark:bg-gray-800 border-l-4 border-gray-300 print:bg-gray-50';
+      return 'bg-slate-100 dark:bg-slate-800 border-l-4 border-slate-300 text-slate-800 dark:text-slate-300 print:bg-slate-100';
   }
 };
 
 const PlanSlotCard: React.FC<{ slot: PlanSlot }> = ({ slot }) => {
   const content = (
-    <div className={`p-3 rounded-lg shadow-sm mb-3 transition-transform duration-200 ${getActivityColor(slot.type)} ${slot.link ? 'hover:scale-105' : ''} print:shadow-none print:rounded-md`}>
-      <p className="font-bold text-sm text-gray-800 dark:text-gray-100 print:text-black">{slot.activity}</p>
-      <p className="text-xs text-gray-600 dark:text-gray-400 print:text-black">{slot.startTime} - {slot.endTime}</p>
-      <p className="text-xs capitalize mt-1 font-medium text-gray-500 dark:text-gray-300 print:text-black">{slot.type}</p>
+    <div className={`p-3 rounded-lg shadow-sm mb-3 transition-shadow duration-200 ${getActivityColor(slot.type)} ${slot.link ? 'hover:shadow-md' : ''} print:shadow-none print:rounded-md`}>
+      <p className="font-bold text-sm print:text-black">{slot.activity}</p>
+      {slot.code && <p className="text-xs font-mono mt-1 opacity-70 print:text-slate-600">{slot.code}</p>}
+      <p className="text-xs opacity-80 print:text-black">{slot.startTime} - {slot.endTime}</p>
+      <p className="text-xs capitalize mt-1 font-medium opacity-90 print:text-black">{slot.type}</p>
     </div>
   );
 
@@ -46,44 +42,27 @@ const PlanSlotCard: React.FC<{ slot: PlanSlot }> = ({ slot }) => {
   return content;
 };
 
-const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, institution, institutionLogo }) => {
+interface SmartPlanViewProps {
+    plan: SmartPlan;
+}
+
+const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan }) => {
+  const { t } = useLanguage();
   const planByDay = DAYS_OF_WEEK.map(day => {
     return plan.find(p => p.day === day) || { day, slots: [] };
   });
 
-  const institutionDomain = institution
-    ? institution.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9.-]/gi, '')
-    : '';
-
-  const hasLogo = institutionLogo || (institution && institutionDomain);
-
   return (
     <div className="relative">
-      {hasLogo && (
-        <div className="absolute inset-0 flex items-center justify-center z-0 print:hidden">
-          <img 
-            src={institutionLogo || `https://logo.clearbit.com/${institutionDomain}`} 
-            alt={`${institution || 'University'} logo`}
-            className="w-1/2 h-1/2 object-contain opacity-5 pointer-events-none"
-            onError={(e) => {
-              // Only hide the logo if it's the fallback Clearbit logo that fails
-              if (!institutionLogo) {
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-              }
-            }}
-          />
-        </div>
-      )}
       <div className="relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 print:grid-cols-2 print:gap-4">
           {planByDay.map(({ day, slots }) => (
-            <div key={day} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow p-4 border border-gray-200 dark:border-gray-700 transition-transform duration-200 hover:scale-105 hover:shadow-lg print:bg-white print:shadow-none print:border-gray-300 print:backdrop-blur-none">
-              <h3 className="text-xl font-bold text-center mb-4 text-indigo-600 dark:text-indigo-400 print:text-black">{day}</h3>
+            <div key={day} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl shadow p-4 border border-slate-200 dark:border-slate-700 print:bg-white print:shadow-none print:border-slate-300 print:backdrop-blur-none">
+              <h3 className="text-xl font-bold text-center mb-4 text-blue-700 dark:text-blue-500 print:text-black">{day}</h3>
               {slots.length > 0 ? (
                 slots.map((slot, index) => <PlanSlotCard key={index} slot={slot} />)
               ) : (
-                <p className="text-center text-gray-500 dark:text-gray-400 py-8 print:text-black">No activities scheduled.</p>
+                <p className="text-center text-slate-500 dark:text-slate-400 py-8 print:text-black">{t('smartplan.noActivities')}</p>
               )}
             </div>
           ))}
