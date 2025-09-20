@@ -1,5 +1,9 @@
+
 import React, { useState } from 'react';
+// FIX: Added .ts extension
 import type { UserDetails, Toast } from '../types.ts';
+// FIX: Import `EducationalLevel` as a value to use it for default props.
+import { EducationalLevel } from '../types.ts';
 import UserDetailsForm from './UserDetailsForm';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -13,7 +17,8 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
   const { t } = useLanguage();
   
   // Ensure we don't pass null to the form
-  const safeInitialDetails = initialDetails || { name: '', educationalLevel: 'Undergraduate', country: '', institution: '' };
+  // FIX: Use the enum member `EducationalLevel.UNDERGRADUATE` instead of a string literal.
+  const safeInitialDetails = initialDetails || { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, country: '', institution: '' };
 
   const [userDetails, setUserDetails] = useState<UserDetails>(safeInitialDetails);
   const [isEditing, setIsEditing] = useState(false);
@@ -23,6 +28,13 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
         // @ts-ignore
         addToast(t('profile.error.nameRequired'), 'error');
         return;
+    }
+    if (userDetails.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(userDetails.email)) {
+        addToast(t('userdetails.emailInvalid' as any), 'error');
+        return;
+      }
     }
     setGlobalUserDetails(userDetails);
     setIsEditing(false);

@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
-// FIX: Changed DayOfWeek to a value import to allow access to enum members.
+// FIX: Added .ts extension.
 import type { PlanSlot } from '../types.ts';
+// FIX: Changed DayOfWeek to a value import to allow access to enum members.
 import { DayOfWeek } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon';

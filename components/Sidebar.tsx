@@ -1,4 +1,6 @@
+
 import React from 'react';
+// FIX: Added .tsx extension to import path.
 import type { View } from '../App.tsx';
 import { LogoIcon } from './icons/LogoIcon';
 import { CloseIcon } from './icons/CloseIcon';

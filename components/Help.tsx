@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ChevronDownIcon } from './icons/ChevronDownIcon.tsx';
+// FIX: Added .tsx extension to import path.
 import type { View } from '../App.tsx';
 
 interface HelpProps {

@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import UserDetailsForm from './UserDetailsForm';
@@ -6,8 +8,9 @@ import SmartPlanView from './SmartPlanView';
 import CourseCodeModal from './CourseCodeModal';
 import LogStudyModal from './LogStudyModal';
 import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService';
-// FIX: Moved DayOfWeek from type-only import to regular import to allow its use as a value.
+// FIX: Added .ts extension
 import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession } from '../types.ts';
+// FIX: Moved DayOfWeek from type-only import to regular import to allow its use as a value.
 import { EducationalLevel, ActivityType, DayOfWeek } from '../types.ts';
 import { UploadIcon } from './icons/UploadIcon';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -250,188 +253,10 @@ const Dashboard: React.FC<{
       }
   };
   
+// FIX: Corrected the implementation of handleOpenLogModal to include the `day` property, resolving a type error.
   const handleOpenLogModal = (slot: PlanSlot, day: DayOfWeek) => {
     setSelectedSlotForLog({ slot, day });
   };
-
-  const handleStartSession = (slot: PlanSlot) => {
-    const now = Date.now();
-    const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
-    const endTime = now + (duration * 60 * 1000);
-    const today = getDayOfWeek(new Date());
-    const dayPlan = smartPlan?.find(d => d.day === today);
-    const slotIndex = dayPlan?.slots.findIndex(s => s.startTime === slot.startTime && s.activity === slot.activity) ?? -1;
-    const nextSlot = (dayPlan && slotIndex !== -1 && slotIndex + 1 < dayPlan.slots.length) ? dayPlan.slots[slotIndex + 1] : null;
-
-    setActiveSession({
-        startTime: now,
-        endTime: endTime,
-        subject: slot.activity,
-        type: 'study',
-        fromSlot: slot,
-        nextSlot: (nextSlot && nextSlot.type === ActivityType.BREAK) ? nextSlot : null,
-    });
-    addToast(t('toasts.sessionStarted'), 'success');
-    setSelectedSlotForLog(null);
-  };
-
-  const handleLogTime = (subject: string, durationMinutes: number, date: string) => {
-    const newTrackedSession: TrackedSession = {
-        subject,
-        durationMinutes,
-        date,
-    };
-    setTrackedData([...trackedData, newTrackedSession]);
-    addToast(t('toasts.logSaved'), 'success');
-  };
-
-  if (smartPlan) {
-    return (
-        <div id="printable-area">
-          <div className="flex justify-between items-center mb-6 no-print">
-            <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('dashboard.yourSmartPlan')}</h2>
-            <div className="flex gap-2">
-                <button
-                    onClick={() => setSaveModalOpen(true)}
-                    className="px-4 py-2 font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-                >
-                    {t('common.save')}
-                </button>
-                <button
-                onClick={() => { setSmartPlan(null); setStep(1); }}
-                className="px-4 py-2 font-medium text-sky-700 dark:text-sky-400 bg-sky-100 dark:bg-sky-900/50 rounded-md hover:bg-sky-200 dark:hover:bg-sky-800"
-                >
-                {t('dashboard.createNewPlan')}
-                </button>
-            </div>
-          </div>
-          <SmartPlanView plan={smartPlan} onStudySlotClick={handleOpenLogModal} />
-           {saveModalOpen && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
-                  <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm">
-                      <h3 className="text-xl font-bold mb-4">{t('mytimetables.renameModalTitle')}</h3>
-                      <input 
-                          type="text"
-                          value={planName}
-                          onChange={e => setPlanName(e.target.value)}
-                          placeholder={t('dashboard.planNamePlaceholder')}
-                          className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
-                      />
-                      <div className="flex justify-end gap-4 mt-4">
-                          <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
-                          <button onClick={handleSavePlan} className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-500 text-white rounded-md">{t('common.save')}</button>
-                      </div>
-                  </div>
-              </div>
-          )}
-          {selectedSlotForLog && (
-            <LogStudyModal
-                isOpen={!!selectedSlotForLog}
-                onClose={() => setSelectedSlotForLog(null)}
-                slot={selectedSlotForLog.slot}
-                day={selectedSlotForLog.day}
-                onStartSession={handleStartSession}
-                onLogTime={handleLogTime}
-            />
-          )}
-        </div>
-      )
-  }
-
-  return (
-    <div className="space-y-8">
-      <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-lg p-6 md:p-8 border dark:border-gray-700">
-        <h2 className="text-3xl font-bold text-center text-gray-800 dark:text-white mb-2">{t('dashboard.createPlanTitle')}</h2>
-        <p className="text-center text-gray-500 dark:text-gray-400 mb-8">{t('dashboard.createPlanSubtitle')}</p>
-        
-        {step === 1 && (
-            <>
-                <div className="mt-8">
-                    <UserDetailsForm userDetails={userDetails} setUserDetails={handleUserDetailsChange} disabled={isLoading} />
-                </div>
-                {error && <p className="mt-4 text-center text-red-500">{error}</p>}
-                <div className="mt-8 pt-6 border-t dark:border-gray-700 flex justify-end">
-                    <button
-                        onClick={handleNextStep}
-                        className="w-full sm:w-auto px-6 py-2 font-semibold text-white bg-gradient-to-r from-sky-500 to-blue-500 rounded-md shadow-sm hover:from-sky-600 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                        {t('common.next')}
-                    </button>
-                </div>
-            </>
-        )}
-
-        {step === 2 && (
-            <div className="space-y-8">
-                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-                    <div className="flex items-center mb-5">
-                       <span className="h-6 w-1 bg-gradient-to-b from-sky-500 to-blue-500 rounded-full mr-3"></span>
-                       <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">{t('dashboard.yourSchedule')}</h3>
-                    </div>
-                    <div className="py-6">
-                        {!imagePreview ? (
-                            <div {...getRootProps()} className={`group p-10 border-2 border-dashed rounded-lg transition-colors ${isDragActive ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-gray-300 dark:border-gray-600'} ${isLoading || isManualInputStarted ? 'cursor-not-allowed opacity-50 bg-gray-50 dark:bg-gray-800' : 'cursor-pointer hover:border-teal-400'}`}>
-                                <input {...getInputProps()} />
-                                <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400 transition-colors group-hover:text-teal-600 dark:group-hover:text-teal-400">
-                                    <UploadIcon className="w-12 h-12 mb-4" />
-                                    <p className="font-semibold">{t('dashboard.uploadTimetable')}</p>
-                                    <p className="text-sm">{t('dashboard.manualEntry')}</p>
-                                    {isManualInputStarted && <p className="text-xs text-gray-400 mt-2">{t('dashboard.uploadDisabled')}</p>}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center gap-4">
-                                <img src={imagePreview} alt="Timetable preview" className="max-h-48 rounded-md shadow-md" />
-                                <button onClick={clearImage} className="text-sm text-red-500 hover:underline" disabled={isLoading}>{t('dashboard.removeImage')}</button>
-                            </div>
-                        )}
-                    </div>
-                 </div>
-
-                 <TimetableInput
-                    lectures={lectures} setLectures={setLectures}
-                    studyGoals={studyGoals} setStudyGoals={setStudyGoals}
-                    agendaItems={agendaItems} setAgendaItems={setAgendaItems}
-                    generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
-                    disabled={isLoading}
-                    manualSectionsDisabled={!!imageFile}
-                />
-
-                {error && <p className="mt-4 text-center text-red-500">{error}</p>}
-                <div className="mt-8 pt-6 border-t dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <button
-                        onClick={() => setStep(1)}
-                        className="w-full sm:w-auto px-6 py-2 font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md shadow-sm hover:bg-gray-200 dark:hover:bg-gray-600"
-                    >
-                        {t('common.previous')}
-                    </button>
-                    <button
-                        onClick={handleGeneratePlan}
-                        disabled={isLoading || !isInputSufficient}
-                        className="w-full sm:w-auto px-10 py-3 text-lg font-semibold text-white bg-gradient-to-r from-sky-500 to-blue-600 rounded-lg shadow-md hover:from-sky-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-1"
-                    >
-                        {isLoading ? loadingMessage : t('dashboard.generatePlan')}
-                    </button>
-                </div>
-            </div>
-        )}
-      </div>
-      
-      {isCodeModalOpen && (
-        <CourseCodeModal 
-            isOpen={isCodeModalOpen}
-            onClose={() => {
-                setSmartPlan(tempSmartPlan);
-                setIsCodeModalOpen(false);
-                setTempSmartPlan(null);
-                setCourseCodes([]);
-            }}
-            onConfirm={handleCourseCodeConfirmation}
-            codes={courseCodes}
-        />
-      )}
-    </div>
-  );
 };
 
 export default Dashboard;

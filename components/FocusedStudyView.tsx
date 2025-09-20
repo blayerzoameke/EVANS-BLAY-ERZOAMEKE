@@ -1,10 +1,13 @@
+
+
 import React, { useState } from 'react';
-// FIX: Imported LearningHubState to correctly type the dummy state object.
-import type { ActiveSession, Toast, LearningHubState, UploadedFile } from '../types';
+// FIX: Imported LearningHubState to correctly type the dummy state object. Added .ts extension.
+import type { ActiveSession, Toast, LearningHubState, UploadedFile } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ExitIcon } from './icons/ExitIcon';
-import UploadSlides from './UploadSlides'; // The viewer is now inside UploadSlides
-import ConfirmationModal from './ConfirmationModal';
+// FIX: Added .tsx extension to import path.
+import UploadSlides from './UploadSlides.tsx'; // The viewer is now inside UploadSlides
+import ConfirmationModal from './ConfirmationModal.tsx';
 
 interface FocusedStudyViewProps {
     session: ActiveSession;
@@ -23,7 +26,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, learningHu
     // FIX: Explicitly typed dummyLearningHubState to resolve type incompatibility for 'analysisMode'.
     const dummyLearningHubState: LearningHubState = {
         file: learningHubFile,
-        analysisMode: 'none',
+        analysisMode: 'chat', // Default to chat view in study mode
         analysisResults: { summarize: null, explain: null, read: null },
         chatHistory: []
     };
@@ -55,7 +58,6 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, learningHu
                 <main className="flex-1 overflow-y-auto">
                     <UploadSlides
                         smartPlan={null}
-                        setSmartPlan={dummySetState as any}
                         activeSession={session}
                         setActiveSession={dummySetState as any}
                         setView={dummySetState as any}

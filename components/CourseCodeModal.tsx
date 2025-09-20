@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 // FIX: Added .ts extension to import path.
 import type { CourseCodeMap } from '../types.ts';

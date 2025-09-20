@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 // FIX: Added .ts extension to import path.
 import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts';

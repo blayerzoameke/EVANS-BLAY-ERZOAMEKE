@@ -1,4 +1,6 @@
+
 import React from 'react';
+// FIX: Added .ts extension to import path.
 import type { ActiveSession } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
 

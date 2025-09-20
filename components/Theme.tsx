@@ -1,15 +1,16 @@
+
 import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 // FIX: Added .ts extension to import path.
 import type { Theme } from '../types.ts';
-import { TranslationKey } from '../lib/i18n';
+// FIX: Added .ts extension to import path for type definition.
+import { TranslationKey } from '../lib/i18n.ts';
 
 const ThemeSettings: React.FC = () => {
     const { theme, setTheme } = useTheme();
     const { t } = useLanguage();
 
-    // FIX: Added .ts extension to import path for type definition.
     const options: { value: Theme, labelKey: TranslationKey, descKey?: TranslationKey }[] = [
         { value: 'light', labelKey: 'theme.light' },
         { value: 'dark', labelKey: 'theme.dark' },

@@ -1,3 +1,4 @@
+
 import React from 'react';
 // FIX: Added .ts extension to import path.
 import type { NotificationSettings } from '../types.ts';

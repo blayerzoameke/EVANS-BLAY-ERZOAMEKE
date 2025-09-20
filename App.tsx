@@ -1,59 +1,45 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import Sidebar from './components/Sidebar';
-import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import Progression from './components/Progression';
-import UploadSlides from './components/UploadSlides';
-import ExamPrep from './components/ExamPrep';
-import MyTimetables from './components/MyTimetables';
-import Notes from './components/Notes';
-// FIX: Added .tsx extension to component imports to resolve module errors.
+
+
+import React, { useState, useEffect, useCallback } from 'react';
+import Sidebar from './components/Sidebar.tsx';
+import Header from './components/Header.tsx';
+import Dashboard from './components/Dashboard.tsx';
 import Profile from './components/Profile.tsx';
-import NotificationSettingsComponent from './components/NotificationSettings';
-import LanguageSettings from './components/Language';
-import ThemeSettings from './components/Theme';
-import Settings from './components/Settings';
-import Reports from './components/Reports';
-import Feedback from './components/Feedback';
-import Help from './components/Help';
-import About from './components/About';
-// FIX: Added .tsx extension to component imports to resolve module errors.
+import MyTimetables from './components/MyTimetables.tsx';
+import Progression from './components/Progression.tsx';
+import Notes from './components/Notes.tsx';
 import Onboarding from './components/Onboarding.tsx';
-import StudyTracker from './components/StudyTracker';
-import FocusedStudyView from './components/FocusedStudyView';
-import BreakView from './components/BreakView';
-import ToastContainer from './components/ToastContainer';
-import Library from './components/Library';
-import Terms from './components/Terms';
+import ToastContainer from './components/ToastContainer.tsx';
+import LanguageSettings from './components/Language.tsx';
+import ThemeSettings from './components/Theme.tsx';
+import NotificationSettingsComponent from './components/NotificationSettings.tsx';
+import Settings from './components/Settings.tsx';
+import Reports from './components/Reports.tsx';
+import Feedback from './components/Feedback.tsx';
+import Help from './components/Help.tsx';
+import About from './components/About.tsx';
+import UploadSlides from './components/UploadSlides.tsx';
+import ExamPrep from './components/ExamPrep.tsx';
+import StudyTracker from './components/StudyTracker.tsx';
+import BreakView from './components/BreakView.tsx';
+import FocusedStudyView from './components/FocusedStudyView.tsx';
+import Library from './components/Library.tsx';
+import Terms from './components/Terms.tsx';
 
-import type { 
-    UserDetails, 
-    SmartPlan, 
-    StoredPlan, 
-    Note, 
-    NotificationSettings,
-    AppSettings,
-    ActiveSession,
-    TrackedSession,
-    Toast,
-    LearningHubState,
-} from './types.ts';
-import { ActivityType } from './types.ts';
-import { useTheme } from './contexts/ThemeContext';
-import { DAYS_OF_WEEK } from './constants.ts';
+import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession } from './types.ts';
+import { EducationalLevel } from './types.ts';
 
-// This is the View type that other components are trying to import.
 export type View =
   | 'dashboard'
+  | 'profile'
+  | 'mytimetables'
   | 'progression'
+  | 'notes'
   | 'uploadslides'
   | 'examprep'
-  | 'mytimetables'
-  | 'notes'
-  | 'profile'
-  | 'notification'
   | 'language'
   | 'theme'
+  | 'notification'
   | 'settings'
   | 'report'
   | 'feedback'
@@ -62,277 +48,169 @@ export type View =
   | 'library'
   | 'terms';
 
-// Custom hook for using localStorage
-function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
-    const [storedValue, setStoredValue] = useState<T>(() => {
-        try {
-            const item = window.localStorage.getItem(key);
-            return item ? JSON.parse(item) : initialValue;
-        } catch (error) {
-            console.error(error);
-            return initialValue;
-        }
-    });
-
-    const setValue = (value: T | ((val: T) => T)) => {
-        try {
-            const valueToStore = value instanceof Function ? value(storedValue) : value;
-            setStoredValue(valueToStore);
-            window.localStorage.setItem(key, JSON.stringify(valueToStore));
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    return [storedValue, setValue];
-}
-
 const App: React.FC = () => {
-    const [view, setView] = useLocalStorage<View>('view', 'dashboard');
-    const [isSidebarOpen, setSidebarOpen] = useState(false);
-    const [userDetails, setUserDetails] = useLocalStorage<UserDetails | null>('userDetails', null);
-    const [smartPlan, setSmartPlan] = useLocalStorage<SmartPlan | null>('smartPlan', null);
-    const [savedTimetables, setSavedTimetables] = useLocalStorage<StoredPlan[]>('savedTimetables', []);
-    const [notes, setNotes] = useLocalStorage<Note[]>('notes', []);
-    const [notificationSettings, setNotificationSettings] = useLocalStorage<NotificationSettings>('notificationSettings', { status: 'unconfigured', enabled: false, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
-    const [appSettings, setAppSettings] = useLocalStorage<AppSettings>('appSettings', {});
-    const [activeSession, setActiveSession] = useLocalStorage<ActiveSession | null>('activeSession', null);
-    const [trackedData, setTrackedData] = useLocalStorage<TrackedSession[]>('trackedData', []);
-    const [toasts, setToasts] = useState<Toast[]>([]);
-    const [learningHubState, setLearningHubState] = useLocalStorage<LearningHubState>('learningHubState', { file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] });
-    
-    const { theme } = useTheme(); // To force re-render on theme change for any components that need it
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [view, setView] = useState<View>('dashboard');
+  const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
+  const [smartPlan, setSmartPlan] = useState<SmartPlan | null>(null);
+  const [savedTimetables, setSavedTimetables] = useState<StoredPlan[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const [learningHubState, setLearningHubState] = useState<LearningHubState>({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] });
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({ status: 'unconfigured', enabled: false, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
+  const [trackedData, setTrackedData] = useState<TrackedSession[]>([]);
 
-    const sentRemindersRef = useRef<{ date: string; reminders: Set<string> }>({
-        date: new Date().toISOString().split('T')[0],
-        reminders: new Set<string>(),
-    });
-
-    const addToast = useCallback((message: string, type: Toast['type']) => {
-        const id = Date.now();
-        setToasts(prev => [...prev, { id, message, type }]);
-    }, []);
-
-    const removeToast = (id: number) => {
-        setToasts(prev => prev.filter(toast => toast.id !== id));
-    };
-    
-    const timeToMinutes = useCallback((time: string): number => {
-      if (!time || !time.includes(':')) return 0;
+  useEffect(() => {
+    const loadData = () => {
       try {
-          const timeParts = time.split(' ');
-          const [hourStr, minuteStr] = timeParts[0].split(':');
-          let hours = parseInt(hourStr, 10);
-          const minutes = parseInt(minuteStr, 10);
+        const savedUserDetails = localStorage.getItem('userDetails');
+        if (savedUserDetails) setUserDetails(JSON.parse(savedUserDetails));
 
-          if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'PM' && hours !== 12) {
-              hours += 12;
-          }
-          if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'AM' && hours === 12) {
-              hours = 0; // Midnight case
-          }
-          return hours * 60 + minutes;
-      } catch {
-          return 0;
+        const savedPlans = localStorage.getItem('savedTimetables');
+        if (savedPlans) setSavedTimetables(JSON.parse(savedPlans));
+
+        const savedNotes = localStorage.getItem('notes');
+        if (savedNotes) setNotes(JSON.parse(savedNotes));
+        
+        const savedSmartPlan = localStorage.getItem('smartPlan');
+        if (savedSmartPlan) setSmartPlan(JSON.parse(savedSmartPlan));
+        
+        const savedNotifSettings = localStorage.getItem('notificationSettings');
+        if (savedNotifSettings) setNotificationSettings(JSON.parse(savedNotifSettings));
+        
+        const savedTrackedData = localStorage.getItem('trackedData');
+        if (savedTrackedData) setTrackedData(JSON.parse(savedTrackedData));
+
+      } catch (error) {
+        console.error("Failed to load data from localStorage", error);
+        addToast("Could not load saved data.", "error");
       }
-    }, []);
-
-    const handleSessionCompleted = (session: ActiveSession, durationMinutes: number) => {
-        if (session.type === 'study' && !session.isUntracked) {
-             const newTrackedSession: TrackedSession = {
-                subject: session.subject,
-                durationMinutes,
-                date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-            };
-            setTrackedData([...trackedData, newTrackedSession]);
-        }
-
-        if (session.nextSlot) {
-            const now = Date.now();
-            const duration = timeToMinutes(session.nextSlot.endTime) - timeToMinutes(session.nextSlot.startTime);
-            const endTime = now + (duration * 60 * 1000);
-            
-            setActiveSession({
-                startTime: now,
-                endTime: endTime,
-                subject: session.nextSlot.activity,
-                type: session.nextSlot.type === ActivityType.BREAK ? 'break' : 'study',
-                fromSlot: session.nextSlot,
-                nextSlot: null, // Don't chain beyond one break
-                isLearningHubSession: session.isLearningHubSession,
-                originalStudySubject: session.subject, // Pass original study subject
-            });
-        } else if (session.type === 'break' && session.isLearningHubSession) {
-            const now = Date.now();
-            setActiveSession({
-                startTime: now,
-                subject: session.originalStudySubject || 'Study Material',
-                type: 'postBreakView',
-                fromSlot: session.fromSlot,
-                nextSlot: null,
-                isLearningHubSession: true,
-            });
-        } else {
-            setActiveSession(null);
-        }
     };
-    
-    useEffect(() => {
-        // This effect handles scheduled notifications for session reminders
-        if (!smartPlan || !notificationSettings.enabled || !notificationSettings.reminders) return;
+    loadData();
+  }, []);
 
-        const checkSchedule = () => {
-             if (Notification.permission !== 'granted') {
-                return; // Can't send notifications if permission is not granted
-            }
+  const persistState = <T,>(key: string, state: T) => {
+    try {
+      if (state !== null && state !== undefined) {
+        localStorage.setItem(key, JSON.stringify(state));
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.error(`Failed to persist state for key "${key}"`, error);
+    }
+  };
 
-            const now = new Date();
-            const todayStr = now.toISOString().split('T')[0];
+  useEffect(() => persistState('userDetails', userDetails), [userDetails]);
+  useEffect(() => persistState('savedTimetables', savedTimetables), [savedTimetables]);
+  useEffect(() => persistState('notes', notes), [notes]);
+  useEffect(() => persistState('smartPlan', smartPlan), [smartPlan]);
+  useEffect(() => persistState('notificationSettings', notificationSettings), [notificationSettings]);
+  useEffect(() => persistState('trackedData', trackedData), [trackedData]);
 
-            // Reset the set of sent reminders if the day has changed
-            if (sentRemindersRef.current.date !== todayStr) {
-                sentRemindersRef.current = { date: todayStr, reminders: new Set<string>() };
-            }
-            
-            // Monday is 0 in our DAYS_OF_WEEK array, but 1 in getDay(), Sunday is 6 and 0 respectively
-            const dayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
-            const currentDayOfWeek = DAYS_OF_WEEK[dayIndex];
-            
-            const todayPlan = smartPlan.find(dayPlan => dayPlan.day === currentDayOfWeek);
-            if (!todayPlan) return;
-            
-            const reminderMinutes = notificationSettings.reminderTime;
+  const addToast = useCallback((message: string, type: Toast['type']) => {
+    const newToast = { id: Date.now(), message, type };
+    setToasts(prev => [...prev, newToast]);
+  }, []);
 
-            todayPlan.slots.forEach(slot => {
-                // Only send reminders for study sessions and lectures
-                if (slot.type !== ActivityType.STUDY && slot.type !== ActivityType.LECTURE) {
-                    return;
-                }
+  const dismissToast = (id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+  
+  const handleOnboardingComplete = (details: UserDetails) => {
+    setUserDetails(details);
+  };
+  
+  const learningHubFile = learningHubState.file;
+  const isStudyMode = activeSession?.type === 'study' && learningHubFile;
 
-                const slotTimeInMinutes = timeToMinutes(slot.startTime);
-                // A basic check to avoid acting on a failed parse from timeToMinutes
-                if (slotTimeInMinutes === 0 && !slot.startTime.startsWith("12:00 AM")) return;
-
-                const slotStartDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.floor(slotTimeInMinutes / 60), slotTimeInMinutes % 60);
-                
-                // Calculate the exact time the reminder should be sent
-                const reminderTime = new Date(slotStartDate.getTime() - reminderMinutes * 60 * 1000);
-                
-                // A unique ID for this specific reminder on this day to prevent duplicates
-                const reminderId = `${todayPlan.day}-${slot.startTime}-${slot.activity}`;
-                
-                // Check if the current time matches the reminder time (to the minute)
-                // and if we haven't already sent this reminder today
-                if (
-                    now.getHours() === reminderTime.getHours() &&
-                    now.getMinutes() === reminderTime.getMinutes() &&
-                    !sentRemindersRef.current.reminders.has(reminderId)
-                ) {
-                    const title = slot.type === ActivityType.STUDY ? `Upcoming Study Session` : `Upcoming Lecture`;
-                    const body = `'${slot.activity}' starts in ${reminderMinutes} minutes.`;
-
-                    new Notification(title, { body });
-                    
-                    // Mark this reminder as sent for today
-                    sentRemindersRef.current.reminders.add(reminderId);
-                }
-            });
-        };
-
-        const interval = setInterval(checkSchedule, 60000); // Check every minute
-        return () => clearInterval(interval);
-    }, [smartPlan, notificationSettings, timeToMinutes]);
-
-    const handleOnboardingComplete = (details: UserDetails) => {
-        setUserDetails(details);
-        addToast('Profile saved! Welcome to EduBlay.', 'success');
-    };
-    
-    const renderView = () => {
-        switch (view) {
-            case 'dashboard':
-                return <Dashboard 
-                    setSmartPlan={setSmartPlan} 
-                    smartPlan={smartPlan} 
-                    userDetails={userDetails!} 
-                    setUserDetails={setUserDetails} 
-                    savedTimetables={savedTimetables} 
-                    setSavedTimetables={setSavedTimetables} 
-                    addToast={addToast}
-                    setActiveSession={setActiveSession}
-                    trackedData={trackedData}
-                    setTrackedData={setTrackedData}
+  const renderView = () => {
+    switch (view) {
+      case 'dashboard':
+        return <Dashboard 
+                  setSmartPlan={setSmartPlan} 
+                  smartPlan={smartPlan} 
+                  userDetails={userDetails}
+                  setUserDetails={setUserDetails}
+                  savedTimetables={savedTimetables}
+                  setSavedTimetables={setSavedTimetables}
+                  addToast={addToast}
+                  setActiveSession={setActiveSession}
+                  trackedData={trackedData}
+                  setTrackedData={setTrackedData}
+               />;
+      case 'profile':
+        return <Profile userDetails={userDetails} setUserDetails={setUserDetails} addToast={addToast} />;
+      case 'mytimetables':
+// FIX: Passed `addToast` prop to MyTimetables component.
+        return <MyTimetables savedTimetables={savedTimetables} setSavedTimetables={setSavedTimetables} onLoadPlan={(plan) => { setSmartPlan(plan); setView('dashboard'); }} addToast={addToast} />;
+      case 'progression':
+        return <Progression plan={smartPlan} trackedData={trackedData} />;
+      case 'notes':
+        return <Notes notes={notes} setNotes={setNotes} />;
+      case 'uploadslides':
+        return <UploadSlides
+                  smartPlan={smartPlan}
+                  activeSession={activeSession}
+                  setActiveSession={setActiveSession}
+                  setView={setView}
+                  addToast={addToast}
+                  learningHubState={learningHubState}
+                  setLearningHubState={setLearningHubState}
+                  notes={notes}
+                  setNotes={setNotes}
                 />;
-            case 'progression':
-                return <Progression plan={smartPlan} trackedData={trackedData} />;
-            case 'uploadslides':
-                return <UploadSlides smartPlan={smartPlan} setSmartPlan={setSmartPlan} activeSession={activeSession} setActiveSession={setActiveSession} setView={setView} addToast={addToast} learningHubState={learningHubState} setLearningHubState={setLearningHubState} notes={notes} setNotes={setNotes} showTitle={true} />;
-            case 'examprep':
-                return <ExamPrep addToast={addToast} setView={setView} />;
-            case 'mytimetables':
-                return <MyTimetables savedTimetables={savedTimetables} setSavedTimetables={setSavedTimetables} onLoadPlan={(plan) => { setSmartPlan(plan); setView('dashboard'); }} />;
-            case 'notes':
-                return <Notes notes={notes} setNotes={setNotes} />;
-            case 'profile':
-                return <Profile userDetails={userDetails} setUserDetails={setUserDetails} addToast={addToast} />;
-            case 'notification':
-                return <NotificationSettingsComponent settings={notificationSettings} setSettings={setNotificationSettings} />;
-            case 'language':
-                return <LanguageSettings />;
-            case 'theme':
-                return <ThemeSettings />;
-            case 'settings':
-                return <Settings notificationSettings={notificationSettings} setNotificationSettings={setNotificationSettings} />;
-            case 'report':
-                return <Reports userDetails={userDetails} />;
-            case 'feedback':
-                return <Feedback />;
-            case 'help':
-                return <Help setView={setView} />;
-            case 'about':
-                return <About />;
-            case 'library':
-                return <Library />;
-            case 'terms':
-                return <Terms />;
-            default:
-                return <div>Not implemented</div>;
-        }
-    };
+      case 'examprep':
+        return <ExamPrep addToast={addToast} setView={setView} />;
+      case 'language':
+        return <LanguageSettings />;
+      case 'theme':
+        return <ThemeSettings />;
+      case 'notification':
+        return <NotificationSettingsComponent settings={notificationSettings} setSettings={setNotificationSettings} />;
+      case 'settings':
+        return <Settings notificationSettings={notificationSettings} setNotificationSettings={setNotificationSettings} />;
+      case 'report':
+        return <Reports userDetails={userDetails} />;
+      case 'feedback':
+        return <Feedback />;
+      case 'help':
+        return <Help setView={setView} />;
+      case 'about':
+        return <About />;
+      case 'library':
+        return <Library />;
+      case 'terms':
+        return <Terms />;
+      default:
+        return <div>Not Found</div>;
+    }
+  };
 
-    const renderContent = () => {
-        if (!userDetails) {
-            return <Onboarding onComplete={handleOnboardingComplete} addToast={addToast} />;
-        }
-        
-        if (activeSession?.isLearningHubSession) {
-            return <FocusedStudyView session={activeSession} learningHubFile={learningHubState.file} onExit={() => setActiveSession(null)} addToast={addToast} />;
-        }
-        
-        if (activeSession?.type === 'break' && activeSession.fromSlot.link) {
-            return <BreakView session={activeSession} />;
-        }
+  if (!userDetails) {
+    return <Onboarding onComplete={handleOnboardingComplete} addToast={addToast} />;
+  }
+  
+  if (isStudyMode) {
+     return <FocusedStudyView session={activeSession} learningHubFile={learningHubFile} onExit={() => setActiveSession(null)} addToast={addToast} />;
+  }
 
-        return (
-            <div className={`flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 theme-${theme}`}>
-                <Sidebar view={view} setView={setView} isOpen={isSidebarOpen} setOpen={setSidebarOpen} />
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    <Header toggleSidebar={() => setSidebarOpen(!isSidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} />
-                    <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6 lg:p-8">
-                        {renderView()}
-                    </main>
-                </div>
-            </div>
-        );
-    };
-
-    return (
-        <>
-            {renderContent()}
-            {activeSession && (activeSession.type === 'study' || activeSession.type === 'break') && <StudyTracker activeSession={activeSession} setActiveSession={setActiveSession} onSessionCompleted={handleSessionCompleted} notificationSettings={notificationSettings} />}
-            <ToastContainer toasts={toasts} onDismiss={removeToast} />
-        </>
-    );
+  return (
+    <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <Sidebar view={view} setView={setView} isOpen={sidebarOpen} setOpen={setSidebarOpen} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
+          {renderView()}
+{/* FIX: Passed missing `trackedData` and `setTrackedData` props to StudyTracker. */}
+          {activeSession?.type === 'study' && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} />}
+        </main>
+      </div>
+       {activeSession?.type === 'break' && <BreakView session={activeSession} />}
+    </div>
+  );
 };
 
 export default App;

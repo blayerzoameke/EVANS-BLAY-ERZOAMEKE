@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon';
-// FIX: Imported ConflictInfo to be used in props.
-import type { ConflictInfo } from '../types';
+// FIX: Imported ConflictInfo to be used in props. Added .ts extension.
+import type { ConflictInfo } from '../types.ts';
 
 // Helper component to parse and render simple markdown-like bold text
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {

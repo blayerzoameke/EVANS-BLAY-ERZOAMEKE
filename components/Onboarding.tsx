@@ -1,7 +1,10 @@
+
 import React, { useState } from 'react';
 import UserDetailsForm from './UserDetailsForm';
-import type { UserDetails, Toast } from '../types';
-import { EducationalLevel } from '../types';
+// FIX: Added .ts extension to import path.
+import type { UserDetails, Toast } from '../types.ts';
+// FIX: Changed to value import for enum usage.
+import { EducationalLevel } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LogoIcon } from './icons/LogoIcon';
 
@@ -33,6 +36,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, addToast }) => {
                 // @ts-ignore
                 addToast(t('onboarding.error.countryRequired'), 'error');
                 return;
+            }
+            if (userDetails.email) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(userDetails.email)) {
+                    addToast(t('userdetails.emailInvalid' as any), 'error');
+                    return;
+                }
             }
         }
         setStep(prev => prev + 1);

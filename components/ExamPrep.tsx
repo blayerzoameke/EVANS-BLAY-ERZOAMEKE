@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
@@ -5,6 +6,7 @@ import {
     getDocumentContext,
     generateQuiz,
 } from '../services/geminiService';
+// FIX: Added .ts extension to import path.
 import type { 
     UploadedFile, 
     Toast,
@@ -12,10 +14,12 @@ import type {
     QuizSummary,
     AnswerFeedback,
 } from '../types.ts';
+// FIX: Added .ts extension to import path.
 import { QuizType } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
 import { UploadIcon } from './icons/UploadIcon';
 import { CloseIcon } from './icons/CloseIcon';
+// FIX: Added .tsx extension to import path.
 import type { View } from '../App.tsx';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { PdfIcon } from './icons/PdfIcon.tsx';
@@ -304,7 +308,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({ addToast, setView }) => {
                     <div>
                         <label className="block text-sm font-medium">Quiz Type</label>
                         <select value={quizConfig.type} onChange={e => setQuizConfig({...quizConfig, type: e.target.value as QuizType})} className="mt-1 block w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
-                            {Object.values(QuizType).map(t => <option key={t} value={t}>{t}</option>)}
+                            {Object.values(QuizType).map(quizType => <option key={quizType} value={quizType}>{quizType}</option>)}
                         </select>
                     </div>
                     <button onClick={handleGenerateQuiz} disabled={isGenerating} className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-400">

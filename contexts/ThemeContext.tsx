@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 // FIX: Added .ts extension to import path.
 import type { Theme } from '../types.ts';

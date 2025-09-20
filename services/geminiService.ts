@@ -77,8 +77,8 @@ function buildBasePrompt(
 
 async function generatePlan(prompt: string, imagePart?: ImagePart): Promise<SmartPlan> {
     try {
-        // FIX: Corrected the structure of the 'contents' property for multipart requests to align with the Gemini API SDK.
-        const contents = imagePart ? { parts: [imagePart, { text: prompt }] } : prompt;
+// FIX: Corrected the structure of the 'contents' property for multipart requests to align with the Gemini API SDK.
+        const contents = imagePart ? { parts: [{ text: prompt }, imagePart] } : prompt;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
