@@ -1,52 +1,82 @@
-// FIX: Replaced incorrect component definition with actual type definitions to resolve all import errors.
 
-export type Language = string;
-export type Theme = 'light' | 'dark' | 'system';
 
-export enum EducationalLevel {
-    HIGH_SCHOOL = 'highschool',
-    UNDERGRADUATE = 'undergraduate',
-    POSTGRADUATE = 'postgraduate',
-    PHD = 'phd',
-    OTHER = 'other',
-}
-
-export interface UserDetails {
-    name: string;
-    educationalLevel: EducationalLevel;
-    institution?: string;
-    country?: string;
-    email?: string;
-    profilePicture?: string | null;
-    institutionLogo?: string | null;
-    biography?: string;
-}
-
+// FIX: Resolve circular dependency and export errors by defining DayOfWeek enum here.
 export enum DayOfWeek {
-    Monday = "Monday",
-    Tuesday = "Tuesday",
-    Wednesday = "Wednesday",
-    Thursday = "Thursday",
-    Friday = "Friday",
-    Saturday = "Saturday",
-    Sunday = "Sunday",
+  Monday = 'Monday',
+  Tuesday = 'Tuesday',
+  Wednesday = 'Wednesday',
+  Thursday = 'Thursday',
+  Friday = 'Friday',
+  Saturday = 'Saturday',
+  Sunday = 'Sunday',
+}
+
+// FIX: Defined enums directly in this file to resolve import and circular dependency errors.
+export enum EducationalLevel {
+  HIGH_SCHOOL = 'High School',
+  UNDERGRADUATE = 'Undergraduate',
+  POSTGRADUATE = 'Postgraduate',
+  PHD = 'PhD Student',
+  OTHER = 'Other',
 }
 
 export enum ActivityType {
-    LECTURE = 'lecture',
-    STUDY = 'study',
-    AGENDA = 'agenda',
-    BREAK = 'break',
-    FREE = 'free',
+  LECTURE = 'lecture',
+  STUDY = 'study',
+  AGENDA = 'agenda',
+  BREAK = 'break',
+  FREE = 'free',
+}
+
+export enum QuizType {
+  MCQ = 'MCQ',
+  CONCEPTUAL = 'Conceptual',
+  THEORY = 'Theory',
+}
+
+
+export interface UserDetails {
+  name: string;
+  educationalLevel: EducationalLevel;
+  country: string;
+  institution: string;
+  email?: string;
+  profilePicture?: string | null;
+  institutionLogo?: string | null;
+  biography?: string;
+}
+
+export interface Lecture {
+  id: string;
+  subject: string;
+  day: DayOfWeek;
+  startTime: string;
+  endTime: string;
+  location?: string;
+}
+
+export interface StudyGoal {
+  id: string;
+  subject: string;
+  hours: number;
+  materials?: string;
+}
+
+export interface AgendaItem {
+  id: string;
+  title: string;
+  day: DayOfWeek;
+  startTime: string;
+  endTime: string;
 }
 
 export interface PlanSlot {
-    activity: string;
-    startTime: string;
-    endTime: string;
-    type: ActivityType;
-    link?: string;
-    code?: string;
+  activity: string;
+  startTime: string;
+  endTime: string;
+  type: ActivityType;
+  link?: string;
+  code?: string;
 }
 
 export interface DayPlan {
@@ -57,35 +87,78 @@ export interface DayPlan {
 export type SmartPlan = DayPlan[];
 
 export interface StoredPlan {
-    id: string;
+  id: string;
+  name: string;
+  createdAt: string;
+  plan: SmartPlan;
+  isFavourite: boolean;
+}
+
+export interface ImagePart {
+  inlineData: {
+    data: string; // base64 encoded string
+    mimeType: string;
+  };
+}
+
+export interface AppSettings {
+}
+
+export interface CourseCodeMap {
+    [code: string]: string;
+}
+
+export interface Toast {
+    id: number;
+    message: string;
+    type: 'success' | 'error' | 'info';
+}
+
+export interface UploadedFile {
     name: string;
-    createdAt: string;
-    plan: SmartPlan;
-    isFavourite: boolean;
+    type: string;
+    size: number;
+    base64: string;
+    context: string;
 }
 
-export interface Lecture {
-    id: string;
-    subject: string;
-    day: DayOfWeek;
-    startTime: string;
-    endTime: string;
-    location?: string;
+export interface ChatTurn {
+    user: string;
+    blay: string;
 }
 
-export interface StudyGoal {
-    id: string;
-    subject: string;
-    hours: number;
-    materials?: string;
+export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'chat' | 'read';
+
+export interface LearningHubState {
+    file: UploadedFile | null;
+    analysisMode: AnalysisMode;
+    analysisResults: {
+        summarize: string | null;
+        explain: string | null;
+        read: string | null;
+    };
+    chatHistory: ChatTurn[];
 }
 
-export interface AgendaItem {
-    id: string;
-    title: string;
-    day: DayOfWeek;
-    startTime: string;
-    endTime: string;
+export interface QuizQuestion {
+    type: QuizType;
+    question: string;
+    options?: string[]; // Only for MCQ
+    correctAnswer: string;
+    explanation: string;
+    topic: string;
+}
+
+export interface AnswerFeedback {
+    isCorrect: boolean;
+    explanation: string;
+}
+
+export interface QuizSummary {
+    score: number;
+    strengths: string[];
+    weaknesses: string[];
+    recommendations: string[];
 }
 
 export interface Note {
@@ -101,79 +174,34 @@ export interface NotificationSettings {
     status: 'unconfigured' | 'configured';
     enabled: boolean;
     reminders: boolean;
-    reminderTime: 5 | 10 | 15 | number;
+    reminderTime: 5 | 10 | 15;
     sessionStart: boolean;
     breakStartEnd: boolean;
 }
 
-export interface UploadedFile {
-    file: File;
-    name: string;
-    size: number;
-    type: string;
-    base64: string;
-    context?: string;
+export interface ActiveSession {
+    startTime: number;
+    endTime?: number;
+    subject: string;
+    type: 'study' | 'break' | 'postBreakView';
+    fromSlot: PlanSlot;
+    nextSlot: PlanSlot | null;
+    isLearningHubSession?: boolean;
+    isUntracked?: boolean;
+    originalStudySubject?: string;
 }
 
-export interface ActiveSession {
-    type: 'study' | 'break';
-    subject: string;
-    startTime: number;
-    endTime: number;
-    fromSlot: PlanSlot;
-    studyModeFile?: UploadedFile;
-    isUntracked?: boolean;
-}
+export type Theme = 'light' | 'dark' | 'system';
 
 export interface TrackedSession {
     subject: string;
     durationMinutes: number;
-    date: string;
+    date: string; // YYYY-MM-DD
 }
 
-export interface AppSettings {
-    printButtonEnabled: boolean;
-}
-
-export interface Toast {
-    id: number;
-    message: string;
-    type: 'info' | 'success' | 'error' | 'warning';
-}
-
-export interface ImagePart {
-    inlineData: {
-        data: string;
-        mimeType: string;
-    };
-}
-
-export type CourseCodeMap = {
-    [code: string]: string;
-};
-
-export enum QuizType {
-    MCQ = 'MCQ',
-    CONCEPTUAL = 'Conceptual',
-    THEORY = 'Theory',
-}
-
-export interface QuizQuestion {
-    question: string;
-    options?: string[];
-    type: QuizType;
-    correctAnswer: string;
-    explanation: string;
-}
-
-export interface AnswerFeedback {
-    isCorrect: boolean;
-    explanation: string;
-}
-
-export interface QuizSummary {
-    score: number;
-    strengths: string[];
-    weaknesses: string[];
-    recommendations: string[];
+export interface ConflictInfo {
+    plannedSubject: string;
+    uploadedSubject: string;
+    slot: PlanSlot;
+    day: DayOfWeek;
 }

@@ -1,16 +1,45 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
 import UserDetailsForm from './UserDetailsForm';
 import TimetableInput from './TimetableInput';
 import SmartPlanView from './SmartPlanView';
 import CourseCodeModal from './CourseCodeModal';
+import LogStudyModal from './LogStudyModal';
 import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService';
-import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, AppSettings, CourseCodeMap, Toast } from '../types.ts';
-import { EducationalLevel, ActivityType } from '../types.ts';
+// FIX: Moved DayOfWeek from type-only import to regular import to allow its use as a value.
+import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession } from '../types.ts';
+import { EducationalLevel, ActivityType, DayOfWeek } from '../types.ts';
 import { UploadIcon } from './icons/UploadIcon';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LogoIcon } from './icons/LogoIcon.tsx';
 
 const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '' };
+
+const timeToMinutes = (time: string): number => {
+    if (!time || !time.includes(':')) return 0;
+    try {
+        const timeParts = time.split(' ');
+        const [hourStr, minuteStr] = timeParts[0].split(':');
+        let hours = parseInt(hourStr, 10);
+        const minutes = parseInt(minuteStr, 10);
+
+        if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'PM' && hours !== 12) {
+            hours += 12;
+        }
+        if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'AM' && hours === 12) {
+            hours = 0; // Midnight case
+        }
+        return hours * 60 + minutes;
+    } catch {
+        return 0;
+    }
+};
+
+const getDayOfWeek = (date: Date): DayOfWeek => {
+    const dayIndex = date.getDay(); // Sunday - 0, Monday - 1, ...
+    const days: DayOfWeek[] = [DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday];
+    return days[dayIndex];
+};
 
 const Dashboard: React.FC<{
   setSmartPlan: (plan: SmartPlan | null) => void;
@@ -19,9 +48,11 @@ const Dashboard: React.FC<{
   setUserDetails: (details: UserDetails) => void;
   savedTimetables: StoredPlan[];
   setSavedTimetables: (plans: StoredPlan[]) => void;
-  appSettings: AppSettings;
   addToast: (message: string, type: Toast['type']) => void;
-}> = ({ setSmartPlan, smartPlan, userDetails: initialUserDetails, setUserDetails: setGlobalUserDetails, savedTimetables, setSavedTimetables, appSettings, addToast }) => {
+  setActiveSession: (session: ActiveSession | null) => void;
+  trackedData: TrackedSession[];
+  setTrackedData: (data: TrackedSession[]) => void;
+}> = ({ setSmartPlan, smartPlan, userDetails: initialUserDetails, setUserDetails: setGlobalUserDetails, savedTimetables, setSavedTimetables, addToast, setActiveSession, trackedData, setTrackedData }) => {
   const [userDetails, setUserDetails] = useState<UserDetails>(initialUserDetails || emptyUserDetails);
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [studyGoals, setStudyGoals] = useState<StudyGoal[]>([]);
@@ -37,6 +68,7 @@ const Dashboard: React.FC<{
   const [tempSmartPlan, setTempSmartPlan] = useState<SmartPlan | null>(null);
   const [courseCodes, setCourseCodes] = useState<string[]>([]);
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
+  const [selectedSlotForLog, setSelectedSlotForLog] = useState<{ slot: PlanSlot; day: DayOfWeek } | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
   const { t } = useLanguage();
 
@@ -55,6 +87,8 @@ const Dashboard: React.FC<{
     lectures.some(l => l.subject.trim() !== '') ||
     studyGoals.some(g => g.subject.trim() !== '') ||
     agendaItems.some(a => a.title.trim() !== '');
+    
+  const isManualInputStarted = lectures.some(l => l.subject.trim() !== '') || studyGoals.some(g => g.subject.trim() !== '');
 
   const extractCourseCodes = (plan: SmartPlan): string[] => {
     const codeRegex = /\b([A-Z]{2,5}\s?\d{2,4})\b/g;
@@ -178,15 +212,22 @@ const Dashboard: React.FC<{
     setCourseCodes([]);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
     if (file) {
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
       setLectures([]);
       setAgendaItems([]);
     }
-  };
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': ['.jpeg', '.jpg', '.png'] },
+    multiple: false,
+    disabled: isLoading || isManualInputStarted,
+  });
   
   const clearImage = () => {
       setImageFile(null);
@@ -209,15 +250,46 @@ const Dashboard: React.FC<{
       }
   };
   
-  const handlePrint = () => {
-      window.print();
-  }
-  
+  const handleOpenLogModal = (slot: PlanSlot, day: DayOfWeek) => {
+    setSelectedSlotForLog({ slot, day });
+  };
+
+  const handleStartSession = (slot: PlanSlot) => {
+    const now = Date.now();
+    const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
+    const endTime = now + (duration * 60 * 1000);
+    const today = getDayOfWeek(new Date());
+    const dayPlan = smartPlan?.find(d => d.day === today);
+    const slotIndex = dayPlan?.slots.findIndex(s => s.startTime === slot.startTime && s.activity === slot.activity) ?? -1;
+    const nextSlot = (dayPlan && slotIndex !== -1 && slotIndex + 1 < dayPlan.slots.length) ? dayPlan.slots[slotIndex + 1] : null;
+
+    setActiveSession({
+        startTime: now,
+        endTime: endTime,
+        subject: slot.activity,
+        type: 'study',
+        fromSlot: slot,
+        nextSlot: (nextSlot && nextSlot.type === ActivityType.BREAK) ? nextSlot : null,
+    });
+    addToast(t('toasts.sessionStarted'), 'success');
+    setSelectedSlotForLog(null);
+  };
+
+  const handleLogTime = (subject: string, durationMinutes: number, date: string) => {
+    const newTrackedSession: TrackedSession = {
+        subject,
+        durationMinutes,
+        date,
+    };
+    setTrackedData([...trackedData, newTrackedSession]);
+    addToast(t('toasts.logSaved'), 'success');
+  };
+
   if (smartPlan) {
     return (
         <div id="printable-area">
           <div className="flex justify-between items-center mb-6 no-print">
-            <h2 className="text-3xl font-bold text-slate-800 dark:text-white">{t('dashboard.yourSmartPlan')}</h2>
+            <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('dashboard.yourSmartPlan')}</h2>
             <div className="flex gap-2">
                 <button
                     onClick={() => setSaveModalOpen(true)}
@@ -225,40 +297,42 @@ const Dashboard: React.FC<{
                 >
                     {t('common.save')}
                 </button>
-                 {appSettings.printButtonEnabled && (
-                    <button
-                        onClick={handlePrint}
-                        className="px-4 py-2 font-medium text-white bg-blue-700 rounded-md hover:bg-blue-800"
-                    >
-                        {t('dashboard.print')}
-                    </button>
-                 )}
                 <button
                 onClick={() => { setSmartPlan(null); setStep(1); }}
-                className="px-4 py-2 font-medium text-blue-700 dark:text-blue-500 bg-blue-100 dark:bg-blue-900/50 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800"
+                className="px-4 py-2 font-medium text-sky-700 dark:text-sky-400 bg-sky-100 dark:bg-sky-900/50 rounded-md hover:bg-sky-200 dark:hover:bg-sky-800"
                 >
                 {t('dashboard.createNewPlan')}
                 </button>
             </div>
           </div>
-          <SmartPlanView plan={smartPlan} />
+          <SmartPlanView plan={smartPlan} onStudySlotClick={handleOpenLogModal} />
            {saveModalOpen && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
-                  <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-xl w-full max-w-sm">
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm">
                       <h3 className="text-xl font-bold mb-4">{t('mytimetables.renameModalTitle')}</h3>
                       <input 
                           type="text"
                           value={planName}
                           onChange={e => setPlanName(e.target.value)}
                           placeholder={t('dashboard.planNamePlaceholder')}
-                          className="w-full p-2 border rounded-md dark:bg-slate-700 dark:border-slate-600"
+                          className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
                       />
                       <div className="flex justify-end gap-4 mt-4">
-                          <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded-md">{t('common.cancel')}</button>
-                          <button onClick={handleSavePlan} className="px-4 py-2 bg-blue-700 text-white rounded-md">{t('common.save')}</button>
+                          <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
+                          <button onClick={handleSavePlan} className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-500 text-white rounded-md">{t('common.save')}</button>
                       </div>
                   </div>
               </div>
+          )}
+          {selectedSlotForLog && (
+            <LogStudyModal
+                isOpen={!!selectedSlotForLog}
+                onClose={() => setSelectedSlotForLog(null)}
+                slot={selectedSlotForLog.slot}
+                day={selectedSlotForLog.day}
+                onStartSession={handleStartSession}
+                onLogTime={handleLogTime}
+            />
           )}
         </div>
       )
@@ -266,86 +340,80 @@ const Dashboard: React.FC<{
 
   return (
     <div className="space-y-8">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 md:p-8">
-        <h2 className="text-3xl font-bold text-center text-slate-800 dark:text-white mb-2">{t('dashboard.createPlanTitle')}</h2>
-        <p className="text-center text-slate-500 dark:text-slate-400 mb-8">{t('dashboard.createPlanSubtitle')}</p>
+      <div className="bg-white dark:bg-gray-800/50 rounded-2xl shadow-lg p-6 md:p-8 border dark:border-gray-700">
+        <h2 className="text-3xl font-bold text-center text-gray-800 dark:text-white mb-2">{t('dashboard.createPlanTitle')}</h2>
+        <p className="text-center text-gray-500 dark:text-gray-400 mb-8">{t('dashboard.createPlanSubtitle')}</p>
         
         {step === 1 && (
             <>
                 <div className="mt-8">
-                    <h3 className="text-xl font-semibold mb-4 text-slate-800 dark:text-slate-200">{t('dashboard.yourDetails')}</h3>
                     <UserDetailsForm userDetails={userDetails} setUserDetails={handleUserDetailsChange} disabled={isLoading} />
                 </div>
                 {error && <p className="mt-4 text-center text-red-500">{error}</p>}
-                <div className="mt-8 pt-6 border-t dark:border-slate-700 flex justify-end">
+                <div className="mt-8 pt-6 border-t dark:border-gray-700 flex justify-end">
                     <button
                         onClick={handleNextStep}
-                        className="px-6 py-2 font-semibold text-white bg-blue-700 rounded-md shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        className="w-full sm:w-auto px-6 py-2 font-semibold text-white bg-gradient-to-r from-sky-500 to-blue-500 rounded-md shadow-sm hover:from-sky-600 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
-                        {t('dashboard.nextStep')}
+                        {t('common.next')}
                     </button>
                 </div>
             </>
         )}
 
         {step === 2 && (
-            <>
-                <div className="mt-8">
-                    <h3 className="text-xl font-semibold mb-4 text-slate-800 dark:text-slate-200">{t('dashboard.yourSchedule')}</h3>
-                    <div className="p-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-center mb-6">
+            <div className="space-y-8">
+                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                    <div className="flex items-center mb-5">
+                       <span className="h-6 w-1 bg-gradient-to-b from-sky-500 to-blue-500 rounded-full mr-3"></span>
+                       <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">{t('dashboard.yourSchedule')}</h3>
+                    </div>
+                    <div className="py-6">
                         {!imagePreview ? (
-                            <>
-                            <label htmlFor="timetable-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600">
-                                <UploadIcon className="w-5 h-5" />
-                                {t('dashboard.uploadTimetable')}
-                            </label>
-                            <input id="timetable-upload" type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isLoading} />
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">{t('dashboard.manualEntry')}</p>
-                            </>
+                            <div {...getRootProps()} className={`group p-10 border-2 border-dashed rounded-lg transition-colors ${isDragActive ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-gray-300 dark:border-gray-600'} ${isLoading || isManualInputStarted ? 'cursor-not-allowed opacity-50 bg-gray-50 dark:bg-gray-800' : 'cursor-pointer hover:border-teal-400'}`}>
+                                <input {...getInputProps()} />
+                                <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400 transition-colors group-hover:text-teal-600 dark:group-hover:text-teal-400">
+                                    <UploadIcon className="w-12 h-12 mb-4" />
+                                    <p className="font-semibold">{t('dashboard.uploadTimetable')}</p>
+                                    <p className="text-sm">{t('dashboard.manualEntry')}</p>
+                                    {isManualInputStarted && <p className="text-xs text-gray-400 mt-2">{t('dashboard.uploadDisabled')}</p>}
+                                </div>
+                            </div>
                         ) : (
                             <div className="flex flex-col items-center gap-4">
-                                <img src={imagePreview} alt="Timetable preview" className="max-h-48 rounded-md" />
+                                <img src={imagePreview} alt="Timetable preview" className="max-h-48 rounded-md shadow-md" />
                                 <button onClick={clearImage} className="text-sm text-red-500 hover:underline" disabled={isLoading}>{t('dashboard.removeImage')}</button>
                             </div>
                         )}
                     </div>
-                     {!imageFile ? (
-                        <TimetableInput
-                            lectures={lectures} setLectures={setLectures}
-                            studyGoals={studyGoals} setStudyGoals={setStudyGoals}
-                            agendaItems={agendaItems} setAgendaItems={setAgendaItems}
-                            generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
-                            disabled={isLoading}
-                        />
-                    ) : (
-                        <div className="w-full mt-8">
-                            <TimetableInput
-                                lectures={[]} setLectures={()=>{}}
-                                studyGoals={studyGoals} setStudyGoals={setStudyGoals}
-                                agendaItems={[]} setAgendaItems={()=>{}}
-                                generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
-                                disabled={isLoading}
-                            />
-                        </div>
-                    )}
-                </div>
+                 </div>
+
+                 <TimetableInput
+                    lectures={lectures} setLectures={setLectures}
+                    studyGoals={studyGoals} setStudyGoals={setStudyGoals}
+                    agendaItems={agendaItems} setAgendaItems={setAgendaItems}
+                    generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
+                    disabled={isLoading}
+                    manualSectionsDisabled={!!imageFile}
+                />
+
                 {error && <p className="mt-4 text-center text-red-500">{error}</p>}
-                <div className="mt-8 pt-6 border-t dark:border-slate-700 flex items-center justify-between">
+                <div className="mt-8 pt-6 border-t dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <button
                         onClick={() => setStep(1)}
-                        className="px-6 py-2 font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 rounded-md shadow-sm hover:bg-slate-200 dark:hover:bg-slate-600"
+                        className="w-full sm:w-auto px-6 py-2 font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 rounded-md shadow-sm hover:bg-gray-200 dark:hover:bg-gray-600"
                     >
-                        {t('dashboard.previousStep')}
+                        {t('common.previous')}
                     </button>
                     <button
                         onClick={handleGeneratePlan}
                         disabled={isLoading || !isInputSufficient}
-                        className="px-10 py-3 text-lg font-semibold text-white bg-blue-700 rounded-lg shadow-md hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 dark:disabled:bg-blue-800 disabled:cursor-not-allowed transition-colors"
+                        className="w-full sm:w-auto px-10 py-3 text-lg font-semibold text-white bg-gradient-to-r from-sky-500 to-blue-600 rounded-lg shadow-md hover:from-sky-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-1"
                     >
                         {isLoading ? loadingMessage : t('dashboard.generatePlan')}
                     </button>
                 </div>
-            </>
+            </div>
         )}
       </div>
       

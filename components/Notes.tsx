@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 // FIX: Added .ts extension to import path.
 import type { Note } from '../types.ts';
@@ -85,7 +84,8 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes }) => {
 
     const filteredNotes = notes.filter(note => 
         note.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        note.subject.toLowerCase().includes(searchTerm.toLowerCase())
+        note.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        note.content.toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a,b) => (b.isFavourite ? 1 : 0) - (a.isFavourite ? 1 : 0));
 
     return (

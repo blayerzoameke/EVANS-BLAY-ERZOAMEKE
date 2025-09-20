@@ -2,42 +2,99 @@ import React from 'react';
 import { MenuIcon } from './icons/MenuIcon';
 import { LogoIcon } from './icons/LogoIcon';
 import { useLanguage } from '../contexts/LanguageContext';
-import { UserDetails } from '../types';
-import { View } from '../App';
+// FIX: Added .ts extension to import path.
+import { UserDetails, Toast } from '../types.ts';
+import type { View } from '../App.tsx';
+import { ShareIcon } from './icons/ShareIcon.tsx';
 
 interface HeaderProps {
   toggleSidebar: () => void;
   userDetails: UserDetails | null;
   setView: (view: View) => void;
+  addToast: (message: string, type: Toast['type']) => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView }) => {
+const getInitials = (name: string | undefined): string => {
+    if (!name) return '';
+    const nameParts = name.trim().split(' ').filter(Boolean);
+    if (nameParts.length === 1) {
+        return nameParts[0][0]?.toUpperCase() || '';
+    }
+    if (nameParts.length > 1) {
+        const firstInitial = nameParts[0][0]?.toUpperCase() || '';
+        const lastInitial = nameParts[nameParts.length - 1][0]?.toUpperCase() || '';
+        return `${firstInitial}${lastInitial}`;
+    }
+    return '';
+};
+
+const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, addToast }) => {
   const { t } = useLanguage();
+
+  const handleShare = async () => {
+    // FIX: Replaced window.location.href with a hardcoded, valid canonical URL
+    // to prevent "Invalid URL" errors with the Web Share API in certain environments.
+    const appUrl = 'https://edublay-study-hub.web.app/';
+
+    const shareData = {
+      title: t('header.title'),
+      text: t('about.intro'),
+      url: appUrl,
+    };
+
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+            addToast(t('toasts.shareSuccess'), 'success');
+        } catch (err) {
+            if ((err as DOMException).name !== 'AbortError') {
+                console.error('Error sharing:', err);
+                addToast(t('toasts.shareError'), 'error');
+            }
+        }
+    } else {
+        // Fallback to copying the link
+        navigator.clipboard.writeText(appUrl).then(() => {
+            addToast(t('toasts.shareFallback'), 'info');
+        }).catch(err => {
+            console.error('Failed to copy link:', err);
+            addToast('Failed to copy link.', 'error');
+        });
+    }
+  };
+
   return (
-    <header className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm no-print">
+    <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm no-print">
       <div className="flex items-center">
         <button
           onClick={toggleSidebar}
-          className="text-slate-500 dark:text-slate-400 focus:outline-none focus:text-slate-700 dark:focus:text-slate-200 lg:hidden"
+          className="text-gray-500 dark:text-gray-400 focus:outline-none focus:text-gray-700 dark:focus:text-gray-200 lg:hidden"
           aria-label="Open sidebar"
         >
           <MenuIcon className="w-6 h-6" />
         </button>
         <div className="flex items-center ml-4">
-            <LogoIcon className="w-8 h-8 text-blue-700 dark:text-blue-500" />
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 ml-2">
+            <LogoIcon className="w-8 h-8 text-sky-600 dark:text-sky-400" />
+            <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 ml-2">
                 {t('header.title')}
             </h1>
         </div>
       </div>
       <div className="flex items-center">
-         <button onClick={() => setView('profile')} className="flex items-center gap-3 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
-             <span className="font-semibold text-sm hidden md:block text-slate-700 dark:text-slate-200">{userDetails?.name}</span>
+        <button
+            onClick={handleShare}
+            className="p-2 mr-4 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            title={t('common.share')}
+        >
+            <ShareIcon className="w-5 h-5" />
+        </button>
+         <button onClick={() => setView('profile')} className="flex items-center gap-3 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+             <span className="font-semibold text-sm hidden md:block text-gray-700 dark:text-gray-200">{userDetails?.name}</span>
              {userDetails?.profilePicture ? (
                  <img src={userDetails.profilePicture} alt="Profile" className="w-8 h-8 rounded-full object-cover" />
              ) : (
-                 <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
-                     {userDetails?.name ? userDetails.name[0].toUpperCase() : ''}
+                 <div className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center font-bold text-sm">
+                     {getInitials(userDetails?.name)}
                  </div>
              )}
          </button>

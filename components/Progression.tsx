@@ -183,12 +183,12 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
        
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <StatsCard title={t('progression.weeklyOverview')} className="lg:col-span-1">
-                <div className="space-y-3">
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalStudy')}</span><span className="font-bold text-2xl text-blue-600 dark:text-blue-400">{stats.totalHours.study}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalLecture')}</span><span className="font-bold text-lg text-red-600 dark:text-red-400">{stats.totalHours.lecture}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.personalAgenda')}</span><span className="font-bold text-lg text-yellow-600 dark:text-yellow-400">{stats.totalHours.agenda}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalBreak')}</span><span className="font-bold text-lg text-green-600 dark:text-green-400">{stats.totalHours.break}h</span></div>
-                    <div className="flex justify-between items-baseline"><span className="font-medium text-gray-600 dark:text-gray-300">{t('progression.totalFree')}</span><span className="font-bold text-lg text-gray-500 dark:text-gray-400">{stats.totalHours.free}h</span></div>
+                <div className="space-y-4">
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalStudy')}</p><p className="font-bold text-2xl text-blue-600 dark:text-blue-400">{stats.totalHours.study}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalLecture')}</p><p className="font-bold text-lg text-red-600 dark:text-red-400">{stats.totalHours.lecture}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.personalAgenda')}</p><p className="font-bold text-lg text-yellow-600 dark:text-yellow-400">{stats.totalHours.agenda}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalBreak')}</p><p className="font-bold text-lg text-green-600 dark:text-green-400">{stats.totalHours.break}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalFree')}</p><p className="font-bold text-lg text-gray-500 dark:text-gray-400">{stats.totalHours.free}h</p></div>
                 </div>
             </StatsCard>
             
@@ -238,7 +238,7 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
             <StatsCard title={t('progression.dailyScheduled')}>
                  <div className="flex justify-between items-end h-56 space-x-2 md:space-x-4" aria-label="Daily scheduled hours chart">
                     {stats.dailyHours.map(item => (
-                      <div key={item.day} className="flex-1 flex flex-col items-center group">
+                      <div key={item.day} className="flex-1 flex flex-col items-center group transition-colors duration-300 p-1 rounded-t-md hover:bg-slate-100 dark:hover:bg-slate-800">
                           <div className="relative w-full h-full flex items-end">
                             <div 
                               className="w-full bg-blue-400 dark:bg-blue-600 rounded-t-md group-hover:bg-blue-500 transition-all duration-300"

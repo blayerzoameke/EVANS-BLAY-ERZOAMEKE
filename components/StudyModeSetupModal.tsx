@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import type { PlanSlot } from '../types';
+// FIX: Added .ts extension to import path.
+import type { PlanSlot } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon';
 

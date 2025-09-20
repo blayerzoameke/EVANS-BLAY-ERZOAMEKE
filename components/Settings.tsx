@@ -5,18 +5,16 @@ import { ExportIcon } from './icons/ExportIcon';
 import { ImportIcon } from './icons/ImportIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import Switch from './Switch';
-import type { NotificationSettings, AppSettings } from '../types.ts';
+import type { NotificationSettings } from '../types.ts';
 import ConfirmationModal from './ConfirmationModal.tsx';
 
 
 interface SettingsProps {
     notificationSettings: NotificationSettings;
     setNotificationSettings: (settings: NotificationSettings) => void;
-    appSettings: AppSettings;
-    setAppSettings: (settings: AppSettings) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ notificationSettings, setNotificationSettings, appSettings, setAppSettings }) => {
+const Settings: React.FC<SettingsProps> = ({ notificationSettings, setNotificationSettings }) => {
     const { t } = useLanguage();
     const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
 
@@ -83,17 +81,13 @@ const Settings: React.FC<SettingsProps> = ({ notificationSettings, setNotificati
                         <label htmlFor="notif-toggle" className="font-medium text-sm">{t('notifications.enable')}</label>
                         <Switch id="notif-toggle" checked={notificationSettings.enabled} onChange={e => setNotificationSettings({...notificationSettings, enabled: e.target.checked, status: 'configured'})} />
                     </div>
-                    <div className="flex items-center justify-between">
-                        <label htmlFor="print-toggle" className="font-medium text-sm">{t('settings.appSettings.printButton')}</label>
-                        <Switch id="print-toggle" checked={appSettings.printButtonEnabled} onChange={e => setAppSettings({...appSettings, printButtonEnabled: e.target.checked})} />
-                    </div>
                 </div>
 
                 <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow space-y-4">
                     <h3 className="text-lg font-semibold">{t('settings.data.title')}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400">{t('settings.data.desc')}</p>
                     <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                        <button onClick={handleExport} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700">
+                        <button onClick={handleExport} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700">
                             <ExportIcon className="w-4 h-4" /> {t('settings.data.export')}
                         </button>
                         <button onClick={handleImport} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700">

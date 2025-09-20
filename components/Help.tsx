@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ChevronDownIcon } from './icons/ChevronDownIcon.tsx';
-import { View } from '../App';
+import type { View } from '../App.tsx';
 
 interface HelpProps {
     setView: (view: View) => void;

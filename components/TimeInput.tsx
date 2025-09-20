@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ClockIcon } from './icons/ClockIcon';
 
 const generateTimeOptions = () => {
     const times = [];
@@ -65,8 +66,8 @@ const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, id, disabled = f
     option.name.toLowerCase().includes(inputValue.toLowerCase())
   );
   
-  const baseClasses = "h-10 w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
-  const disabledClasses = "disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed";
+  const baseClasses = "w-full h-10 pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-700/50 border-2 border-slate-200 dark:border-slate-600 rounded-lg shadow-inner placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm";
+  const disabledClasses = "disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed";
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -81,6 +82,7 @@ const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, id, disabled = f
         className={`${baseClasses} ${disabledClasses}`}
         disabled={disabled}
       />
+      <ClockIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
       {isOpen && !disabled && (
         <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-48 overflow-auto">
           {filteredOptions.length > 0 ? (

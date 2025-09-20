@@ -82,9 +82,9 @@ const MyTimetables: React.FC<MyTimetablesProps> = ({ savedTimetables, setSavedTi
                   </p>
                 </div>
                 <div className="flex gap-2 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
-                  <button onClick={(e) => {e.stopPropagation(); onLoadPlan(p.plan); alert(t('mytimetables.planLoaded'))}} className="flex-1 px-4 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">{t('mytimetables.load')}</button>
-                  <button onClick={(e) => {e.stopPropagation(); openModal('rename', p)}} className="flex-1 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">{t('mytimetables.rename')}</button>
-                  <button onClick={(e) => {e.stopPropagation(); openModal('delete', p)}} className="flex-1 px-4 py-1.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">{t('mytimetables.delete')}</button>
+                  <button onClick={(e) => {e.stopPropagation(); onLoadPlan(p.plan); alert(t('mytimetables.planLoaded'))}} className="flex-1 px-4 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">{t('common.load')}</button>
+                  <button onClick={(e) => {e.stopPropagation(); openModal('rename', p)}} className="flex-1 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">{t('common.rename')}</button>
+                  <button onClick={(e) => {e.stopPropagation(); openModal('delete', p)}} className="flex-1 px-4 py-1.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">{t('common.delete')}</button>
                 </div>
               </div>
             ))}

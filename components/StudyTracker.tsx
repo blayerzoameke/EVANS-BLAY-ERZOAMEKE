@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 // FIX: Added .ts extension to import path.
 import type { TrackedSession, ActiveSession, NotificationSettings } from '../types.ts';
 // FIX: Added .ts extension to import path.
@@ -19,6 +19,7 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ activeSession, setActiveSes
     const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
     const [totalPausedTime, setTotalPausedTime] = useState(0); // Track total pause duration in ms
     const { t } = useLanguage();
+    const notifiedSessionStartRef = useRef<number | null>(null);
     
     // Set timer when session changes
     useEffect(() => {
@@ -33,7 +34,24 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ activeSession, setActiveSes
         setIsPaused(false);
         setPauseStartTime(null);
         setTotalPausedTime(0);
-    }, [activeSession]);
+        
+        // Send notification for the start of a new session.
+        if (
+            notificationSettings.enabled &&
+            notificationSettings.sessionStart &&
+            notifiedSessionStartRef.current !== activeSession.startTime
+        ) {
+            const title = activeSession.type === 'study' 
+                ? t('notifications.sessionStartAlert.study.title') 
+                : t('notifications.sessionStartAlert.break.title');
+            
+            const body = t('notifications.sessionStartAlert.body', { subject: activeSession.subject });
+
+            new Notification(title, { body });
+            notifiedSessionStartRef.current = activeSession.startTime;
+        }
+
+    }, [activeSession, notificationSettings, t]);
 
     // Main timer countdown logic
     useEffect(() => {
@@ -144,7 +162,7 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ activeSession, setActiveSes
                         </p>
                         <div className="flex items-center gap-2 mt-2">
                            <button onClick={handleTogglePause} className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded-md">{isPaused ? t('studytracker.resume') : t('studytracker.pause')}</button>
-                           <button onClick={() => endSession(false)} className="px-3 py-1 text-sm bg-red-500 text-white rounded-md">{t('studytracker.end')}</button>
+                           <button onClick={() => endSession(false)} className="px-3 py-1 text-sm bg-red-500 text-white rounded-md">{t('common.end')}</button>
                         </div>
                     </div>
                 </div>

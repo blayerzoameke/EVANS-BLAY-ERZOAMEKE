@@ -6,24 +6,31 @@ interface ConfirmationModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: () => void;
+    onCancel?: () => void;
     title: string;
     message: string;
     confirmText?: string;
     cancelText?: string;
     confirmColor?: 'red' | 'green' | 'blue';
     cancelColor?: 'red' | 'green' | 'blue';
+    tertiaryAction?: {
+        text: string;
+        onClick: () => void;
+    };
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     isOpen,
     onClose,
     onConfirm,
+    onCancel,
     title,
     message,
     confirmText,
     cancelText,
     confirmColor,
     cancelColor,
+    tertiaryAction,
 }) => {
     const { t } = useLanguage();
 
@@ -47,6 +54,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     
     const confirmButtonClasses = getButtonClasses(confirmColor, true);
     const cancelButtonClasses = getButtonClasses(cancelColor, false);
+    const tertiaryButtonClasses = getButtonClasses(undefined, false);
+
+    const handleCancelClick = onCancel || onClose;
 
 
     return (
@@ -61,8 +71,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 <div className="p-6">
                     <p className="text-gray-600 dark:text-gray-400">{message}</p>
                 </div>
-                <div className="flex justify-end gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700">
-                    <button onClick={onClose} className={cancelButtonClasses}>{cancelText || t('common.cancel')}</button>
+                <div className="flex justify-end items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700">
+                    {tertiaryAction && (
+                        <button onClick={tertiaryAction.onClick} className={`${tertiaryButtonClasses} mr-auto !px-4 !py-2 text-sm`}>
+                            {tertiaryAction.text}
+                        </button>
+                    )}
+                    <button onClick={handleCancelClick} className={cancelButtonClasses}>{cancelText || t('common.cancel')}</button>
                     <button onClick={onConfirm} className={confirmButtonClasses}>{confirmText || 'Confirm'}</button>
                 </div>
             </div>

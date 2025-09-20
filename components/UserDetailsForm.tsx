@@ -14,7 +14,7 @@ interface UserDetailsFormProps {
 const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserDetails, disabled }) => {
   const { t } = useLanguage();
   
-  const inputClasses = "mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
+  const inputClasses = "mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm";
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -32,7 +32,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {t('userdetails.fullName')}
         </label>
         <input
@@ -47,7 +47,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
         />
       </div>
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {t('userdetails.emailOptional')}
         </label>
         <input
@@ -62,7 +62,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
         />
       </div>
       <div>
-        <label htmlFor="educationalLevel" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        <label htmlFor="educationalLevel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {t('userdetails.level')}
         </label>
         <select
@@ -73,9 +73,10 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
           className={`${inputClasses} pl-3 pr-10 py-2`}
           disabled={disabled}
         >
-          {Object.values(EducationalLevel).map(level => (
-            <option key={level} value={level}>
-              {t(`userdetails.level.${level}` as any)}
+          {Object.entries(EducationalLevel).map(([key, value]) => (
+            <option key={key} value={value}>
+              {/* @ts-ignore */}
+              {t(`userdetails.level.${key}`)}
             </option>
           ))}
         </select>
@@ -83,7 +84,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
       {userDetails.educationalLevel !== EducationalLevel.HIGH_SCHOOL && (
         <>
           <div>
-            <label htmlFor="country" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('userdetails.country')} <span className="text-red-500">*</span>
             </label>
             <SearchableDropdown
@@ -97,7 +98,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
             />
           </div>
           <div>
-            <label htmlFor="institution" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label htmlFor="institution" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('userdetails.institution')}
             </label>
             <SearchableDropdown

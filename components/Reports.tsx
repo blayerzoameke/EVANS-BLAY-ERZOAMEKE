@@ -1,5 +1,5 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
 // FIX: Added .ts extension to import path.
 import type { UserDetails } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -25,11 +25,12 @@ const Reports: React.FC<ReportsProps> = ({ userDetails }) => {
     }
   }, [userDetails]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setAttachment(e.target.files[0]);
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles[0]) {
+      setAttachment(acceptedFiles[0]);
     }
-  };
+  }, []);
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,17 +100,19 @@ const Reports: React.FC<ReportsProps> = ({ userDetails }) => {
                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('reports.attachment')}</label>
                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t('reports.attachmentDesc')}</p>
                  {!attachment ? (
-                    <label htmlFor="attachment-upload" className="cursor-pointer flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <UploadIcon className="w-5 h-5" />
-                        <span>Choose a file...</span>
-                    </label>
+                    <div {...getRootProps()} className={`mt-1 group p-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isDragActive ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-teal-400'}`}>
+                        <input {...getInputProps()} />
+                        <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400">
+                            <UploadIcon className="w-10 h-10 mb-3" />
+                            <p className="font-semibold">{t('reports.uploadPrompt')}</p>
+                        </div>
+                    </div>
                  ) : (
-                    <div className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                    <div className="mt-1 flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
                         <span className="text-sm font-medium truncate">{attachment.name}</span>
                         <button type="button" onClick={() => setAttachment(null)} className="p-1 text-gray-500 hover:text-red-500"><CloseIcon className="w-4 h-4" /></button>
                     </div>
                  )}
-                 <input id="attachment-upload" type="file" className="hidden" onChange={handleFileChange} />
             </div>
             
              <div>

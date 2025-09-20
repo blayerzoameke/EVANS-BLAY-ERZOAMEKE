@@ -14,6 +14,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => {
   const { t } = useLanguage();
   
+  // @ts-ignore
   type NavItem = { id: View; nameKey: keyof typeof import('../lib/i18n.ts').translations['en'] };
 
   const manageNavItems: NavItem[] = [
@@ -57,20 +58,21 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
       <a
         href="#"
         onClick={(e) => { e.preventDefault(); onClick(item.id); }}
-        className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-colors duration-200 ${
+        className={`flex items-center px-4 py-2.5 text-sm rounded-md transition-colors duration-200 ${
           isActive
-            ? "bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-300"
-            : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+            ? "bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 font-semibold"
+            : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
         }`}
       >
-        {t(item.nameKey)}
+        {t(item.nameKey as any)}
       </a>
     );
   };
   
+  // @ts-ignore
   const NavGroup: React.FC<{titleKey: keyof typeof import('../lib/i18n.ts').translations['en'], items: NavItem[]}> = ({ titleKey, items }) => (
     <div>
-        <h3 className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t(titleKey)}</h3>
+        <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t(titleKey as any)}</h3>
         <div className="space-y-1">
             {items.map(item => <NavLink key={item.id} item={item} currentView={view} onClick={handleNavClick} />)}
         </div>
@@ -79,12 +81,12 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
   
   const sidebarContent = (
       <div className="flex flex-col h-full no-print">
-        <div className="flex items-center justify-between px-4 py-5 border-b border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 py-5 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center">
-            <LogoIcon className="w-8 h-8 text-blue-700 dark:text-blue-500" />
-            <span className="ml-3 text-lg font-bold text-slate-800 dark:text-slate-100">EduBlay</span>
+            <LogoIcon className="w-8 h-8 text-sky-600 dark:text-sky-400" />
+            <span className="ml-3 text-2xl font-bold text-gray-800 dark:text-gray-100">EduBlay</span>
           </div>
-          <button onClick={() => setOpen(false)} className="lg:hidden p-1 -mr-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md">
+          <button onClick={() => setOpen(false)} className="lg:hidden p-1 -mr-2 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">
               <CloseIcon className="w-6 h-6" />
           </button>
         </div>
@@ -103,14 +105,14 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
         
         {/* Mobile sidebar */}
         <div className={`fixed inset-y-0 left-0 z-40 flex lg:hidden transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} no-print`}>
-            <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-slate-800 shadow-xl">
+            <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl">
                {sidebarContent}
             </div>
         </div>
         
         {/* Desktop sidebar */}
         <div className="hidden lg:flex lg:flex-shrink-0 no-print">
-            <div className="flex flex-col w-64 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+            <div className="flex flex-col w-64 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                 {sidebarContent}
             </div>
         </div>

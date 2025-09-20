@@ -1,7 +1,5 @@
-// FIX: Implement Gemini service to resolve import errors and provide core functionality.
 import { GoogleGenAI, Type } from "@google/genai";
-// FIX: Added .ts extension to import path.
-import { UserDetails, StudyGoal, Lecture, AgendaItem, SmartPlan, ImagePart, DayOfWeek, ActivityType, QuizType, QuizQuestion, AnswerFeedback, QuizSummary } from "../types.ts";
+import { UserDetails, StudyGoal, Lecture, AgendaItem, SmartPlan, ImagePart, DayOfWeek, ActivityType, QuizType, QuizQuestion, AnswerFeedback, QuizSummary, ChatTurn } from "../types.ts";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -13,10 +11,8 @@ const planSlotSchema = {
         endTime: { type: Type.STRING, description: "The end time in 'HH:MM AM/PM' format (e.g., '10:00 AM')." },
         type: {
             type: Type.STRING,
-            enum: Object.values(ActivityType),
-            description: "The type of activity."
+            description: `The type of activity. Must be one of: ${Object.values(ActivityType).join(', ')}.`
         },
-        // FIX: Removed non-standard `nullable` property. Optionality is handled by not being in the `required` array.
         link: { type: Type.STRING, description: "An optional relevant link for the activity (e.g., a YouTube link for a break)." },
     },
     required: ["activity", "startTime", "endTime", "type"],
@@ -27,8 +23,7 @@ const dayPlanSchema = {
     properties: {
         day: {
             type: Type.STRING,
-            enum: Object.values(DayOfWeek),
-            description: "The day of the week."
+            description: `The day of the week. Must be one of: ${Object.values(DayOfWeek).join(', ')}.`
         },
         slots: {
             type: Type.ARRAY,
@@ -82,7 +77,8 @@ function buildBasePrompt(
 
 async function generatePlan(prompt: string, imagePart?: ImagePart): Promise<SmartPlan> {
     try {
-        const contents = imagePart ? { parts: [{ text: prompt }, imagePart] } : prompt;
+        // FIX: Corrected the structure of the 'contents' property for multipart requests to align with the Gemini API SDK.
+        const contents = imagePart ? { parts: [imagePart, { text: prompt }] } : prompt;
 
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
@@ -90,6 +86,7 @@ async function generatePlan(prompt: string, imagePart?: ImagePart): Promise<Smar
             config: {
                 responseMimeType: "application/json",
                 responseSchema: smartPlanSchema,
+                thinkingConfig: { thinkingBudget: 0 }
             },
         });
 
@@ -110,13 +107,13 @@ export const isImageTimetable = async (imagePart: ImagePart): Promise<boolean> =
         const prompt = "Analyze this image and determine if it is a timetable or a schedule. A timetable typically contains days, times, and subjects/activities in a structured grid or list format. Answer with a single word: 'yes' if it is a timetable, and 'no' if it is not.";
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: { parts: [ { text: prompt }, imagePart ] },
+            contents: { parts: [imagePart, { text: prompt }] },
+            config: { thinkingConfig: { thinkingBudget: 0 } }
         });
         const resultText = response.text.trim().toLowerCase();
         return resultText === 'yes';
     } catch (error) {
         console.error("Error verifying image:", error);
-        // Default to false on error to prevent processing invalid images
         return false;
     }
 };
@@ -126,14 +123,14 @@ export const isStudyMaterial = async (filePart: ImagePart): Promise<boolean> => 
         const prompt = "Analyze the content of this document. Is it likely to be educational material for a student, such as lecture slides, a textbook, academic notes, or a research paper? Please disregard any timetables or schedules. Answer with a single word: 'yes' if it is educational material, or 'no' if it is not.";
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: { parts: [ { text: prompt }, filePart ] },
+            contents: { parts: [filePart, { text: prompt }] },
             config: { thinkingConfig: { thinkingBudget: 0 } }
         });
         const resultText = response.text.trim().toLowerCase();
-        return resultText.includes('yes'); // Use .includes() for robustness
+        return resultText.includes('yes');
     } catch (error) {
         console.error("Error verifying study material:", error);
-        return false; // Default to false on error
+        return false;
     }
 };
 
@@ -142,13 +139,13 @@ export const getDocumentContext = async (filePart: ImagePart): Promise<string> =
         const prompt = "Analyze the provided document and identify its primary subject matter in one or two words. Examples: Mathematics, European History, Cell Biology, Computer Science, English Literature, Contract Law. If the subject is unclear or too broad, respond with 'General'.";
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: { parts: [{ text: prompt }, filePart] },
+            contents: { parts: [filePart, { text: prompt }] },
             config: { thinkingConfig: { thinkingBudget: 0 } }
         });
         return response.text.trim();
     } catch (error) {
         console.error("Error identifying document context:", error);
-        return "General"; // Default to a general context on error
+        return "General";
     }
 };
 
@@ -178,6 +175,13 @@ const generateSpecializedPrompt = (baseAction: 'summarize' | 'explain', context:
         prompt = 'Explain the key concepts in this document in a simple, step-by-step manner, as if you were tutoring a peer.';
     }
 
+    prompt += " IMPORTANT FORMATTING AND CONTENT RULES:\n";
+    prompt += "1. For mathematical formulas, use LaTeX notation. Use double dollar signs ($$ ... $$) for display-style equations on their own line. Use single dollar signs ($ ... $) for inline formulas within a sentence, for example: 'The value is $\\alpha$'.\n";
+    prompt += "2. To emphasize specific terms or keywords, enclose them in double asterisks, like this: **keyword**. Do not use bold for entire sentences.\n";
+    prompt += "3. For mathematical problems, provide a clear **step-by-step solution**.\n";
+    prompt += "4. When explaining a formula, first present it using LaTeX, then **explain each variable and component**. If relevant, briefly describe its derivation.\n";
+    prompt += "5. If the document contains a mathematical function that is being explained or summarized, you MUST provide a visualization by outputting a special JSON block on its own line. The format is: {\"graph\": {\"function\": \"x**2 + 2*x - 3\", \"domain\": [-10, 10]}}. Use JavaScript-compatible math syntax (e.g., `**` for exponents, `Math.sin()`). Always provide a reasonable domain for plotting.\n";
+
     const lowerContext = context.toLowerCase();
     if (lowerContext.includes('math')) {
         prompt += " Pay special attention to defining formulas, explaining theorems, and breaking down multi-step problem solutions.";
@@ -204,21 +208,90 @@ export const explainDocument = async (filePart: ImagePart, context: string): Pro
     return analyzeDocument(prompt, filePart);
 };
 
-export const chatWithDocument = async (filePart: ImagePart, question: string, context: string): Promise<string> => {
-    const prompt = `You are a helpful study assistant. The user is studying a document about **${context}**. Based *only* on the content of the provided document, answer the following question: "${question}"`;
+export const chatWithDocumentStream = async (
+    filePart: ImagePart,
+    question: string,
+    chatHistory: ChatTurn[],
+    context: string
+) => {
+    const systemInstruction = `You are Blay, an advanced AI study assistant with a friendly, encouraging, and slightly informal personality. Your primary goal is to help a student understand the provided document about **${context}**.
+
+**PRIMARY DIRECTIVE:**
+Your responses MUST be based *only* on the information within the provided document. If the answer isn't in the document, you MUST politely state that you can't find the information in the provided material.
+
+**CORE ACADEMIC CAPABILITIES:**
+When a user's question relates to content within the document, you MUST use the following capabilities:
+
+1.  ✨ **LaTeX Formula Rendering:** If the document contains math, render it using LaTeX. Use display style ($$ ... $$) for equations on their own line and inline style ($ ... $) for formulas within text.
+
+2.  **Step-by-Step Problem Solving:** If the document contains a mathematical problem and the user asks for a solution, you MUST solve it by providing a clear **step-by-step solution**. Break down each part of the process logically.
+
+3.  **Interactive Graphing:** If the conversation involves a mathematical function, either from the document or derived during the explanation, you MUST offer a visualization. To do this, output a special JSON block on its own line. This is mandatory whenever a function is discussed. The format is: {"graph": {"function": "x**2", "domain": [-10, 10]}}. Use JavaScript-compatible math syntax (e.g., \`**\` for exponents, \`Math.sin()\` for sine). Always provide a reasonable domain for plotting.
+
+4.  **Formula Explanation & Derivation:** If the user asks about a formula from the document, you MUST first present it using LaTeX. Then, **explain each variable and component** clearly. If the derivation is available in the document or can be reasonably inferred, provide a brief derivation.
+
+**CONVERSATIONAL SKILLS:**
+- You understand conversational language, including common slang and abbreviations (e.g., "idk", "lol", "cuz").
+- You keep track of the conversation context to provide relevant answers.
+- You detect the user's intent (e.g., asking for a definition, an example, or a summary) and provide the most helpful response based on the document.
+
+**ABSOLUTE RULE:**
+- You MUST NOT create quizzes, tests, or questions if asked. Instead, you MUST politely decline and redirect the user to the "Exam Prep" section of the app. For example, say: "I can help with explanations based on your material here, but for quizzes, please head over to the 'Exam Prep' section. It's designed for that!"`;
+
+    const contents: any[] = [];
+
+    // Construct history for the API call
+    chatHistory.forEach((turn, index) => {
+        const userParts: any[] = [];
+        // Only include the document image in the very first turn to provide context initially.
+        if (index === 0) {
+            userParts.push(filePart);
+        }
+        userParts.push({ text: turn.user });
+        contents.push({ role: 'user', parts: userParts });
+
+        contents.push({ role: 'model', parts: [{ text: turn.blay }] });
+    });
+
+    // Add the current user question
+    const currentUserParts: any[] = [];
+    // If there's no history, this is the first message, so it needs the document.
+    if (chatHistory.length === 0) {
+        currentUserParts.push(filePart);
+    }
+    currentUserParts.push({ text: question });
+    contents.push({ role: 'user', parts: currentUserParts });
+
     try {
+        const responseStream = await ai.models.generateContentStream({
+            model: "gemini-2.5-flash",
+            contents: contents,
+            config: {
+                systemInstruction: systemInstruction,
+                thinkingConfig: { thinkingBudget: 0 }
+            }
+        });
+        return responseStream;
+    } catch (error) {
+        console.error("Error analyzing document for chat stream:", error);
+        if (error instanceof Error) {
+            throw new Error(`Failed to stream chat response. Details: ${error.message}`);
+        }
+        throw new Error("An unknown error occurred while streaming the chat response.");
+    }
+};
+
+export const extractTextFromDocument = async (filePart: ImagePart): Promise<string> => {
+    try {
+        const prompt = "Extract all text content from the document. Do not summarize, translate, or alter it. Return only the raw text, preserving paragraph breaks.";
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: { parts: [filePart, { text: prompt }] },
-            config: { thinkingConfig: { thinkingBudget: 0 } }
         });
         return response.text;
     } catch (error) {
-        console.error("Error analyzing document for chat:", error);
-        if (error instanceof Error) {
-            throw new Error(`Failed to analyze the document. Details: ${error.message}`);
-        }
-        throw new Error("An unknown error occurred while analyzing the document.");
+        console.error("Error extracting text:", error);
+        throw new Error("Failed to extract text from the document.");
     }
 };
 
@@ -256,7 +329,10 @@ export const generatePlanFromImage = async (
     imagePart: ImagePart
 ): Promise<SmartPlan> => {
     let prompt = buildBasePrompt(userDetails, studyGoals, generalGoals);
-    prompt += "\nAn image of the student's existing timetable is provided. First, extract all lectures and their timings from the image. Then, use this information to create the complete Smart Plan as requested.\n";
+    prompt += "\n**IMPORTANT IMAGE INSTRUCTIONS:**\n";
+    prompt += "An image of the student's current timetable is attached. Your primary task is to meticulously extract all fixed events (like lectures, labs, or appointments) along with their precise days and times from this image.\n";
+    prompt += "These extracted events are **NON-NEGOTIABLE** and **MUST** be placed in the schedule exactly as they appear in the image. Do not alter their times or days.\n";
+    prompt += "After placing these fixed events, schedule the student's study goals and personal agenda items into the remaining available time slots. Fill any other gaps with breaks and free time. The timetable from the image is the rigid foundation of the new plan.\n";
     return generatePlan(prompt, imagePart);
 };
 
@@ -269,8 +345,9 @@ const mcqSchema = {
         options: { type: Type.ARRAY, items: { type: Type.STRING } },
         correctAnswer: { type: Type.STRING, description: "The correct answer string, which must be one of the values from the 'options' array." },
         explanation: { type: Type.STRING, description: "A brief explanation for why the answer is correct." },
+        topic: { type: Type.STRING, description: "The main topic or concept this question is testing (e.g., 'Photosynthesis', 'Newton's First Law')." },
     },
-    required: ["question", "options", "correctAnswer", "explanation"],
+    required: ["question", "options", "correctAnswer", "explanation", "topic"],
 };
 
 const openEndedSchema = {
@@ -279,8 +356,9 @@ const openEndedSchema = {
         question: { type: Type.STRING },
         correctAnswer: { type: Type.STRING, description: "The correct answer to the question." },
         explanation: { type: Type.STRING, description: "A brief explanation for the correct answer." },
+        topic: { type: Type.STRING, description: "The main topic or concept this question is testing (e.g., 'Photosynthesis', 'Newton's First Law')." },
     },
-    required: ["question", "correctAnswer", "explanation"],
+    required: ["question", "correctAnswer", "explanation", "topic"],
 };
 
 export const generateQuiz = async (
@@ -290,7 +368,7 @@ export const generateQuiz = async (
     questionCount: number = 5
 ): Promise<QuizQuestion[]> => {
     const questionTypeString = quizType === QuizType.MCQ ? 'multiple choice questions with 4 options each' : quizType === QuizType.CONCEPTUAL ? 'conceptual questions that test deep understanding' : 'theory-based questions';
-    const prompt = `You are a quiz master. Based on the provided document, generate ${questionCount} ${questionTypeString}. The questions should focus on the following topic or page range: "${scope}". For each question, you MUST provide the correct answer and a brief explanation. For multiple choice questions, the 'correctAnswer' field must be one of the strings from the 'options' array. Ensure the questions are relevant and challenging. Return only the JSON array.`;
+    const prompt = `You are a quiz master. Based on the provided document, generate ${questionCount} ${questionTypeString}. The questions should focus on the following topic or page range: "${scope}". For each question, you MUST provide the correct answer, a brief explanation, and the main 'topic' it covers. For multiple choice questions, the 'correctAnswer' field must be one of the strings from the 'options' array. Ensure the questions are relevant and challenging. Return only the JSON array.`;
     
     let responseSchema;
     if (quizType === QuizType.MCQ) {
@@ -315,45 +393,5 @@ export const generateQuiz = async (
     } catch (error) {
         console.error("Error generating quiz:", error);
         throw new Error("Failed to generate the quiz. The model may have returned an unexpected format.");
-    }
-};
-
-const summarySchema = {
-    type: Type.OBJECT,
-    properties: {
-        score: { type: Type.NUMBER, description: "The final score as a percentage (0-100)." },
-        strengths: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of topics or concepts the user seems to understand well." },
-        weaknesses: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of topics or concepts the user struggled with." },
-        recommendations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Specific recommendations for sections or topics to revise based on the weaknesses." },
-    },
-    required: ["score", "strengths", "weaknesses", "recommendations"],
-};
-
-export const generateQuizSummary = async (
-    filePart: ImagePart,
-    performance: { question: string; wasCorrect: boolean }[]
-): Promise<QuizSummary> => {
-    const performanceString = performance.map(p => `- Question: "${p.question}" - Correct: ${p.wasCorrect}`).join('\n');
-    const prompt = `Based on the provided document and the student's quiz performance below, generate a summary report.
-    
-    Performance:
-    ${performanceString}
-    
-    The report should include a final score (percentage), a list of strengths, a list of weaknesses (weak spots), and specific recommendations on what to revise from the document. Return only the JSON object.`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: { parts: [filePart, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: summarySchema,
-            },
-        });
-        const jsonText = response.text.trim();
-        return JSON.parse(jsonText);
-    } catch (error) {
-        console.error("Error generating summary:", error);
-        throw new Error("Could not generate the quiz summary.");
     }
 };

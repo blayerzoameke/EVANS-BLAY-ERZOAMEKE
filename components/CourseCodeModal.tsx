@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import type { CourseCodeMap } from '../types';
+// FIX: Added .ts extension to import path.
+import type { CourseCodeMap } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon';
 
