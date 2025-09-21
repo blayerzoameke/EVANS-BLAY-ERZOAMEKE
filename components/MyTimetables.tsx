@@ -1,9 +1,10 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 // FIX: Added .ts extension to import path.
 import type { StoredPlan, SmartPlan, Toast } from '../types.ts';
-import SmartPlanView from './SmartPlanView';
+import SmartPlanView from './SmartPlanView.tsx';
 import { StarIcon } from './icons/StarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { CloseIcon } from './icons/CloseIcon';

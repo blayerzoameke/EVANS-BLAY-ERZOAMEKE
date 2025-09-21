@@ -1,12 +1,13 @@
 
+
 // FIX: Implement Library component to resolve module error.
 import React, { useState } from 'react';
 import { libraryResources } from '../data/libraryResources.ts';
 import { useLanguage } from '../contexts/LanguageContext';
-import { SearchIcon } from './icons/SearchIcon';
-import { BookIcon } from './icons/BookIcon';
-import { ToolsIcon } from './icons/ToolsIcon';
-import { WriteIcon } from './icons/WriteIcon';
+import { SearchIcon } from './icons/SearchIcon.tsx';
+import { BookIcon } from './icons/BookIcon.tsx';
+import { ToolsIcon } from './icons/ToolsIcon.tsx';
+import { WriteIcon } from './icons/WriteIcon.tsx';
 
 const categoryIcons: { [key: string]: React.FC<React.SVGProps<SVGSVGElement>> } = {
     'study-techniques': BookIcon,

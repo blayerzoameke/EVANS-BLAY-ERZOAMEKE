@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { CloseIcon } from './icons/CloseIcon';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface ConfirmationModalProps {
     isOpen: boolean;

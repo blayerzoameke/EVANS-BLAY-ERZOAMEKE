@@ -1,13 +1,17 @@
 
 
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
 import Dashboard from './components/Dashboard.tsx';
+// FIX: Add .tsx extension to Profile component import.
 import Profile from './components/Profile.tsx';
 import MyTimetables from './components/MyTimetables.tsx';
 import Progression from './components/Progression.tsx';
 import Notes from './components/Notes.tsx';
+// FIX: Add .tsx extension to Onboarding component import.
 import Onboarding from './components/Onboarding.tsx';
 import ToastContainer from './components/ToastContainer.tsx';
 import LanguageSettings from './components/Language.tsx';

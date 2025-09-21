@@ -1,11 +1,12 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 // FIX: Added .ts extension to import path.
 import type { UserDetails } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext';
-import { UploadIcon } from './icons/UploadIcon';
-import { CloseIcon } from './icons/CloseIcon';
+import { UploadIcon } from './icons/UploadIcon.tsx';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface ReportsProps {
   userDetails: UserDetails | null;

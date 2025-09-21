@@ -1,54 +1,64 @@
-import React from 'react';
-import type { SmartPlan, PlanSlot, DayOfWeek } from '../types.ts';
-import { ActivityType } from '../types.ts';
+import React, { useState, useEffect } from 'react';
+import type { SmartPlan, PlanSlot } from '../types.ts';
+import { ActivityType, DayOfWeek } from '../types.ts';
 import { DAYS_OF_WEEK } from '../constants';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const getActivityColor = (type: ActivityType) => {
+  const baseClasses = 'text-white shadow-lg border-l-4';
   switch (type) {
     case ActivityType.LECTURE:
-      return 'bg-fuchsia-100 dark:bg-fuchsia-900/50 border-l-4 border-fuchsia-500 text-fuchsia-800 dark:text-fuchsia-100';
+      return `${baseClasses} bg-lecture border-lecture/80`;
     case ActivityType.STUDY:
-      return 'bg-sky-100 dark:bg-sky-900/50 border-l-4 border-sky-500 text-sky-800 dark:text-sky-100';
+      return `${baseClasses} bg-study border-study/80`;
     case ActivityType.AGENDA:
-      return 'bg-amber-100 dark:bg-amber-900/50 border-l-4 border-amber-500 text-amber-800 dark:text-amber-100';
+      return `${baseClasses} bg-agenda border-agenda/80`;
     case ActivityType.BREAK:
-      return 'bg-emerald-100 dark:bg-emerald-900/50 border-l-4 border-emerald-500 text-emerald-800 dark:text-emerald-100';
+      return `${baseClasses} bg-break border-break/80`;
     case ActivityType.FREE:
-      return 'bg-gray-100 dark:bg-gray-800 border-l-4 border-gray-400 text-gray-700 dark:text-gray-300';
+      return `${baseClasses} bg-free border-free/80`;
     default:
-      return 'bg-gray-100 dark:bg-gray-800 border-l-4 border-gray-300 text-gray-800 dark:text-gray-300';
+      return `${baseClasses} bg-slate-500 border-slate-300`;
   }
 };
 
-const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void }> = ({ slot, onClick }) => {
-  const content = (
-    <div className={`p-3 rounded-lg shadow-sm mb-3 transition-shadow duration-200 ${getActivityColor(slot.type)} ${slot.link || onClick ? 'hover:shadow-md' : ''}`}>
-      <p className="font-bold text-sm">{slot.activity}</p>
-      {slot.code && <p className="text-xs font-mono mt-1 opacity-70">{slot.code}</p>}
-      <p className="text-xs opacity-80">{slot.startTime} - {slot.endTime}</p>
-      <p className="text-xs capitalize mt-1 font-medium opacity-90">{slot.type}</p>
-    </div>
-  );
-  
-  if (onClick) {
-      return (
-          <button onClick={onClick} className="w-full text-left block">
-              {content}
-          </button>
-      );
-  }
+const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: string }> = ({ slot, onClick, tooltip }) => {
+    const isClickable = !!(slot.link || onClick);
 
-  if (slot.link) {
-    return (
-      <a href={slot.link} target="_blank" rel="noopener noreferrer" className="no-underline block">
-        {content}
-      </a>
+    const cardClasses = `relative group p-4 rounded-xl shadow-md mb-4 transition-all duration-300 transform hover:shadow-xl hover:scale-105 ${getActivityColor(slot.type)} ${isClickable ? 'cursor-pointer' : 'cursor-default'}`;
+    
+    const content = (
+        <div className={cardClasses}>
+            <p className="font-bold text-base mb-1">{slot.activity}</p>
+            {slot.code && <p className="text-sm font-mono mt-1 text-white/90 bg-black/20 px-2 py-1 rounded">{slot.code}</p>}
+            <p className="text-sm text-white/90 mt-2 font-medium">{slot.startTime} - {slot.endTime}</p>
+            <p className="text-sm capitalize mt-2 font-semibold text-white/95 bg-white/20 px-2 py-1 rounded-full inline-block">{slot.type}</p>
+            {tooltip && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-3 py-1.5 text-sm font-medium text-white bg-gray-900 dark:bg-black rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+                    {tooltip}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900 dark:border-t-black"></div>
+                </div>
+            )}
+        </div>
     );
-  }
 
-  return content;
+    if (onClick) {
+        return (
+            <button onClick={onClick} className="w-full text-left block">
+                {content}
+            </button>
+        );
+    }
+    if (slot.link) {
+        return (
+            <a href={slot.link} target="_blank" rel="noopener noreferrer" className="no-underline block">
+                {content}
+            </a>
+        );
+    }
+    return content;
 };
+
 
 interface SmartPlanViewProps {
     plan: SmartPlan;
@@ -57,26 +67,83 @@ interface SmartPlanViewProps {
 
 const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick }) => {
   const { t } = useLanguage();
-  const planByDay = DAYS_OF_WEEK.map(day => {
-    return plan.find(p => p.day === day) || { day, slots: [] };
-  });
+  const [now, setNow] = useState(new Date());
 
+    useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 60000); // Update time every minute to check for day change
+        return () => clearInterval(timer);
+    }, []);
+    
+    const DAYS_MAP: DayOfWeek[] = [
+      DayOfWeek.Sunday,
+      DayOfWeek.Monday,
+      DayOfWeek.Tuesday,
+      DayOfWeek.Wednesday,
+      DayOfWeek.Thursday,
+      DayOfWeek.Friday,
+      DayOfWeek.Saturday,
+    ];
+
+    const getCurrentDay = (date: Date): DayOfWeek => DAYS_MAP[date.getDay()];
+
+  const weekdaysData = DAYS_OF_WEEK.slice(0, 5).map(day => 
+    plan.find(p => p.day === day) || { day, slots: [] }
+  );
+  const weekendsData = DAYS_OF_WEEK.slice(5).map(day => 
+    plan.find(p => p.day === day) || { day, slots: [] }
+  );
+
+  const DayCard: React.FC<{ day: DayOfWeek; slots: PlanSlot[]; isWeekend?: boolean }> = ({ day, slots, isWeekend = false }) => {
+    const currentDay = getCurrentDay(now);
+
+    return (
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 h-full transition-all duration-300 hover:shadow-2xl">
+          <h3 className={`text-2xl font-bold text-center mb-6 bg-gradient-to-r ${isWeekend ? 'from-green-500 to-teal-500' : 'from-primary to-purple-600'} bg-clip-text text-transparent`}>{day}</h3>
+          {slots.length > 0 ? (
+            slots.map((slot, index) => {
+              const isClickable = slot.type === ActivityType.STUDY && day === currentDay && !!onStudySlotClick;
+              const tooltip = isClickable ? t('smartplan.clickToStudy') : undefined;
+              
+              return (
+                  <PlanSlotCard 
+                      key={index} 
+                      slot={slot} 
+                      onClick={isClickable ? () => onStudySlotClick!(slot, day) : undefined} 
+                      tooltip={tooltip}
+                  />
+              );
+            })
+          ) : (
+            <div className="flex items-center justify-center h-56">
+                <div className="text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                        <span className="text-2xl text-gray-400">📅</span>
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400 font-medium">{t('smartplan.noActivities')}</p>
+                </div>
+            </div>
+          )}
+        </div>
+    );
+  };
+  
   return (
     <div className="relative">
-      <div className="relative z-10">
-        <div className="grid grid-flow-col auto-cols-[18rem] lg:auto-cols-fr lg:grid-flow-row lg:grid-cols-7 gap-4 overflow-x-auto pb-4 -mx-4 px-4">
-          {planByDay.map(({ day, slots }) => (
-            <div key={day} className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl shadow p-4 border border-gray-200 dark:border-gray-700 h-full">
-              <h3 className="text-xl font-bold text-center mb-4 text-sky-600 dark:text-sky-400">{day}</h3>
-              {slots.length > 0 ? (
-                slots.map((slot, index) => <PlanSlotCard key={index} slot={slot} onClick={ (slot.type === ActivityType.STUDY && onStudySlotClick) ? () => onStudySlotClick(slot, day) : undefined } />)
-              ) : (
-                <div className="flex items-center justify-center h-48">
-                    <p className="text-center text-gray-500 dark:text-gray-400">{t('smartplan.noActivities')}</p>
-                </div>
-              )}
-            </div>
+      <div className="relative z-10 space-y-8">
+        {/* Weekdays Row */}
+        <div className="grid grid-flow-col auto-cols-[20rem] lg:auto-cols-fr lg:grid-flow-row lg:grid-cols-5 gap-6 overflow-x-auto pb-6 -mx-4 px-4">
+          {weekdaysData.map(({ day, slots }) => (
+            <DayCard key={day} day={day} slots={slots} />
           ))}
+        </div>
+
+        {/* Weekends Row */}
+        <div className="flex justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full lg:w-2/5">
+            {weekendsData.map(({ day, slots }) => (
+              <DayCard key={day} day={day} slots={slots} isWeekend />
+            ))}
+          </div>
         </div>
       </div>
     </div>

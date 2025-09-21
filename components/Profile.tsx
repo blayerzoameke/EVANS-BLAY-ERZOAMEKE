@@ -1,78 +1,263 @@
-
-import React, { useState } from 'react';
-// FIX: Added .ts extension
-import type { UserDetails, Toast } from '../types.ts';
-// FIX: Import `EducationalLevel` as a value to use it for default props.
-import { EducationalLevel } from '../types.ts';
-import UserDetailsForm from './UserDetailsForm';
+import React, { useState, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { UserDetails, Toast } from '../types.ts';
+import UserDetailsForm from './UserDetailsForm.tsx';
+import { PencilIcon } from './icons/PencilIcon.tsx';
+import { SaveIcon } from './icons/SaveIcon.tsx';
+import { BuildingIcon } from './icons/BuildingIcon.tsx';
+import CropImageModal from './CropImageModal.tsx';
 
 interface ProfileProps {
-  userDetails: UserDetails | null;
-  setUserDetails: (details: UserDetails) => void;
-  addToast: (message: string, type: Toast['type']) => void;
+    userDetails: UserDetails | null;
+    setUserDetails: (details: UserDetails) => void;
+    addToast: (message: string, type: Toast['type']) => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserDetails: setGlobalUserDetails, addToast }) => {
-  const { t } = useLanguage();
-  
-  // Ensure we don't pass null to the form
-  // FIX: Use the enum member `EducationalLevel.UNDERGRADUATE` instead of a string literal.
-  const safeInitialDetails = initialDetails || { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, country: '', institution: '' };
-
-  const [userDetails, setUserDetails] = useState<UserDetails>(safeInitialDetails);
-  const [isEditing, setIsEditing] = useState(false);
-
-  const handleSave = () => {
-    if (!userDetails.name) {
-        // @ts-ignore
-        addToast(t('profile.error.nameRequired'), 'error');
-        return;
+const getInitials = (name: string | undefined): string => {
+    if (!name) return '';
+    const nameParts = name.trim().split(' ').filter(Boolean);
+    if (nameParts.length === 1) {
+        return nameParts[0][0]?.toUpperCase() || '';
     }
-    if (userDetails.email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(userDetails.email)) {
-        addToast(t('userdetails.emailInvalid' as any), 'error');
-        return;
-      }
+    if (nameParts.length > 1) {
+        const firstInitial = nameParts[0][0]?.toUpperCase() || '';
+        const lastInitial = nameParts[nameParts.length - 1][0]?.toUpperCase() || '';
+        return `${firstInitial}${lastInitial}`;
     }
-    setGlobalUserDetails(userDetails);
-    setIsEditing(false);
-    // @ts-ignore
-    addToast(t('profile.success'), 'success');
-  };
+    return '';
+};
 
-  const handleCancel = () => {
-    setIsEditing(false);
-    setUserDetails(safeInitialDetails);
-  }
 
-  if (!initialDetails) return <div>Loading profile...</div>;
+const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserDetails, addToast }) => {
+    const { t } = useLanguage();
+    const [isEditing, setIsEditing] = useState(false);
+    const [editableDetails, setEditableDetails] = useState<UserDetails | null>(initialDetails);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+    const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
-  return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      <div>
-        {/* @ts-ignore */}
-        <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('profile.title')}</h2>
-        {/* @ts-ignore */}
-        <p className="text-gray-500 dark:text-gray-400 mt-1">{t('profile.subtitle')}</p>
-      </div>
-      <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
-        <UserDetailsForm userDetails={userDetails} setUserDetails={setUserDetails} disabled={!isEditing} />
-        <div className="mt-6 flex justify-end gap-4">
-          {isEditing ? (
-            <>
-              <button onClick={handleCancel} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
-              <button onClick={handleSave} className="px-4 py-2 bg-blue-700 text-white rounded-md">{t('common.save')}</button>
-            </>
-          ) : (
-            // @ts-ignore
-            <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-blue-700 text-white rounded-md">{t('profile.edit')}</button>
-          )}
+    if (!initialDetails || !editableDetails) return <div>Loading profile...</div>;
+
+    const handleSave = () => {
+        if (!editableDetails.name.trim()) {
+            addToast('Full Name is required.', 'error');
+            return;
+        }
+        setUserDetails(editableDetails);
+        setIsEditing(false);
+        addToast(t('toasts.profileUpdated'), 'success');
+    };
+
+    const handleCancel = () => {
+        setEditableDetails(initialDetails);
+        setIsEditing(false);
+    };
+    
+    const handlePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                addToast('Profile picture must be less than 5MB.', 'error');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImageToCrop(reader.result as string);
+                setIsCropModalOpen(true);
+            };
+            reader.readAsDataURL(file);
+        } else if (file) {
+            addToast('Please select a valid image file.', 'error');
+        }
+        // Reset file input to allow re-uploading the same file
+        if (e.target) {
+            e.target.value = '';
+        }
+    };
+
+    const handleCropComplete = (croppedImageUrl: string) => {
+        setEditableDetails(prev => prev ? { ...prev, profilePicture: croppedImageUrl } : null);
+        setIsCropModalOpen(false);
+        setImageToCrop(null);
+    };
+
+    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            if (file.size > 2 * 1024 * 1024) { // 2MB limit for logos
+                addToast('Institution logo must be less than 2MB.', 'error');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setEditableDetails(prev => prev ? { ...prev, institutionLogo: reader.result as string } : null);
+            };
+            reader.readAsDataURL(file);
+            addToast('Institution logo updated!', 'success');
+        } else if (file) {
+            addToast('Please select a valid image file for logo.', 'error');
+        }
+    };
+
+    return (
+        <div className="max-w-2xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('profile.title')}</h2>
+                 {!isEditing && (
+                     <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-text bg-primary rounded-md hover:bg-primary-dark">
+                         <PencilIcon className="w-4 h-4" /> {t('common.edit')}
+                     </button>
+                 )}
+            </div>
+           
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+                 <div className="flex flex-col items-center space-y-4 mb-8">
+                    <div className="flex items-start gap-10">
+                        {/* Profile Picture */}
+                        <div className="relative group">
+                            {editableDetails.profilePicture ? (
+                                <img src={editableDetails.profilePicture} alt="Profile" className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 dark:border-gray-700" />
+                            ) : (
+                                <div className="w-32 h-32 rounded-full bg-primary text-primary-text flex items-center justify-center font-bold text-5xl border-4 border-gray-200 dark:border-gray-700">
+                                    {getInitials(editableDetails.name)}
+                                </div>
+                            )}
+                            {isEditing && (
+                                <>
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                        aria-label="Change profile picture"
+                                    >
+                                        <PencilIcon className="w-8 h-8" />
+                                    </button>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        onChange={handlePictureUpload}
+                                        className="hidden"
+                                        accept="image/png, image/jpeg, image/webp"
+                                    />
+                                </>
+                            )}
+                        </div>
+
+                        {/* Institution Logo */}
+                        <div className="flex flex-col items-center mt-4">
+                            <div className="relative group">
+                                {editableDetails.institutionLogo ? (
+                                    <img 
+                                        src={editableDetails.institutionLogo} 
+                                        alt="Institution Logo" 
+                                        className="w-24 h-24 rounded-full object-contain border-2 border-gray-200 dark:border-gray-600" 
+                                    />
+                                ) : (
+                                    <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center border-2 border-gray-200 dark:border-gray-600">
+                                        <BuildingIcon className="w-12 h-12 text-gray-400" />
+                                    </div>
+                                )}
+                                {isEditing && (
+                                    <>
+                                        <button
+                                            onClick={() => logoInputRef.current?.click()}
+                                            className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                            aria-label="Change institution logo"
+                                        >
+                                            <PencilIcon className="w-6 h-6" />
+                                        </button>
+                                        <input
+                                            type="file"
+                                            ref={logoInputRef}
+                                            onChange={handleLogoUpload}
+                                            className="hidden"
+                                            accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                                        />
+                                    </>
+                                )}
+                            </div>
+                             {!isEditing && initialDetails.institutionAbbreviation && (
+                                <p className="text-xs font-semibold text-center text-gray-500 dark:text-gray-400 mt-2 w-24 truncate" title={initialDetails.institution}>
+                                    {initialDetails.institutionAbbreviation}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {!isEditing && (
+                        <div className="text-center">
+                            <h3 className="text-2xl font-bold">{initialDetails.name}</h3>
+                            {initialDetails.programmeOfStudy && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{initialDetails.programmeOfStudy}</p>}
+                        </div>
+                    )}
+                 </div>
+
+                 {isEditing ? (
+                    <>
+                        <UserDetailsForm userDetails={editableDetails} setUserDetails={setEditableDetails} showExtendedFields={true} />
+                        
+                        {/* Institution Logo Upload Section */}
+                        <div className="mt-6 p-4 border rounded-lg dark:border-gray-600">
+                            <h4 className="font-semibold text-gray-800 dark:text-gray-300 mb-3">Institution Logo</h4>
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-full border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center bg-gray-50 dark:bg-gray-700">
+                                    {editableDetails.institutionLogo ? (
+                                        <img src={editableDetails.institutionLogo} alt="Logo" className="w-full h-full object-contain rounded-full" />
+                                    ) : (
+                                        <BuildingIcon className="w-8 h-8 text-gray-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <button
+                                        onClick={() => logoInputRef.current?.click()}
+                                        className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500"
+                                    >
+                                        🏛️ Choose Logo
+                                    </button>
+                                    <p className="text-xs text-gray-500 mt-1">PNG, JPG, SVG up to 2MB</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-4 mt-6">
+                            <button onClick={handleCancel} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
+                            <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 text-white bg-green-600 rounded-md hover:bg-green-700">
+                                <SaveIcon className="w-4 h-4" /> {t('common.save')}
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="space-y-6">
+                         {initialDetails.biography && (
+                            <div>
+                                <h4 className="font-semibold text-gray-800 dark:text-gray-300 mb-1 border-b pb-1 dark:border-gray-600">Biography</h4>
+                                <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap pt-2">{initialDetails.biography}</p>
+                            </div>
+                         )}
+
+                         <div>
+                            <h4 className="font-semibold text-gray-800 dark:text-gray-300 mb-1 border-b pb-1 dark:border-gray-600">Details</h4>
+                            <div className="space-y-4 pt-2">
+                                <div><p className="text-sm text-gray-500">{t('userDetails.email')}</p><p className="text-lg">{initialDetails.email || 'Not provided'}</p></div>
+                                <div><p className="text-sm text-gray-500">{t('userDetails.level')}</p><p className="text-lg">{initialDetails.educationalLevel}</p></div>
+                                {initialDetails.country && <div><p className="text-sm text-gray-500">{t('userDetails.country')}</p><p className="text-lg">{initialDetails.country}</p></div>}
+                                {initialDetails.institution && <div><p className="text-sm text-gray-500">{t('userDetails.institution')}</p><p className="text-lg">{initialDetails.institution}</p></div>}
+                            </div>
+                         </div>
+                    </div>
+                )}
+            </div>
+
+            {isCropModalOpen && imageToCrop && (
+                <CropImageModal
+                    isOpen={isCropModalOpen}
+                    onClose={() => setIsCropModalOpen(false)}
+                    imageSrc={imageToCrop}
+                    onCropComplete={handleCropComplete}
+                />
+            )}
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default Profile;

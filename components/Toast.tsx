@@ -1,8 +1,9 @@
 
+
 import React, { useEffect } from 'react';
 // FIX: Added .ts extension to import path.
 import type { Toast as ToastType } from '../types.ts';
-import { CloseIcon } from './icons/CloseIcon';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface ToastProps {
     toast: ToastType;

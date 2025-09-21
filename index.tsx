@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ColorThemeProvider } from './contexts/ColorThemeContext.tsx';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -14,9 +15,11 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <ThemeProvider>
-      <LanguageProvider>
-        <App />
-      </LanguageProvider>
+      <ColorThemeProvider>
+        <LanguageProvider>
+          <App />
+        </LanguageProvider>
+      </ColorThemeProvider>
     </ThemeProvider>
   </React.StrictMode>
 );

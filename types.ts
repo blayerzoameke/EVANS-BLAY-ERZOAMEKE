@@ -1,4 +1,5 @@
 
+
 export type Theme = 'light' | 'dark' | 'system';
 
 export enum DayOfWeek {
@@ -26,6 +27,10 @@ export interface UserDetails {
   country?: string;
   email?: string;
   profilePicture?: string;
+  biography?: string;
+  institutionLogo?: string;
+  programmeOfStudy?: string;
+  institutionAbbreviation?: string;
 }
 
 export interface Lecture {
@@ -88,7 +93,7 @@ export interface ImagePart {
   inlineData: {
     data: string;
     mimeType: string;
-  };
+};
 }
 
 export interface CourseCodeMap {

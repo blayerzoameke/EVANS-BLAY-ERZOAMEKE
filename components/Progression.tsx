@@ -1,9 +1,11 @@
 
-import React, { useMemo } from 'react';
+
+import React, { useMemo, useState, useEffect } from 'react';
 // FIX: Added .ts extension to import path.
 import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts';
 import { DAYS_OF_WEEK } from '../constants';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useColorTheme } from '../contexts/ColorThemeContext.tsx';
 
 interface ProgressionProps {
   plan: SmartPlan | null;
@@ -45,7 +47,7 @@ const DonutChart: React.FC<{ data: { type: string; value: number; color: string 
                         cy="100"
                         fill="transparent"
                         strokeWidth="30"
-                        className={item.color}
+                        style={{ stroke: item.color }}
                         strokeDasharray={strokeDasharray}
                         strokeDashoffset={strokeDashoffset}
                         aria-label={`${item.type}: ${((item.value / total) * 100).toFixed(1)}%`}
@@ -58,6 +60,23 @@ const DonutChart: React.FC<{ data: { type: string; value: number; color: string 
 
 const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
   const { t } = useLanguage();
+  const { colorTheme } = useColorTheme();
+  const [chartColors, setChartColors] = useState({ study: '', lecture: '', agenda: '', break: '', free: '' });
+  
+  useEffect(() => {
+    const rootStyle = getComputedStyle(document.documentElement);
+    // These names must match the color names in the tailwind.config
+    const colors = {
+      study: rootStyle.getPropertyValue('--tw-color-study').trim(),
+      lecture: rootStyle.getPropertyValue('--tw-color-lecture').trim(),
+      agenda: rootStyle.getPropertyValue('--tw-color-agenda').trim(),
+      break: rootStyle.getPropertyValue('--tw-color-break').trim(),
+      free: rootStyle.getPropertyValue('--tw-color-free').trim()
+    };
+    setChartColors(colors);
+  }, [colorTheme]);
+
+
   const stats = useMemo(() => {
     if (!plan) return null;
 
@@ -65,7 +84,6 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
     const studyBySubject = new Map<string, number>();
     const dailyTotals = new Map<string, number>();
 
-    // FIX: Updated timeToMinutes to correctly parse HH:MM AM/PM format.
     const timeToMinutes = (time: string): number => {
         if (!time || !time.includes(':')) return 0;
         try {
@@ -151,15 +169,15 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
         hours: (dailyTotals.get(day) || 0) / 60
       })),
       activityDistribution: [
-        { type: 'Study', value: totals.study, color: 'stroke-blue-500', legendColor: 'bg-blue-500' },
-        { type: 'Lecture', value: totals.lecture, color: 'stroke-red-500', legendColor: 'bg-red-500' },
-        { type: 'Agenda', value: totals.agenda, color: 'stroke-yellow-500', legendColor: 'bg-yellow-500' },
-        { type: 'Break', value: totals.break, color: 'stroke-green-500', legendColor: 'bg-green-500' },
-        { type: 'Free', value: totals.free, color: 'stroke-gray-400', legendColor: 'bg-gray-400' },
+        { type: 'Study', value: totals.study, color: chartColors.study, legendColor: 'bg-study' },
+        { type: 'Lecture', value: totals.lecture, color: chartColors.lecture, legendColor: 'bg-lecture' },
+        { type: 'Agenda', value: totals.agenda, color: chartColors.agenda, legendColor: 'bg-agenda' },
+        { type: 'Break', value: totals.break, color: chartColors.break, legendColor: 'bg-break' },
+        { type: 'Free', value: totals.free, color: chartColors.free, legendColor: 'bg-free' },
       ],
       trackedVsScheduled,
     };
-  }, [plan, trackedData]);
+  }, [plan, trackedData, chartColors]);
 
   if (!plan || !stats) {
     return (
@@ -185,11 +203,11 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <StatsCard title={t('progression.weeklyOverview')} className="lg:col-span-1">
                 <div className="space-y-4">
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalStudy')}</p><p className="font-bold text-2xl text-blue-600 dark:text-blue-400">{stats.totalHours.study}h</p></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalLecture')}</p><p className="font-bold text-lg text-red-600 dark:text-red-400">{stats.totalHours.lecture}h</p></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.personalAgenda')}</p><p className="font-bold text-lg text-yellow-600 dark:text-yellow-400">{stats.totalHours.agenda}h</p></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalBreak')}</p><p className="font-bold text-lg text-green-600 dark:text-green-400">{stats.totalHours.break}h</p></div>
-                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalFree')}</p><p className="font-bold text-lg text-gray-500 dark:text-gray-400">{stats.totalHours.free}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalStudy')}</p><p className="font-bold text-2xl text-study">{stats.totalHours.study}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalLecture')}</p><p className="font-bold text-lg text-lecture">{stats.totalHours.lecture}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.personalAgenda')}</p><p className="font-bold text-lg text-agenda">{stats.totalHours.agenda}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalBreak')}</p><p className="font-bold text-lg text-break">{stats.totalHours.break}h</p></div>
+                    <div><p className="text-sm text-gray-500 dark:text-gray-400">{t('progression.totalFree')}</p><p className="font-bold text-lg text-free">{stats.totalHours.free}h</p></div>
                 </div>
             </StatsCard>
             
@@ -222,14 +240,14 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
                                     <span>{item.trackedHours.toFixed(1)}h / {item.scheduledHours.toFixed(1)}h</span>
                                 </div>
                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 relative">
-                                    <div className="bg-blue-300 dark:bg-blue-800 h-4 rounded-full" style={{ width: `${(item.scheduledHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
-                                    <div className="bg-blue-600 h-4 rounded-full absolute top-0 left-0" style={{ width: `${(item.trackedHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
+                                    <div className="bg-study/30 h-4 rounded-full" style={{ width: `${(item.scheduledHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
+                                    <div className="bg-study h-4 rounded-full absolute top-0 left-0" style={{ width: `${(item.trackedHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}
                          <div className="flex items-center justify-end space-x-4 text-xs pt-2">
-                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-blue-600 mr-1.5"></span> Tracked</div>
-                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-blue-300 dark:bg-blue-800 mr-1.5"></span> Scheduled</div>
+                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-study mr-1.5"></span> Tracked</div>
+                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-study/30 mr-1.5"></span> Scheduled</div>
                         </div>
                     </div>
                 ) : (
@@ -242,7 +260,7 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
                       <div key={item.day} className="flex-1 flex flex-col items-center group transition-colors duration-300 p-1 rounded-t-md hover:bg-slate-100 dark:hover:bg-slate-800">
                           <div className="relative w-full h-full flex items-end">
                             <div 
-                              className="w-full bg-blue-400 dark:bg-blue-600 rounded-t-md group-hover:bg-blue-500 transition-all duration-300"
+                              className="w-full bg-primary rounded-t-md group-hover:bg-primary-dark transition-all duration-300"
                               style={{ height: `${(item.hours / maxDailyHours) * 100}%` }}
                               role="progressbar"
                               aria-valuenow={item.hours}

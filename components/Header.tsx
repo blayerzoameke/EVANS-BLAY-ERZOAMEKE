@@ -74,7 +74,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
           <MenuIcon className="w-6 h-6" />
         </button>
         <div className="flex items-center ml-4">
-            <LogoIcon className="w-8 h-8 text-sky-600 dark:text-sky-400" />
+            <LogoIcon className="w-8 h-8 text-primary dark:text-primary-light" />
             <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100 ml-2">
                 {t('header.title')}
             </h1>
@@ -93,7 +93,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
              {userDetails?.profilePicture ? (
                  <img src={userDetails.profilePicture} alt="Profile" className="w-8 h-8 rounded-full object-cover" />
              ) : (
-                 <div className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center font-bold text-sm">
+                 <div className="w-8 h-8 rounded-full bg-primary text-primary-text flex items-center justify-center font-bold text-sm">
                      {getInitials(userDetails?.name)}
                  </div>
              )}

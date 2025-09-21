@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { CloseIcon } from './icons/CloseIcon';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 // FIX: Imported ConflictInfo to be used in props. Added .ts extension.
 import type { ConflictInfo } from '../types.ts';
 

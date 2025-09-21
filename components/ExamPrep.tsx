@@ -1,29 +1,15 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
-import {
-    isStudyMaterial,
-    getDocumentContext,
-    generateQuiz,
-} from '../services/geminiService';
-// FIX: Added .ts extension to import path.
-import type { 
-    UploadedFile, 
-    Toast,
-    QuizQuestion,
-    QuizSummary,
-    AnswerFeedback,
-} from '../types.ts';
-// FIX: Added .ts extension to import path.
-import { QuizType } from '../types.ts';
+// FIX: Implement ExamPrep component.
+import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { UploadIcon } from './icons/UploadIcon';
-import { CloseIcon } from './icons/CloseIcon';
-// FIX: Added .tsx extension to import path.
+import { generateQuiz } from '../services/geminiService.ts';
+import type { Toast, QuizQuestion, AnswerFeedback, QuizSummary } from '../types.ts';
+import { QuizType } from '../types.ts';
 import type { View } from '../App.tsx';
-import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
-import { PdfIcon } from './icons/PdfIcon.tsx';
-import { PowerPointIcon } from './icons/PowerPointIcon.tsx';
+import { ArrowLeftIcon } from './icons/ArrowLeftIcon.tsx';
+import { ArrowRightIcon } from './icons/ArrowRightIcon.tsx';
+import { CheckIcon } from './icons/CheckIcon.tsx';
+import { CloseIcon } from './icons/CloseIcon.tsx';
+
 
 interface ExamPrepProps {
     addToast: (message: string, type: Toast['type']) => void;
@@ -32,308 +18,190 @@ interface ExamPrepProps {
 
 const ExamPrep: React.FC<ExamPrepProps> = ({ addToast, setView }) => {
     const { t } = useLanguage();
-    const [file, setFile] = useState<UploadedFile | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [loadingMessage, setLoadingMessage] = useState('');
-    const [error, setError] = useState<string | null>(null);
+    const [topic, setTopic] = useState('');
+    const [numQuestions, setNumQuestions] = useState(5);
+    const [quizType, setQuizType] = useState<QuizType>(QuizType.MCQ);
+    const [isLoading, setIsLoading] =useState(false);
 
-    const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+    const [quiz, setQuiz] = useState<QuizQuestion[]>([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [userAnswers, setUserAnswers] = useState<(string | null)[]>([]);
-    const [selectedOption, setSelectedOption] = useState<string | null>(null);
+    const [userAnswers, setUserAnswers] = useState<string[]>([]);
     const [feedback, setFeedback] = useState<AnswerFeedback | null>(null);
-    const [quizSummary, setQuizSummary] = useState<QuizSummary | null>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
+    const [summary, setSummary] = useState<QuizSummary | null>(null);
 
-    const [quizConfig, setQuizConfig] = useState({
-        type: QuizType.MCQ,
-        scope: '',
-        count: 5
-    });
-
-    const resetQuizState = () => {
-        setQuizQuestions([]);
+    const handleGenerateQuiz = async () => {
+        if (!topic.trim()) {
+            addToast(t('examPrep.error.noTopic'), 'error');
+            return;
+        }
+        setIsLoading(true);
+        setQuiz([]);
         setCurrentQuestionIndex(0);
         setUserAnswers([]);
-        setSelectedOption(null);
         setFeedback(null);
-        setQuizSummary(null);
-    };
-
-    const processFile = useCallback(async (acceptedFile: File) => {
-        setIsLoading(true);
-        setError(null);
-        setLoadingMessage(t('uploadslides.verifying'));
-        
-        const reader = new FileReader();
-        reader.readAsDataURL(acceptedFile);
-        reader.onloadend = async () => {
-            try {
-                const base64 = (reader.result as string).split(',')[1];
-                const filePart = { inlineData: { data: base64, mimeType: acceptedFile.type } };
-
-                const isMaterial = await isStudyMaterial(filePart);
-                if (!isMaterial) {
-                    setError(t('uploadslides.error.notStudyMaterial'));
-                    setIsLoading(false);
-                    return;
-                }
-                
-                setLoadingMessage(t('uploadslides.analyzing'));
-                const context = await getDocumentContext(filePart);
-                
-                setFile({
-                    name: acceptedFile.name,
-                    type: acceptedFile.type,
-                    size: acceptedFile.size,
-                    base64,
-                    context
-                });
-            } catch (e: any) {
-                setError(e.message || t('uploadslides.error.generic'));
-            } finally {
-                setIsLoading(false);
-            }
-        };
-    }, [t]);
-
-    const onDrop = useCallback((acceptedFiles: File[]) => {
-        if (acceptedFiles[0]) {
-            processFile(acceptedFiles[0]);
-        }
-    }, [processFile]);
-
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        onDrop,
-        accept: {
-            'application/pdf': ['.pdf'],
-            'image/*': ['.jpeg', '.jpg', '.png'],
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
-        },
-        multiple: false,
-        disabled: isLoading,
-    });
-    
-    const handleGenerateQuiz = async () => {
-        if (!file) return;
-        setIsGenerating(true);
-        setError(null);
+        setSummary(null);
         try {
-            const filePart = { inlineData: { data: file.base64, mimeType: file.type } };
-            const questions = await generateQuiz(filePart, quizConfig.type, quizConfig.scope || 'the entire document', quizConfig.count);
-            setQuizQuestions(questions);
-            setUserAnswers(new Array(questions.length).fill(null));
-        } catch (e: any) {
-            setError(e.message || "Failed to generate quiz.");
-            addToast(e.message || "Failed to generate quiz.", 'error');
+            const questions = await generateQuiz(topic, numQuestions, quizType);
+            if (questions && questions.length > 0) {
+                setQuiz(questions);
+                setUserAnswers(new Array(questions.length).fill(null));
+            } else {
+                addToast(t('examPrep.error.noQuestions'), 'warning');
+            }
+        } catch (error: any) {
+            addToast(error.message || t('examPrep.error.generic'), 'error');
         } finally {
-            setIsGenerating(false);
+            setIsLoading(false);
         }
     };
-    
-    const handleAnswerSubmit = () => {
-        if (!selectedOption) return;
-        
-        const currentQuestion = quizQuestions[currentQuestionIndex];
-        const isCorrect = selectedOption.trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase();
-        
+
+    const handleAnswerSubmit = (answer: string) => {
+        const newAnswers = [...userAnswers];
+        newAnswers[currentQuestionIndex] = answer;
+        setUserAnswers(newAnswers);
+
+        const currentQuestion = quiz[currentQuestionIndex];
+        const isCorrect = answer.toLowerCase() === currentQuestion.correctAnswer.toLowerCase();
         setFeedback({
             isCorrect,
             explanation: currentQuestion.explanation,
         });
-
-        const newAnswers = [...userAnswers];
-        newAnswers[currentQuestionIndex] = selectedOption;
-        setUserAnswers(newAnswers);
     };
 
     const handleNextQuestion = () => {
         setFeedback(null);
-        setSelectedOption(null);
-        if (currentQuestionIndex < quizQuestions.length - 1) {
+        if (currentQuestionIndex < quiz.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
         } else {
-            // End of quiz, generate summary
+            // End of quiz
             calculateSummary();
         }
     };
-    
+
     const calculateSummary = () => {
-        const correctAnswers = userAnswers.filter((answer, index) => 
-            answer && answer.trim().toLowerCase() === quizQuestions[index].correctAnswer.trim().toLowerCase()
-        );
-        const score = (correctAnswers.length / quizQuestions.length) * 100;
-        
-        const strengths = Array.from(new Set(quizQuestions
-            .filter((q, i) => userAnswers[i] && userAnswers[i]?.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase())
-            .map(q => q.topic)
-        ));
+        const score = userAnswers.reduce((correctCount, answer, index) => {
+            return answer?.toLowerCase() === quiz[index].correctAnswer.toLowerCase() ? correctCount + 1 : correctCount;
+        }, 0);
 
-        const weaknesses = Array.from(new Set(quizQuestions
-            .filter((q, i) => !userAnswers[i] || userAnswers[i]?.trim().toLowerCase() !== q.correctAnswer.trim().toLowerCase())
-            .map(q => q.topic)
-        ));
+        const topicCounts: { [topic: string]: { correct: number, total: number } } = {};
+        quiz.forEach((q, i) => {
+            if (!topicCounts[q.topic]) {
+                topicCounts[q.topic] = { correct: 0, total: 0 };
+            }
+            topicCounts[q.topic].total++;
+            if (userAnswers[i]?.toLowerCase() === q.correctAnswer.toLowerCase()) {
+                topicCounts[q.topic].correct++;
+            }
+        });
 
-        setQuizSummary({
-            score: Math.round(score),
+        const strengths = Object.entries(topicCounts).filter(([, v]) => v.correct / v.total >= 0.7).map(([k]) => k);
+        const weaknesses = Object.entries(topicCounts).filter(([, v]) => v.correct / v.total < 0.7).map(([k]) => k);
+
+        setSummary({
+            score: (score / quiz.length) * 100,
             strengths,
             weaknesses,
-            recommendations: [`Focus on reviewing topics like: ${weaknesses.join(', ')}.`]
+            recommendations: [`Focus on reviewing these topics: ${weaknesses.join(', ')}`],
         });
     };
-    
-    const startOver = () => {
-        setFile(null);
-        resetQuizState();
+
+    const resetQuiz = () => {
+        setQuiz([]);
+        setSummary(null);
+        setTopic('');
     };
 
-    if (quizSummary) {
+    if (isLoading) {
+        return <div className="text-center p-8">{t('examPrep.loading')}</div>;
+    }
+
+    if (summary) {
         return (
-            <div className="max-w-4xl mx-auto space-y-6">
-                <h2 className="text-3xl font-bold text-center">{t('examprep.summaryTitle')}</h2>
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
-                    <p className="text-center text-lg">{t('examprep.yourScore')}: <span className="font-bold text-3xl text-blue-600">{quizSummary.score}%</span></p>
+            <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg">
+                <h2 className="text-3xl font-bold text-center mb-4">{t('examPrep.summary.title')}</h2>
+                <p className="text-5xl font-bold text-center text-blue-600 dark:text-blue-400 mb-6">{summary.score.toFixed(0)}%</p>
+                <div className="space-y-4">
+                    <div><h3 className="font-semibold">{t('examPrep.summary.strengths')}</h3><p>{summary.strengths.join(', ') || 'None identified'}</p></div>
+                    <div><h3 className="font-semibold">{t('examPrep.summary.weaknesses')}</h3><p>{summary.weaknesses.join(', ') || 'None identified'}</p></div>
+                    <div><h3 className="font-semibold">{t('examPrep.summary.recommendations')}</h3><p>{summary.recommendations.join(', ')}</p></div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-                         <h3 className="font-bold text-green-600 dark:text-green-400 mb-2">{t('examprep.strengths')}</h3>
-                         {quizSummary.strengths.length > 0 ? (
-                            <ul className="list-disc list-inside">
-                                {quizSummary.strengths.map((s, i) => <li key={i}>{s}</li>)}
-                            </ul>
-                         ) : <p>{t('examprep.none')}</p>}
-                    </div>
-                     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-                         <h3 className="font-bold text-red-600 dark:text-red-400 mb-2">{t('examprep.weaknesses')}</h3>
-                         {quizSummary.weaknesses.length > 0 ? (
-                            <ul className="list-disc list-inside">
-                                {quizSummary.weaknesses.map((w, i) => <li key={i}>{w}</li>)}
-                            </ul>
-                         ) : <p>{t('examprep.none')}</p>}
-                    </div>
-                </div>
-                 <div className="flex justify-center gap-4 mt-6">
-                    <button onClick={resetQuizState} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg">{t('examprep.retakeQuiz')}</button>
-                    <button onClick={startOver} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 font-semibold rounded-lg">{t('examprep.chooseNewMaterial')}</button>
-                </div>
+                <button onClick={resetQuiz} className="mt-8 w-full py-2 bg-blue-700 text-white font-semibold rounded-md hover:bg-blue-800">{t('examPrep.tryAgain')}</button>
             </div>
         );
     }
     
-    if (quizQuestions.length > 0) {
-        const currentQuestion = quizQuestions[currentQuestionIndex];
+    if (quiz.length > 0) {
+        const currentQuestion = quiz[currentQuestionIndex];
         return (
-            <div className="max-w-2xl mx-auto">
-                <p className="text-center font-semibold mb-4">{t('examprep.question', { current: currentQuestionIndex + 1, total: quizQuestions.length })}</p>
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
-                    <p className="font-bold text-lg mb-4">{currentQuestion.question}</p>
-                    <div className="space-y-3">
-                        {currentQuestion.options?.map((option, index) => (
-                             <button
-                                key={index}
-                                onClick={() => !feedback && setSelectedOption(option)}
-                                className={`w-full text-left p-3 rounded-md border-2 transition-all ${
-                                    selectedOption === option
-                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/50'
-                                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                                } ${feedback ? 'cursor-not-allowed' : ''}`}
+            <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+                <div className="flex justify-between items-center mb-4">
+                    <span className="text-sm font-semibold">{t('examPrep.question', { current: currentQuestionIndex + 1, total: quiz.length })}</span>
+                    <span className="text-sm font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">{currentQuestion.topic}</span>
+                </div>
+                <p className="text-lg font-medium mb-6">{currentQuestion.question}</p>
+
+                <div className="space-y-3">
+                    {currentQuestion.options ? (
+                        currentQuestion.options.map((opt, i) => (
+                            <button
+                                key={i}
+                                onClick={() => handleAnswerSubmit(opt)}
                                 disabled={!!feedback}
+                                className={`w-full text-left p-3 border rounded-lg transition-colors ${
+                                    feedback && opt === currentQuestion.correctAnswer ? 'bg-green-100 dark:bg-green-900/50 border-green-500' :
+                                    feedback && opt === userAnswers[currentQuestionIndex] && !feedback.isCorrect ? 'bg-red-100 dark:bg-red-900/50 border-red-500' :
+                                    'hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
                             >
-                                {option}
+                                {opt}
                             </button>
-                        ))}
-                         {currentQuestion.type !== QuizType.MCQ && (
-                              <textarea
-                                value={selectedOption || ''}
-                                onChange={(e) => !feedback && setSelectedOption(e.target.value)}
-                                rows={4}
-                                className="w-full text-left p-3 rounded-md border-2 transition-all border-gray-300 dark:border-gray-600 focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700"
-                                disabled={!!feedback}
-                            />
-                         )}
-                    </div>
-
-                    {feedback && (
-                        <div className={`mt-4 p-4 rounded-lg ${feedback.isCorrect ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200' : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200'}`}>
-                            <h4 className="font-bold">{feedback.isCorrect ? t('examprep.correct') : t('examprep.incorrect')}</h4>
-                            <p>{feedback.explanation}</p>
-                        </div>
+                        ))
+                    ) : (
+                        <textarea rows={4} onBlur={(e) => handleAnswerSubmit(e.target.value)} disabled={!!feedback} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"/>
                     )}
-                    
-                    <div className="mt-6 flex justify-end">
-                        {!feedback ? (
-                            <button onClick={handleAnswerSubmit} disabled={!selectedOption} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-300">
-                                {t('examprep.checkAnswer')}
-                            </button>
-                        ) : (
-                            <button onClick={handleNextQuestion} className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg">
-                                {currentQuestionIndex < quizQuestions.length - 1 ? t('examprep.nextQuestion') : t('examprep.finishAndSummary')}
-                            </button>
-                        )}
-                    </div>
                 </div>
+
+                {feedback && (
+                    <div className={`mt-6 p-4 rounded-lg ${feedback.isCorrect ? 'bg-green-100 dark:bg-green-900/50' : 'bg-red-100 dark:bg-red-900/50'}`}>
+                        <div className="flex items-center gap-2">
+                             {feedback.isCorrect ? <CheckIcon className="w-6 h-6 text-green-600" /> : <CloseIcon className="w-6 h-6 text-red-600" />}
+                             <h4 className="font-bold text-lg">{feedback.isCorrect ? t('examPrep.correct') : t('examPrep.incorrect')}</h4>
+                        </div>
+                        <p className="text-sm mt-2">{feedback.explanation}</p>
+                        <button onClick={handleNextQuestion} className="w-full mt-4 py-2 px-4 rounded-md text-white font-semibold bg-gray-800 dark:bg-gray-200 dark:text-gray-900">
+                           {currentQuestionIndex < quiz.length - 1 ? t('examPrep.next') : t('examPrep.finish')}
+                        </button>
+                    </div>
+                )}
             </div>
         );
     }
-    
-    // Quiz Configuration View
-    if (file) {
-        return (
-             <div className="max-w-2xl mx-auto space-y-6">
-                <button onClick={startOver} className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800">
-                    <ArrowLeftIcon className="w-4 h-4" /> {t('examprep.chooseNewMaterial')}
-                </button>
-                <h2 className="text-2xl font-bold">{t('examprep.configureQuiz')}</h2>
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow space-y-4">
-                    <div className="flex items-center gap-4 p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md">
-                        {file.type.includes('pdf') 
-                            ? <PdfIcon className="w-8 h-8 text-red-600 shrink-0" /> 
-                            : file.type.includes('image')
-                            ? <img src={`data:${file.type};base64,${file.base64}`} alt={file.name} className="w-8 h-8 object-cover rounded-md" />
-                            : <PowerPointIcon className="w-8 h-8 text-orange-500 shrink-0" />
-                        }
-                        <p className="text-sm font-semibold truncate">{file.name}</p>
-                    </div>
 
+    return (
+        <div className="max-w-2xl mx-auto space-y-8">
+            <div>
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('examPrep.title')}</h2>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">{t('examPrep.subtitle')}</p>
+            </div>
+            <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow space-y-4">
+                <div>
+                    <label htmlFor="topic" className="block text-sm font-medium">{t('examPrep.topic')}</label>
+                    <input type="text" id="topic" value={topic} onChange={e => setTopic(e.target.value)} className="w-full mt-1 p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium">Topic or Scope</label>
-                        <input
-                            type="text"
-                            value={quizConfig.scope}
-                            onChange={e => setQuizConfig({...quizConfig, scope: e.target.value})}
-                            placeholder={t('examprep.topicPlaceholder')}
-                            className="mt-1 block w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
-                        />
+                        <label htmlFor="numQuestions" className="block text-sm font-medium">{t('examPrep.numQuestions')}</label>
+                        <input type="number" id="numQuestions" value={numQuestions} onChange={e => setNumQuestions(parseInt(e.target.value, 10))} min="1" max="20" className="w-full mt-1 p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium">Quiz Type</label>
-                        <select value={quizConfig.type} onChange={e => setQuizConfig({...quizConfig, type: e.target.value as QuizType})} className="mt-1 block w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
-                            {Object.values(QuizType).map(quizType => <option key={quizType} value={quizType}>{quizType}</option>)}
+                     <div>
+                        <label htmlFor="quizType" className="block text-sm font-medium">{t('examPrep.quizType')}</label>
+                        <select id="quizType" value={quizType} onChange={e => setQuizType(e.target.value as QuizType)} className="w-full mt-1 p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
+                            {Object.values(QuizType).map(type => <option key={type} value={type}>{type}</option>)}
                         </select>
                     </div>
-                    <button onClick={handleGenerateQuiz} disabled={isGenerating} className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg disabled:bg-blue-400">
-                        {isGenerating ? t('examprep.generatingQuiz') : t('examprep.generateQuiz')}
-                    </button>
-                    {error && <p className="mt-2 text-center text-red-500">{error}</p>}
                 </div>
-             </div>
-        );
-    }
-
-    // Initial Upload View
-    return (
-        <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-center">{t('examprep.title')}</h2>
-            <p className="text-gray-500 mt-1 mb-8 text-center">{t('examprep.subtitle')}</p>
-            <div {...getRootProps()} className={`group p-12 border-2 border-dashed rounded-lg transition-colors ${isDragActive ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20' : 'border-gray-300 dark:border-gray-600'} ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-teal-400'}`}>
-                <input {...getInputProps()} />
-                <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400 transition-colors group-hover:text-teal-600 dark:group-hover:text-teal-400">
-                    <UploadIcon className="w-16 h-16 mb-4 transition-transform group-hover:scale-110" />
-                    <p className="font-semibold text-lg">{isLoading ? loadingMessage : t('uploadslides.dropPrompt')}</p>
-                    <p className="text-sm">{t('uploadslides.supportedFormats')}</p>
-                </div>
+                <button onClick={handleGenerateQuiz} className="w-full py-3 bg-blue-700 text-white font-semibold rounded-md hover:bg-blue-800">{t('examPrep.generate')}</button>
             </div>
-            {error && <p className="mt-4 text-center text-red-500">{error}</p>}
         </div>
     );
 };

@@ -1,9 +1,12 @@
 
+
+
+
 import React from 'react';
 // FIX: Added .tsx extension to import path.
 import type { View } from '../App.tsx';
-import { LogoIcon } from './icons/LogoIcon';
-import { CloseIcon } from './icons/CloseIcon';
+import { LogoIcon } from './icons/LogoIcon.tsx';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface SidebarProps {
@@ -62,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
         onClick={(e) => { e.preventDefault(); onClick(item.id); }}
         className={`flex items-center px-4 py-2.5 text-sm rounded-md transition-colors duration-200 ${
           isActive
-            ? "bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 font-semibold"
+            ? "bg-primary/10 dark:bg-primary/20 text-primary-dark dark:text-primary-light font-semibold"
             : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
         }`}
       >
@@ -85,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
       <div className="flex flex-col h-full no-print">
         <div className="flex items-center justify-between px-4 py-5 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center">
-            <LogoIcon className="w-8 h-8 text-sky-600 dark:text-sky-400" />
+            <LogoIcon className="w-8 h-8 text-primary dark:text-primary-light" />
             <span className="ml-3 text-2xl font-bold text-gray-800 dark:text-gray-100">EduBlay</span>
           </div>
           <button onClick={() => setOpen(false)} className="lg:hidden p-1 -mr-2 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md">

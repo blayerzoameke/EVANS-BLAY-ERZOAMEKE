@@ -1,13 +1,13 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import UserDetailsForm from './UserDetailsForm';
-import TimetableInput from './TimetableInput';
-import SmartPlanView from './SmartPlanView';
-import CourseCodeModal from './CourseCodeModal';
-import LogStudyModal from './LogStudyModal';
-import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService';
+// FIX: Add .tsx extension to UserDetailsForm import.
+import UserDetailsForm from './UserDetailsForm.tsx';
+import TimetableInput from './TimetableInput.tsx';
+import SmartPlanView from './SmartPlanView.tsx';
+import CourseCodeModal from './CourseCodeModal.tsx';
+import LogStudyModal from './LogStudyModal.tsx';
+// FIX: Added .ts extension to import path for geminiService.
+import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService.ts';
 // FIX: Added .ts extension
 import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession } from '../types.ts';
 // FIX: Moved DayOfWeek from type-only import to regular import to allow its use as a value.
@@ -16,7 +16,7 @@ import { UploadIcon } from './icons/UploadIcon';
 import { useLanguage } from '../contexts/LanguageContext';
 import { LogoIcon } from './icons/LogoIcon.tsx';
 
-const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '' };
+const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '', programmeOfStudy: '', institutionAbbreviation: '' };
 
 const timeToMinutes = (time: string): number => {
     if (!time || !time.includes(':')) return 0;
@@ -74,12 +74,20 @@ const Dashboard: React.FC<{
   const [selectedSlotForLog, setSelectedSlotForLog] = useState<{ slot: PlanSlot; day: DayOfWeek } | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
   const { t } = useLanguage();
+  const [isManualPlan, setIsManualPlan] = useState(false);
 
   useEffect(() => {
     if (initialUserDetails) {
       setUserDetails(initialUserDetails);
     }
   }, [initialUserDetails]);
+  
+  // When a plan is loaded from storage or another page, it's not editable.
+  useEffect(() => {
+    if (smartPlan) {
+      setIsManualPlan(false);
+    }
+  }, []);
 
   const handleUserDetailsChange = useCallback((details: UserDetails) => {
     setUserDetails(details);
@@ -144,6 +152,7 @@ const Dashboard: React.FC<{
     try {
       let plan;
       if (imageFile) {
+        setIsManualPlan(false);
         setLoadingMessage(t('dashboard.verifyingImage'));
         const reader = new FileReader();
         reader.readAsDataURL(imageFile);
@@ -174,7 +183,9 @@ const Dashboard: React.FC<{
             }
         };
       } else {
+        setIsManualPlan(true);
         setLoadingMessage(t('dashboard.generating'));
+        // FIX: Replaced generatePlanFromImage with generateSmartPlan for manual timetable entry, as no image is provided in this path.
         plan = await generateSmartPlan(userDetails, lectures, studyGoals, agendaItems, generalGoals);
         processPlanForCodes(plan);
         setIsLoading(false);
@@ -227,7 +238,10 @@ const Dashboard: React.FC<{
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': ['.jpeg', '.jpg', '.png'] },
+    accept: {
+      'image/jpeg': ['.jpeg', '.jpg'],
+      'image/png': ['.png'],
+    },
     multiple: false,
     disabled: isLoading || isManualInputStarted,
   });
@@ -253,10 +267,149 @@ const Dashboard: React.FC<{
       }
   };
   
-// FIX: Corrected the implementation of handleOpenLogModal to include the `day` property, resolving a type error.
   const handleOpenLogModal = (slot: PlanSlot, day: DayOfWeek) => {
     setSelectedSlotForLog({ slot, day });
   };
+  
+  const handleEditInputs = () => {
+    setSmartPlan(null);
+    setStep(2);
+  };
+
+  const handleStartOver = () => {
+    setSmartPlan(null);
+    setLectures([]);
+    setStudyGoals([]);
+    setAgendaItems([]);
+    setGeneralGoals('');
+    setImageFile(null);
+    setImagePreview(null);
+    setIsManualPlan(false);
+    setStep(1);
+  };
+  
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      {smartPlan ? (
+        <div>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('dashboard.yourSmartPlan')}</h2>
+            <div className="flex gap-2 w-full sm:w-auto">
+                 <button onClick={() => setSaveModalOpen(true)} className="flex-1 sm:flex-none px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700">{t('common.save')}</button>
+                 {isManualPlan && (
+                    <button onClick={handleEditInputs} className="flex-1 sm:flex-none px-4 py-2 bg-yellow-600 text-white font-semibold rounded-md hover:bg-yellow-700">{t('dashboard.editInputs')}</button>
+                 )}
+                 <button onClick={handleStartOver} className="flex-1 sm:flex-none px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-700">{t('dashboard.startOver')}</button>
+            </div>
+          </div>
+          <SmartPlanView plan={smartPlan} onStudySlotClick={handleOpenLogModal} />
+        </div>
+      ) : (
+        <div>
+          <div className="text-center">
+            <LogoIcon className="w-16 h-16 text-primary dark:text-primary-light mx-auto mb-2" />
+            <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('dashboard.createPlanTitle')}</h2>
+            <p className="text-gray-500 mt-1 mb-8">{t('dashboard.createPlanSubtitle')}</p>
+          </div>
+          
+          <div className="max-w-4xl mx-auto">
+            {step === 1 && (
+                <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-xl shadow-lg animate-fade-in">
+                    <UserDetailsForm userDetails={userDetails} setUserDetails={handleUserDetailsChange} />
+                    <button onClick={handleNextStep} className="mt-6 w-full py-3 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark transition-colors">{t('common.next')}</button>
+                </div>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-8 animate-fade-in">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                  {!imagePreview ? (
+                    <div {...getRootProps()} className={`group p-8 border-2 border-dashed rounded-lg transition-colors ${isDragActive ? 'border-primary bg-primary/10' : 'border-gray-300 dark:border-gray-600'} ${isManualInputStarted ? 'cursor-not-allowed opacity-50 bg-gray-50 dark:bg-gray-800' : 'cursor-pointer hover:border-primary/50'}`}>
+                      <input {...getInputProps()} />
+                      <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400">
+                        <UploadIcon className="w-12 h-12 mb-3" />
+                        <p className="font-semibold">{t('dashboard.uploadTimetable')}</p>
+                        {isManualInputStarted && <p className="text-xs text-amber-500 mt-2">{t('dashboard.uploadDisabled')}</p>}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <img src={imagePreview} alt="Timetable preview" className="max-h-60 mx-auto rounded-lg shadow-md" />
+                      <button onClick={clearImage} className="mt-2 text-sm text-red-500 hover:underline">{t('dashboard.removeImage')}</button>
+                    </div>
+                  )}
+                   <p className="text-center text-sm text-gray-500 my-4">- OR -</p>
+                   <p className="text-center text-sm text-gray-500">{t('dashboard.manualEntry')}</p>
+                </div>
+
+                <TimetableInput
+                  lectures={lectures} setLectures={setLectures}
+                  studyGoals={studyGoals} setStudyGoals={setStudyGoals}
+                  agendaItems={agendaItems} setAgendaItems={setAgendaItems}
+                  generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
+                  manualSectionsDisabled={!!imageFile}
+                />
+
+                <div className="flex justify-between items-center mt-8">
+                  <button onClick={() => setStep(1)} className="py-2 px-6 bg-gray-200 dark:bg-gray-600 font-semibold rounded-lg shadow-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">{t('common.previous')}</button>
+                  <button onClick={handleGeneratePlan} disabled={isLoading || !isInputSufficient} className="py-3 px-8 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors">
+                    {isLoading ? loadingMessage : t('dashboard.generatePlan')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {error && <div className="mt-4 text-center text-red-600 bg-red-100 dark:bg-red-900/50 p-3 rounded-md animate-fade-in">{error}</div>}
+      
+      <CourseCodeModal isOpen={isCodeModalOpen} onClose={() => setIsCodeModalOpen(false)} onConfirm={handleCourseCodeConfirmation} codes={courseCodes} />
+
+      {selectedSlotForLog && (
+          <LogStudyModal
+              isOpen={!!selectedSlotForLog}
+              onClose={() => setSelectedSlotForLog(null)}
+              slot={selectedSlotForLog.slot}
+              day={selectedSlotForLog.day}
+              onStartSession={(slotToStart) => {
+                  const now = Date.now();
+                  const duration = timeToMinutes(slotToStart.endTime) - timeToMinutes(slotToStart.startTime);
+                  const endTime = now + (duration * 60 * 1000);
+                  setActiveSession({
+                      startTime: now,
+                      endTime: endTime,
+                      subject: slotToStart.activity,
+                      type: 'study',
+                      fromSlot: slotToStart,
+                      nextSlot: null,
+                  });
+                  addToast(t('toasts.sessionStarted'), 'success');
+                  setSelectedSlotForLog(null);
+              }}
+              onLogTime={(subject, duration, date) => {
+                  const newLog: TrackedSession = { subject, durationMinutes: duration, date };
+                  setTrackedData([...trackedData, newLog]);
+                  addToast(t('toasts.logSaved'), 'success');
+                  setSelectedSlotForLog(null);
+              }}
+          />
+      )}
+
+      {saveModalOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm">
+                  <h3 className="text-lg font-bold mb-4">{t('dashboard.startOver')}</h3>
+                  <input type="text" value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder={t('dashboard.planNamePlaceholder')} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                  <div className="flex justify-end gap-2 mt-4">
+                      <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
+                      <button onClick={handleSavePlan} className="px-4 py-2 bg-primary text-primary-text rounded-md">{t('common.save')}</button>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  );
 };
 
 export default Dashboard;
