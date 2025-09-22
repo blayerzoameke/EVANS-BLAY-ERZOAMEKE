@@ -1,41 +1,43 @@
-
-
 import React, { useState, useEffect } from 'react';
-// FIX: Added .ts extension to import path.
-import type { Note } from '../types.ts';
+import type { Note, NotesViewState } from '../types.ts';
 import { StarIcon } from './icons/StarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { PlusIcon } from './icons/PlusIcon';
 import { useLanguage } from '../contexts/LanguageContext';
 import ConfirmationModal from './ConfirmationModal.tsx';
 
-// FIX: Added props interface to accept state from App.tsx
 interface NotesProps {
     notes: Note[];
     setNotes: (notes: Note[]) => void;
+    notesViewState: NotesViewState;
+    setNotesViewState: React.Dispatch<React.SetStateAction<NotesViewState>>;
 }
 
-// FIX: Changed to a controlled component accepting props
-const Notes: React.FC<NotesProps> = ({ notes, setNotes }) => {
-    const [currentNote, setCurrentNote] = useState<Note | null>(null);
-    const [searchTerm, setSearchTerm] = useState('');
+const Notes: React.FC<NotesProps> = ({ notes, setNotes, notesViewState, setNotesViewState }) => {
     const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
     const { t } = useLanguage();
-
-    // FIX: Removed local state management and localStorage logic, now handled by App.tsx.
-    // This useEffect handles selecting a note when the component mounts or notes change.
-    useEffect(() => {
-        if (notes.length > 0 && !currentNote) {
-            setCurrentNote(notes[0]);
-        }
-        if (currentNote && !notes.find(n => n.id === currentNote.id)) {
-            setCurrentNote(notes[0] || null);
-        }
-    }, [notes, currentNote]);
-
-    const saveNotes = (updatedNotes: Note[]) => {
-        setNotes(updatedNotes);
+    
+    const { currentNoteId, searchTerm } = notesViewState;
+    
+    const setCurrentNoteId = (id: string | null) => {
+        setNotesViewState(prev => ({ ...prev, currentNoteId: id }));
     };
+    
+    const setSearchTerm = (term: string) => {
+        setNotesViewState(prev => ({ ...prev, searchTerm: term }));
+    };
+
+    const currentNote = notes.find(n => n.id === currentNoteId) || null;
+
+    useEffect(() => {
+        const sortedNotes = [...notes].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (sortedNotes.length > 0 && !currentNoteId) {
+            setCurrentNoteId(sortedNotes[0].id);
+        }
+        if (currentNoteId && !notes.find(n => n.id === currentNoteId)) {
+            setCurrentNoteId(sortedNotes[0]?.id || null);
+        }
+    }, [notes, currentNoteId, setCurrentNoteId]);
 
     const createNewNote = () => {
         const newNote: Note = {
@@ -46,41 +48,33 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes }) => {
             createdAt: new Date().toISOString(),
             isFavourite: false,
         };
-        saveNotes([newNote, ...notes]);
-        setCurrentNote(newNote);
+        setNotes([newNote, ...notes]);
+        setCurrentNoteId(newNote.id);
     };
 
     const updateNote = (field: keyof Note, value: any) => {
         if (currentNote) {
             const updatedNote = { ...currentNote, [field]: value };
-            setCurrentNote(updatedNote);
             const updatedNotes = notes.map(n => n.id === currentNote.id ? updatedNote : n);
-            saveNotes(updatedNotes);
+            setNotes(updatedNotes);
         }
     };
 
-    const handleDeleteRequest = (note: Note) => {
-        setNoteToDelete(note);
-    };
+    const handleDeleteRequest = (note: Note) => setNoteToDelete(note);
     
     const confirmDeleteNote = () => {
         if (!noteToDelete) return;
-        
         const updatedNotes = notes.filter(n => n.id !== noteToDelete.id);
-        saveNotes(updatedNotes);
-        
-        if (currentNote?.id === noteToDelete.id) {
-            setCurrentNote(updatedNotes[0] || null);
+        setNotes(updatedNotes);
+        if (currentNoteId === noteToDelete.id) {
+            setCurrentNoteId(updatedNotes[0]?.id || null);
         }
         setNoteToDelete(null);
     };
 
     const toggleFavourite = (id: string) => {
         const updatedNotes = notes.map(n => n.id === id ? { ...n, isFavourite: !n.isFavourite } : n);
-        saveNotes(updatedNotes);
-        if (currentNote?.id === id) {
-             setCurrentNote(n => n ? {...n, isFavourite: !n.isFavourite} : null);
-        }
+        setNotes(updatedNotes);
     }
 
     const filteredNotes = notes.filter(note => 
@@ -92,7 +86,6 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes }) => {
     return (
         <>
             <div className="flex h-[calc(100vh-10rem)] max-w-7xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg overflow-hidden border dark:border-gray-700">
-                {/* Sidebar */}
                 <div className="w-1/3 border-r dark:border-gray-700 flex flex-col">
                     <div className="p-4 border-b dark:border-gray-700">
                         <input
@@ -107,7 +100,7 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes }) => {
                         {filteredNotes.map(note => (
                             <div
                                 key={note.id}
-                                onClick={() => setCurrentNote(note)}
+                                onClick={() => setCurrentNoteId(note.id)}
                                 className={`p-4 cursor-pointer border-l-4 ${currentNote?.id === note.id ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                             >
                                 <h4 className="font-bold truncate text-gray-800 dark:text-gray-200">{note.title}</h4>
@@ -122,7 +115,6 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes }) => {
                     </div>
                 </div>
 
-                {/* Main Content */}
                 <div className="w-2/3 flex flex-col">
                     {currentNote ? (
                         <>

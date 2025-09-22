@@ -1,4 +1,4 @@
-
+import type { View } from './App.tsx';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -114,6 +114,7 @@ export interface ActiveSession {
   fromSlot: PlanSlot;
   nextSlot: PlanSlot | null;
   isUntracked?: boolean;
+  durationMinutes?: number;
 }
 
 export interface Note {
@@ -133,7 +134,7 @@ export interface UploadedFile {
     context: string;
 }
 
-export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'read' | 'chat';
+export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'read' | 'chat' | 'read-focus';
 
 export interface LearningHubState {
     file: UploadedFile | null;
@@ -144,6 +145,7 @@ export interface LearningHubState {
         read: string | null;
     };
     chatHistory: ChatTurn[];
+    isProcessing: boolean;
 }
 
 export enum QuizType {
@@ -195,4 +197,72 @@ export interface NotificationSettings {
 export interface ConflictInfo {
     plannedSubject: string;
     uploadedSubject: string;
+}
+
+export interface GenerationState {
+    isLoading: boolean;
+    message: string;
+    error: string | null;
+    source: 'dashboard' | 'quiz' | 'solve' | 'hub' | null;
+}
+
+export interface QuizState {
+    quiz: QuizQuestion[];
+    currentQuestionIndex: number;
+    userAnswers: string[];
+    feedback: AnswerFeedback | null;
+    summary: QuizSummary | null;
+}
+
+export interface DashboardInputState {
+    lectures: Lecture[];
+    studyGoals: StudyGoal[];
+    agendaItems: AgendaItem[];
+    generalGoals: string;
+    imageFile: File | null;
+    imagePreview: string | null;
+    step: 1 | 2;
+    isManualPlan: boolean;
+}
+
+export interface ExamPrepState {
+    mode: 'quiz' | 'solve';
+    // Quiz generation
+    topic: string;
+    numQuestions: number;
+    quizType: QuizType;
+    uploadedFiles: File[];
+    focusArea: string;
+    isVerifying: boolean;
+    // Problem solving
+    questionImage: string | null; // base64 data url
+    questionText: string;
+    solution: string | null;
+    outputFormat: 'steps' | 'latex' | 'code' | 'graph';
+    programmingLanguage: string;
+}
+
+export interface ProfileEditState {
+    isEditing: boolean;
+    details: UserDetails | null;
+}
+
+export interface NotesViewState {
+    currentNoteId: string | null;
+    searchTerm: string;
+}
+
+export interface ReportDraft {
+    category: string;
+    description: string;
+    attachment: File | null;
+    contactEmail: string;
+    contactWhatsApp: string;
+}
+
+export interface FeedbackDraft {
+    rating: number;
+    category: string;
+    comments: string;
+    canUseAsTestimonial: boolean;
 }

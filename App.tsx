@@ -1,17 +1,12 @@
 
-
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
 import Dashboard from './components/Dashboard.tsx';
-// FIX: Add .tsx extension to Profile component import.
 import Profile from './components/Profile.tsx';
 import MyTimetables from './components/MyTimetables.tsx';
 import Progression from './components/Progression.tsx';
 import Notes from './components/Notes.tsx';
-// FIX: Add .tsx extension to Onboarding component import.
 import Onboarding from './components/Onboarding.tsx';
 import ToastContainer from './components/ToastContainer.tsx';
 import LanguageSettings from './components/Language.tsx';
@@ -30,8 +25,8 @@ import FocusedStudyView from './components/FocusedStudyView.tsx';
 import Library from './components/Library.tsx';
 import Terms from './components/Terms.tsx';
 
-import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession } from './types.ts';
-import { EducationalLevel } from './types.ts';
+import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft } from './types.ts';
+import { EducationalLevel, QuizType } from './types.ts';
 
 export type View =
   | 'dashboard'
@@ -61,15 +56,30 @@ const App: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
-  const [learningHubState, setLearningHubState] = useState<LearningHubState>({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] });
+  const [learningHubState, setLearningHubState] = useState<LearningHubState>({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({ status: 'unconfigured', enabled: false, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
   const [trackedData, setTrackedData] = useState<TrackedSession[]>([]);
+  const [generationState, setGenerationState] = useState<GenerationState>({ isLoading: false, message: '', error: null, source: null });
+  const [quizState, setQuizState] = useState<QuizState>({ quiz: [], currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
+
+  // Persistent component states
+  const [dashboardInputs, setDashboardInputs] = useState<DashboardInputState>({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false });
+  const [examPrepState, setExamPrepState] = useState<ExamPrepState>({ mode: 'quiz', topic: '', numQuestions: 5, quizType: QuizType.MCQ, uploadedFiles: [], focusArea: '', isVerifying: false, questionImage: null, questionText: '', solution: null, outputFormat: 'steps', programmingLanguage: 'python' });
+  const [profileEditState, setProfileEditState] = useState<ProfileEditState>({ isEditing: false, details: null });
+  const [notesViewState, setNotesViewState] = useState<NotesViewState>({ currentNoteId: null, searchTerm: '' });
+  const [reportDraft, setReportDraft] = useState<ReportDraft>({ category: 'bug', description: '', attachment: null, contactEmail: '', contactWhatsApp: '' });
+  const [feedbackDraft, setFeedbackDraft] = useState<FeedbackDraft>({ rating: 0, category: 'compliment', comments: '', canUseAsTestimonial: false });
+
 
   useEffect(() => {
     const loadData = () => {
       try {
         const savedUserDetails = localStorage.getItem('userDetails');
-        if (savedUserDetails) setUserDetails(JSON.parse(savedUserDetails));
+        if (savedUserDetails) {
+            const parsedDetails = JSON.parse(savedUserDetails);
+            setUserDetails(parsedDetails);
+            setReportDraft(prev => ({...prev, contactEmail: parsedDetails.email || ''}));
+        }
 
         const savedPlans = localStorage.getItem('savedTimetables');
         if (savedPlans) setSavedTimetables(JSON.parse(savedPlans));
@@ -124,10 +134,11 @@ const App: React.FC = () => {
   
   const handleOnboardingComplete = (details: UserDetails) => {
     setUserDetails(details);
+    setReportDraft(prev => ({...prev, contactEmail: details.email || ''}));
   };
   
   const learningHubFile = learningHubState.file;
-  const isStudyMode = activeSession?.type === 'study' && learningHubFile;
+  const isStudyMode = activeSession?.type === 'study' && activeSession.isUntracked;
 
   const renderView = () => {
     switch (view) {
@@ -136,6 +147,7 @@ const App: React.FC = () => {
                   setSmartPlan={setSmartPlan} 
                   smartPlan={smartPlan} 
                   userDetails={userDetails}
+// FIX: Corrected a typo. The function is `setUserDetails`, not `setGlobalUserDetails`.
                   setUserDetails={setUserDetails}
                   savedTimetables={savedTimetables}
                   setSavedTimetables={setSavedTimetables}
@@ -143,16 +155,30 @@ const App: React.FC = () => {
                   setActiveSession={setActiveSession}
                   trackedData={trackedData}
                   setTrackedData={setTrackedData}
+                  generationState={generationState}
+                  setGenerationState={setGenerationState}
+                  dashboardInputs={dashboardInputs}
+                  setDashboardInputs={setDashboardInputs}
                />;
       case 'profile':
-        return <Profile userDetails={userDetails} setUserDetails={setUserDetails} addToast={addToast} />;
+        return <Profile 
+                    userDetails={userDetails} 
+                    setUserDetails={setUserDetails} 
+                    addToast={addToast} 
+                    profileEditState={profileEditState}
+                    setProfileEditState={setProfileEditState}
+                />;
       case 'mytimetables':
-// FIX: Passed `addToast` prop to MyTimetables component.
         return <MyTimetables savedTimetables={savedTimetables} setSavedTimetables={setSavedTimetables} onLoadPlan={(plan) => { setSmartPlan(plan); setView('dashboard'); }} addToast={addToast} />;
       case 'progression':
         return <Progression plan={smartPlan} trackedData={trackedData} />;
       case 'notes':
-        return <Notes notes={notes} setNotes={setNotes} />;
+        return <Notes 
+                    notes={notes} 
+                    setNotes={setNotes} 
+                    notesViewState={notesViewState}
+                    setNotesViewState={setNotesViewState}
+                />;
       case 'uploadslides':
         return <UploadSlides
                   smartPlan={smartPlan}
@@ -166,7 +192,18 @@ const App: React.FC = () => {
                   setNotes={setNotes}
                 />;
       case 'examprep':
-        return <ExamPrep addToast={addToast} setView={setView} />;
+        return <ExamPrep 
+                    addToast={addToast} 
+                    setView={setView}
+                    generationState={generationState}
+                    setGenerationState={setGenerationState}
+                    quizState={quizState}
+                    setQuizState={setQuizState}
+                    notes={notes}
+                    setNotes={setNotes}
+                    examPrepState={examPrepState}
+                    setExamPrepState={setExamPrepState}
+                />;
       case 'language':
         return <LanguageSettings />;
       case 'theme':
@@ -176,9 +213,16 @@ const App: React.FC = () => {
       case 'settings':
         return <Settings notificationSettings={notificationSettings} setNotificationSettings={setNotificationSettings} />;
       case 'report':
-        return <Reports userDetails={userDetails} />;
+        return <Reports 
+                    userDetails={userDetails} 
+                    reportDraft={reportDraft}
+                    setReportDraft={setReportDraft}
+                />;
       case 'feedback':
-        return <Feedback />;
+        return <Feedback 
+                    feedbackDraft={feedbackDraft}
+                    setFeedbackDraft={setFeedbackDraft}
+                />;
       case 'help':
         return <Help setView={setView} />;
       case 'about':
@@ -197,7 +241,7 @@ const App: React.FC = () => {
   }
   
   if (isStudyMode) {
-     return <FocusedStudyView session={activeSession} learningHubFile={learningHubFile} onExit={() => setActiveSession(null)} addToast={addToast} />;
+     return <FocusedStudyView session={activeSession} learningHubFile={learningHubFile} onExit={() => { setActiveSession(null); setView('uploadslides'); }} addToast={addToast} />;
   }
 
   return (
@@ -208,8 +252,7 @@ const App: React.FC = () => {
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           {renderView()}
-{/* FIX: Passed missing `trackedData` and `setTrackedData` props to StudyTracker. */}
-          {activeSession?.type === 'study' && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} />}
+          {activeSession?.type === 'study' && !activeSession.isUntracked && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} />}
         </main>
       </div>
        {activeSession?.type === 'break' && <BreakView session={activeSession} />}

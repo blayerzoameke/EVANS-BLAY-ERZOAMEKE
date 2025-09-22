@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useState, useEffect } from 'react';
 // FIX: Added .ts extension to import path.
 import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts';
@@ -64,17 +62,29 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
   const [chartColors, setChartColors] = useState({ study: '', lecture: '', agenda: '', break: '', free: '' });
   
   useEffect(() => {
-    const rootStyle = getComputedStyle(document.documentElement);
-    // These names must match the color names in the tailwind.config
+    // This utility function creates a temporary DOM element with a given Tailwind class,
+    // gets its computed background color, and then removes the element.
+    // This is a reliable way to get the actual color value that Chart.js or other libraries can use.
+    const getTailwindColor = (className: string): string => {
+        const el = document.createElement('div');
+        el.className = className;
+        el.style.display = 'none'; // Keep it hidden
+        document.body.appendChild(el);
+        const color = window.getComputedStyle(el).backgroundColor;
+        document.body.removeChild(el);
+        return color;
+    };
+
+    // Use the utility to get the real, computed colors for our chart.
     const colors = {
-      study: rootStyle.getPropertyValue('--tw-color-study').trim(),
-      lecture: rootStyle.getPropertyValue('--tw-color-lecture').trim(),
-      agenda: rootStyle.getPropertyValue('--tw-color-agenda').trim(),
-      break: rootStyle.getPropertyValue('--tw-color-break').trim(),
-      free: rootStyle.getPropertyValue('--tw-color-free').trim()
+      study: getTailwindColor('bg-study'),
+      lecture: getTailwindColor('bg-lecture'),
+      agenda: getTailwindColor('bg-agenda'),
+      break: getTailwindColor('bg-break'),
+      free: getTailwindColor('bg-free')
     };
     setChartColors(colors);
-  }, [colorTheme]);
+  }, [colorTheme]); // Rerun this effect whenever the color theme changes.
 
 
   const stats = useMemo(() => {

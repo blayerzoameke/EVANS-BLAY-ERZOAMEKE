@@ -1,108 +1,94 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon';
-import type { UploadedFile, Note } from '../types';
-import { BookIcon } from './icons/BookIcon';
-import { UploadIcon } from './icons/UploadIcon';
+import type { Note } from '../types.ts';
 
 interface AdvancedStudySetupModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onStart: (file: UploadedFile) => void;
-    learningHubFile: UploadedFile | null;
+    onStart: (config: { subject: string; duration: number; selectedNoteId?: string }) => void;
+    fileContext?: string;
     notes: Note[];
 }
 
-const AdvancedStudySetupModal: React.FC<AdvancedStudySetupModalProps> = ({ isOpen, onClose, onStart, learningHubFile, notes }) => {
+const AdvancedStudySetupModal: React.FC<AdvancedStudySetupModalProps> = ({ isOpen, onClose, onStart, fileContext, notes }) => {
     const { t } = useLanguage();
-    const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+    const [subject, setSubject] = useState(fileContext || '');
+    const [duration, setDuration] = useState(50);
+    const [studySource, setStudySource] = useState('document');
+    const [selectedNoteId, setSelectedNoteId] = useState<string | undefined>(undefined);
 
     useEffect(() => {
-        if (!isOpen) {
-            setSelectedNoteId(null);
+        if (isOpen) {
+            setSubject(fileContext || '');
+            setStudySource(fileContext ? 'document' : 'note');
+            setSelectedNoteId(notes.length > 0 ? notes[0].id : undefined);
         }
-    }, [isOpen]);
+    }, [isOpen, fileContext, notes]);
 
-    if (!isOpen) return null;
-
-    const handleStartWithNote = () => {
-        const note = notes.find(n => n.id === selectedNoteId);
-        if (note) {
-            // Convert note to UploadedFile format
-            const noteFile: UploadedFile = {
-                name: note.title,
-                type: 'text/plain',
-                size: new Blob([note.content]).size,
-                base64: btoa(note.content), // Base64 encode content
-                context: note.subject,
-            };
-            onStart(noteFile);
+    if (!isOpen) {
+        return null;
+    }
+    
+    const handleStart = () => {
+        let finalSubject = subject.trim();
+        if (studySource === 'note' && selectedNoteId) {
+            const note = notes.find(n => n.id === selectedNoteId);
+            finalSubject = note?.title || 'Note Study';
+        }
+        
+        if (finalSubject && duration > 0) {
+            onStart({ subject: finalSubject, duration, selectedNoteId: studySource === 'note' ? selectedNoteId : undefined });
         }
     };
-    
+
+    const inputClasses = "block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('studyModal.title')}</h2>
+                    <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('advancedStudy.title')}</h2>
                     <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
                         <CloseIcon className="w-5 h-5" />
                     </button>
                 </div>
                 <div className="p-6 space-y-6">
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">Use Material from Learning Hub</h3>
-                        {learningHubFile ? (
-                            <button 
-                                onClick={() => onStart(learningHubFile)}
-                                className="w-full flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/50 text-green-800 dark:text-green-200 border-2 border-green-500 rounded-lg hover:bg-green-100 dark:hover:bg-green-900"
-                            >
-                                <UploadIcon className="w-6 h-6 shrink-0" />
-                                <div className="text-left">
-                                    <p className="font-bold">Start with current material</p>
-                                    <p className="text-sm truncate">{learningHubFile.name}</p>
-                                </div>
-                            </button>
-                        ) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">No material is currently loaded in the Learning Hub.</p>
-                        )}
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Study Source</label>
+                        <div className="mt-2 grid grid-cols-2 gap-2 rounded-md bg-gray-100 dark:bg-gray-800 p-1">
+                            {fileContext && (
+                                <button onClick={() => setStudySource('document')} className={`px-3 py-1.5 text-sm font-medium rounded ${studySource === 'document' ? 'bg-white dark:bg-gray-700 shadow' : ''}`}>Current Document</button>
+                            )}
+                            <button onClick={() => setStudySource('note')} className={`px-3 py-1.5 text-sm font-medium rounded ${studySource === 'note' ? 'bg-white dark:bg-gray-700 shadow' : ''} ${!fileContext ? 'col-span-2' : ''}`}>From My Notes</button>
+                        </div>
                     </div>
 
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                            <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+                    {studySource === 'document' && (
+                        <div>
+                            <label htmlFor="study-subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('advancedStudy.subject')}</label>
+                            <input type="text" id="study-subject" value={subject} onChange={e => setSubject(e.target.value)} className={`${inputClasses} mt-1`} placeholder={t('advancedStudy.subject.placeholder')} />
                         </div>
-                        <div className="relative flex justify-center">
-                            <span className="bg-white dark:bg-gray-900 px-2 text-sm text-gray-500">OR</span>
+                    )}
+
+                    {studySource === 'note' && (
+                         <div>
+                            <label htmlFor="note-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select a Note</label>
+                            <select id="note-select" value={selectedNoteId} onChange={e => setSelectedNoteId(e.target.value)} className={`${inputClasses} mt-1`}>
+                                {notes.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
+                            </select>
                         </div>
-                    </div>
-                    
+                    )}
+
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">Use a Note as Study Material</h3>
-                        {notes.length > 0 ? (
-                            <div className="space-y-2">
-                                <select 
-                                    value={selectedNoteId || ''}
-                                    onChange={e => setSelectedNoteId(e.target.value)}
-                                    className="block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
-                                >
-                                    <option value="" disabled>Select a note...</option>
-                                    {notes.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
-                                </select>
-                                <button 
-                                    onClick={handleStartWithNote}
-                                    disabled={!selectedNoteId}
-                                    className="w-full flex items-center justify-center gap-2 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
-                                >
-                                    <BookIcon className="w-5 h-5"/>
-                                    Start with Selected Note
-                                </button>
-                            </div>
-                        ) : (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">You don't have any notes yet.</p>
-                        )}
+                        <label htmlFor="study-duration" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('advancedStudy.duration')}</label>
+                        <input type="number" id="study-duration" value={duration} onChange={e => setDuration(parseInt(e.target.value, 10) || 0)} className={`${inputClasses} mt-1`} min="1" />
                     </div>
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700">
+                    <button onClick={handleStart} disabled={duration <= 0 || (studySource === 'document' && !subject.trim()) || (studySource === 'note' && !selectedNoteId)} className="w-full py-3 px-4 rounded-lg text-md font-semibold transition-colors bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400">
+                        {t('advancedStudy.start')}
+                    </button>
                 </div>
             </div>
         </div>

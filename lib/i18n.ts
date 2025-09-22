@@ -1,5 +1,3 @@
-
-
 // FIX: Added .ts extension to all translation module imports to resolve module not found errors.
 import { translations as enTranslations } from './i18n-en.ts';
 import { translations as esTranslations } from './i18n-es.ts';

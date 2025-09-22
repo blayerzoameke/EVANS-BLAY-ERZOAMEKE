@@ -70,7 +70,7 @@ const ThemeSettings: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-10">
             {/* Header */}
             <div className="text-center">
-                <h2 className="text-4xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent mb-3">
+                <h2 className="text-4xl font-bold text-gray-800 dark:text-white mb-3">
                     {t('theme.title')}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-300 text-lg">{t('theme.subtitle')}</p>

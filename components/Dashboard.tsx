@@ -9,7 +9,7 @@ import LogStudyModal from './LogStudyModal.tsx';
 // FIX: Added .ts extension to import path for geminiService.
 import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService.ts';
 // FIX: Added .ts extension
-import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession } from '../types.ts';
+import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession, GenerationState, DashboardInputState } from '../types.ts';
 // FIX: Moved DayOfWeek from type-only import to regular import to allow its use as a value.
 import { EducationalLevel, ActivityType, DayOfWeek } from '../types.ts';
 import { UploadIcon } from './icons/UploadIcon';
@@ -44,7 +44,17 @@ const getDayOfWeek = (date: Date): DayOfWeek => {
     return days[dayIndex];
 };
 
-const Dashboard: React.FC<{
+const LoadingOverlay: React.FC<{ isLoading: boolean; message: string }> = ({ isLoading, message }) => {
+    if (!isLoading) return null;
+    return (
+        <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex flex-col items-center justify-center z-30 rounded-xl backdrop-blur-sm">
+            <div className="animate-spin w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full"></div>
+            <p className="mt-4 font-semibold text-gray-700 dark:text-gray-300">{message}</p>
+        </div>
+    );
+};
+
+interface DashboardProps {
   setSmartPlan: (plan: SmartPlan | null) => void;
   smartPlan: SmartPlan | null;
   userDetails: UserDetails | null;
@@ -55,39 +65,44 @@ const Dashboard: React.FC<{
   setActiveSession: (session: ActiveSession | null) => void;
   trackedData: TrackedSession[];
   setTrackedData: (data: TrackedSession[]) => void;
-}> = ({ setSmartPlan, smartPlan, userDetails: initialUserDetails, setUserDetails: setGlobalUserDetails, savedTimetables, setSavedTimetables, addToast, setActiveSession, trackedData, setTrackedData }) => {
+  generationState: GenerationState;
+  setGenerationState: React.Dispatch<React.SetStateAction<GenerationState>>;
+  dashboardInputs: DashboardInputState;
+  setDashboardInputs: React.Dispatch<React.SetStateAction<DashboardInputState>>;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ 
+    setSmartPlan, 
+    smartPlan, 
+    userDetails: initialUserDetails, 
+    setUserDetails: setGlobalUserDetails, 
+    savedTimetables, 
+    setSavedTimetables, 
+    addToast, 
+    setActiveSession, 
+    trackedData, 
+    setTrackedData,
+    generationState,
+    setGenerationState,
+    dashboardInputs,
+    setDashboardInputs
+}) => {
   const [userDetails, setUserDetails] = useState<UserDetails>(initialUserDetails || emptyUserDetails);
-  const [lectures, setLectures] = useState<Lecture[]>([]);
-  const [studyGoals, setStudyGoals] = useState<StudyGoal[]>([]);
-  const [agendaItems, setAgendaItems] = useState<AgendaItem[]>([]);
-  const [generalGoals, setGeneralGoals] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [planName, setPlanName] = useState('');
   const [tempSmartPlan, setTempSmartPlan] = useState<SmartPlan | null>(null);
   const [courseCodes, setCourseCodes] = useState<string[]>([]);
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [selectedSlotForLog, setSelectedSlotForLog] = useState<{ slot: PlanSlot; day: DayOfWeek } | null>(null);
-  const [step, setStep] = useState<1 | 2>(1);
   const { t } = useLanguage();
-  const [isManualPlan, setIsManualPlan] = useState(false);
+  
+  const { lectures, studyGoals, agendaItems, generalGoals, imageFile, imagePreview, step, isManualPlan } = dashboardInputs;
 
   useEffect(() => {
     if (initialUserDetails) {
       setUserDetails(initialUserDetails);
     }
   }, [initialUserDetails]);
-  
-  // When a plan is loaded from storage or another page, it's not editable.
-  useEffect(() => {
-    if (smartPlan) {
-      setIsManualPlan(false);
-    }
-  }, []);
 
   const handleUserDetailsChange = useCallback((details: UserDetails) => {
     setUserDetails(details);
@@ -130,30 +145,30 @@ const Dashboard: React.FC<{
   
   const handleNextStep = () => {
     if (!userDetails.name || !userDetails.educationalLevel) {
-        setError(t('dashboard.error.fillDetails'));
+        setGenerationState({ ...generationState, error: t('dashboard.error.fillDetails'), source: 'dashboard' });
         return;
     }
     if (userDetails.educationalLevel !== EducationalLevel.HIGH_SCHOOL && !userDetails.country) {
-      setError(t('dashboard.error.countryRequired'));
+      setGenerationState({ ...generationState, error: t('dashboard.error.countryRequired'), source: 'dashboard' });
       return;
     }
-    setError(null);
-    setStep(2);
+    setGenerationState({ ...generationState, error: null, source: 'dashboard' });
+    setDashboardInputs(prev => ({ ...prev, step: 2 }));
   };
 
   const handleGeneratePlan = async () => {
     if (!isInputSufficient) {
-        setError(t('dashboard.error.noInput'));
+        setGenerationState({ ...generationState, error: t('dashboard.error.noInput'), source: 'dashboard' });
         return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    setGenerationState({ isLoading: true, message: '', error: null, source: 'dashboard' });
     try {
       let plan;
       if (imageFile) {
-        setIsManualPlan(false);
-        setLoadingMessage(t('dashboard.verifyingImage'));
+        setDashboardInputs(prev => ({ ...prev, isManualPlan: false }));
+        setGenerationState(prev => ({ ...prev, message: t('dashboard.verifyingImage') }));
+        
         const reader = new FileReader();
         reader.readAsDataURL(imageFile);
         reader.onloadend = async () => {
@@ -165,36 +180,28 @@ const Dashboard: React.FC<{
 
                 const isTimetable = await isImageTimetable(imagePart);
                 if (!isTimetable) {
-                    setError(t('dashboard.error.notATimetable'));
-                    setIsLoading(false);
-                    setLoadingMessage('');
+                    setGenerationState({ isLoading: false, message: '', error: t('dashboard.error.notATimetable'), source: 'dashboard' });
                     return;
                 }
 
-                setLoadingMessage(t('dashboard.generating'));
+                setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
                 plan = await generatePlanFromImage(userDetails, studyGoals, generalGoals, imagePart);
                 processPlanForCodes(plan);
+                setGenerationState({ isLoading: false, message: '', error: null, source: null });
 
             } catch (e: any) {
-                 setError(e.message || "An unexpected error occurred during image processing.");
-            } finally {
-                setIsLoading(false);
-                setLoadingMessage('');
+                 setGenerationState({ isLoading: false, message: '', error: e.message || "An unexpected error occurred during image processing.", source: 'dashboard' });
             }
         };
       } else {
-        setIsManualPlan(true);
-        setLoadingMessage(t('dashboard.generating'));
-        // FIX: Replaced generatePlanFromImage with generateSmartPlan for manual timetable entry, as no image is provided in this path.
+        setDashboardInputs(prev => ({ ...prev, isManualPlan: true }));
+        setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
         plan = await generateSmartPlan(userDetails, lectures, studyGoals, agendaItems, generalGoals);
         processPlanForCodes(plan);
-        setIsLoading(false);
-        setLoadingMessage('');
+        setGenerationState({ isLoading: false, message: '', error: null, source: null });
       }
     } catch (e: any) {
-      setError(e.message || "An unexpected error occurred.");
-      setIsLoading(false);
-      setLoadingMessage('');
+      setGenerationState({ isLoading: false, message: '', error: e.message || "An unexpected error occurred.", source: 'dashboard' });
     }
   };
   
@@ -229,12 +236,15 @@ const Dashboard: React.FC<{
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-      setLectures([]);
-      setAgendaItems([]);
+        setDashboardInputs(prev => ({
+            ...prev,
+            imageFile: file,
+            imagePreview: URL.createObjectURL(file),
+            lectures: [],
+            agendaItems: [],
+        }));
     }
-  }, []);
+  }, [setDashboardInputs]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -243,12 +253,11 @@ const Dashboard: React.FC<{
       'image/png': ['.png'],
     },
     multiple: false,
-    disabled: isLoading || isManualInputStarted,
+    disabled: generationState.isLoading || isManualInputStarted,
   });
   
   const clearImage = () => {
-      setImageFile(null);
-      setImagePreview(null);
+      setDashboardInputs(prev => ({ ...prev, imageFile: null, imagePreview: null }));
   }
 
   const handleSavePlan = () => {
@@ -273,19 +282,21 @@ const Dashboard: React.FC<{
   
   const handleEditInputs = () => {
     setSmartPlan(null);
-    setStep(2);
+    setDashboardInputs(prev => ({...prev, step: 2}));
   };
 
   const handleStartOver = () => {
     setSmartPlan(null);
-    setLectures([]);
-    setStudyGoals([]);
-    setAgendaItems([]);
-    setGeneralGoals('');
-    setImageFile(null);
-    setImagePreview(null);
-    setIsManualPlan(false);
-    setStep(1);
+    setDashboardInputs({
+        lectures: [],
+        studyGoals: [],
+        agendaItems: [],
+        generalGoals: '',
+        imageFile: null,
+        imagePreview: null,
+        step: 1,
+        isManualPlan: false,
+    });
   };
   
   return (
@@ -321,10 +332,11 @@ const Dashboard: React.FC<{
             )}
 
             {step === 2 && (
-              <div className="space-y-8 animate-fade-in">
+              <div className="space-y-8 animate-fade-in relative">
+                <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'dashboard'} message={generationState.message} />
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
                   {!imagePreview ? (
-                    <div {...getRootProps()} className={`group p-8 border-2 border-dashed rounded-lg transition-colors ${isDragActive ? 'border-primary bg-primary/10' : 'border-gray-300 dark:border-gray-600'} ${isManualInputStarted ? 'cursor-not-allowed opacity-50 bg-gray-50 dark:bg-gray-800' : 'cursor-pointer hover:border-primary/50'}`}>
+                    <div {...getRootProps()} className={`group p-8 border-2 border-dashed rounded-lg transition-colors ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600'} ${isManualInputStarted ? 'cursor-not-allowed opacity-50 bg-gray-50 dark:bg-gray-800' : 'cursor-pointer hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'}`}>
                       <input {...getInputProps()} />
                       <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400">
                         <UploadIcon className="w-12 h-12 mb-3" />
@@ -343,17 +355,17 @@ const Dashboard: React.FC<{
                 </div>
 
                 <TimetableInput
-                  lectures={lectures} setLectures={setLectures}
-                  studyGoals={studyGoals} setStudyGoals={setStudyGoals}
-                  agendaItems={agendaItems} setAgendaItems={setAgendaItems}
-                  generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
+                  lectures={lectures} setLectures={(updater) => setDashboardInputs(prev => ({...prev, lectures: typeof updater === 'function' ? updater(prev.lectures) : updater}))}
+                  studyGoals={studyGoals} setStudyGoals={(updater) => setDashboardInputs(prev => ({...prev, studyGoals: typeof updater === 'function' ? updater(prev.studyGoals) : updater}))}
+                  agendaItems={agendaItems} setAgendaItems={(updater) => setDashboardInputs(prev => ({...prev, agendaItems: typeof updater === 'function' ? updater(prev.agendaItems) : updater}))}
+                  generalGoals={generalGoals} setGeneralGoals={(goals) => setDashboardInputs(prev => ({...prev, generalGoals: goals}))}
                   manualSectionsDisabled={!!imageFile}
                 />
 
                 <div className="flex justify-between items-center mt-8">
-                  <button onClick={() => setStep(1)} className="py-2 px-6 bg-gray-200 dark:bg-gray-600 font-semibold rounded-lg shadow-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">{t('common.previous')}</button>
-                  <button onClick={handleGeneratePlan} disabled={isLoading || !isInputSufficient} className="py-3 px-8 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors">
-                    {isLoading ? loadingMessage : t('dashboard.generatePlan')}
+                  <button onClick={() => setDashboardInputs(prev => ({...prev, step: 1}))} className="py-2 px-6 bg-gray-200 dark:bg-gray-600 font-semibold rounded-lg shadow-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">{t('common.previous')}</button>
+                  <button onClick={handleGeneratePlan} disabled={generationState.isLoading || !isInputSufficient} className="py-3 px-8 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors">
+                    {t('dashboard.generatePlan')}
                   </button>
                 </div>
               </div>
@@ -362,7 +374,7 @@ const Dashboard: React.FC<{
         </div>
       )}
 
-      {error && <div className="mt-4 text-center text-red-600 bg-red-100 dark:bg-red-900/50 p-3 rounded-md animate-fade-in">{error}</div>}
+      {generationState.error && generationState.source === 'dashboard' && <div className="mt-4 text-center text-red-600 bg-red-100 dark:bg-red-900/50 p-3 rounded-md animate-fade-in">{generationState.error}</div>}
       
       <CourseCodeModal isOpen={isCodeModalOpen} onClose={() => setIsCodeModalOpen(false)} onConfirm={handleCourseCodeConfirmation} codes={courseCodes} />
 

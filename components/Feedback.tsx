@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { StarIcon } from './icons/StarIcon';
+import type { FeedbackDraft } from '../types.ts';
 
-const Feedback: React.FC = () => {
+interface FeedbackProps {
+    feedbackDraft: FeedbackDraft;
+    setFeedbackDraft: React.Dispatch<React.SetStateAction<FeedbackDraft>>;
+}
+
+const Feedback: React.FC<FeedbackProps> = ({ feedbackDraft, setFeedbackDraft }) => {
     const { t } = useLanguage();
-    const [rating, setRating] = useState(0);
     const [hoverRating, setHoverRating] = useState(0);
-    const [category, setCategory] = useState('compliment');
-    const [comments, setComments] = useState('');
-    const [canUseAsTestimonial, setCanUseAsTestimonial] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
+    const { rating, category, comments, canUseAsTestimonial } = feedbackDraft;
+
+    const updateDraft = <K extends keyof FeedbackDraft>(key: K, value: FeedbackDraft[K]) => {
+        setFeedbackDraft(prev => ({...prev, [key]: value}));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -19,15 +26,10 @@ const Feedback: React.FC = () => {
         body += `Comments:\n${comments}\n\n`;
         body += `Permission to use as testimonial: ${canUseAsTestimonial ? 'Yes' : 'No'}`;
         
-        const mailtoLink = `mailto:blayerzoameke@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        window.location.href = mailtoLink;
+        window.location.href = `mailto:blayerzoameke@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
         setSuccessMessage('Thank you for your feedback! Your email client should open shortly.');
-        // Reset form
-        setRating(0);
-        setComments('');
-        setCategory('compliment');
-        setCanUseAsTestimonial(false);
+        setFeedbackDraft({ rating: 0, category: 'compliment', comments: '', canUseAsTestimonial: false });
     };
     
     const inputClasses = "block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
@@ -49,7 +51,7 @@ const Feedback: React.FC = () => {
                                 key={star}
                                 type="button"
                                 onMouseEnter={() => setHoverRating(star)}
-                                onClick={() => setRating(star)}
+                                onClick={() => updateDraft('rating', star)}
                                 className="p-1 text-gray-300 dark:text-gray-600 focus:outline-none"
                             >
                                 <StarIcon
@@ -63,7 +65,7 @@ const Feedback: React.FC = () => {
 
                 <div>
                     <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('feedback.category')}</label>
-                     <select id="category" value={category} onChange={e => setCategory(e.target.value)} className={`${inputClasses} mt-1`}>
+                     <select id="category" value={category} onChange={e => updateDraft('category', e.target.value)} className={`${inputClasses} mt-1`}>
                         <option value="compliment">{t('feedback.category.compliment')}</option>
                         <option value="usability">{t('feedback.category.usability')}</option>
                         <option value="suggestion">{t('feedback.category.suggestion')}</option>
@@ -76,7 +78,7 @@ const Feedback: React.FC = () => {
                         id="comments"
                         rows={6}
                         value={comments}
-                        onChange={(e) => setComments(e.target.value)}
+                        onChange={(e) => updateDraft('comments', e.target.value)}
                         className={`${inputClasses} mt-1`}
                         placeholder={t('feedback.commentsPlaceholder')}
                     />
@@ -89,7 +91,7 @@ const Feedback: React.FC = () => {
                         name="permission"
                         type="checkbox"
                         checked={canUseAsTestimonial}
-                        onChange={(e) => setCanUseAsTestimonial(e.target.checked)}
+                        onChange={(e) => updateDraft('canUseAsTestimonial', e.target.checked)}
                         className="focus:ring-blue-500 h-4 w-4 text-blue-700 border-gray-300 rounded"
                         />
                     </div>
