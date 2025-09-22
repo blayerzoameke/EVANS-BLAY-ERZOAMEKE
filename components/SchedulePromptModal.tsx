@@ -1,6 +1,6 @@
 import React from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
-import { CloseIcon } from './icons/CloseIcon';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface SchedulePromptModalProps {
     isOpen: boolean;

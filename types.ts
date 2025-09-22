@@ -240,6 +240,7 @@ export interface ExamPrepState {
     solution: string | null;
     outputFormat: 'steps' | 'latex' | 'code' | 'graph';
     programmingLanguage: string;
+    graphInterval: string;
 }
 
 export interface ProfileEditState {

@@ -6,6 +6,7 @@ export const translations = {
   'sidebar.examprep': '备考',
   'sidebar.mytimetables': '我的时间表',
   'sidebar.notes': '笔记',
+  'sidebar.library': '资源库',
   'sidebar.profile': '个人资料',
   'sidebar.notification': '通知',
   'sidebar.language': '语言',

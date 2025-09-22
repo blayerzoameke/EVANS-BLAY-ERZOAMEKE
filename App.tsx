@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -64,7 +65,7 @@ const App: React.FC = () => {
 
   // Persistent component states
   const [dashboardInputs, setDashboardInputs] = useState<DashboardInputState>({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false });
-  const [examPrepState, setExamPrepState] = useState<ExamPrepState>({ mode: 'quiz', topic: '', numQuestions: 5, quizType: QuizType.MCQ, uploadedFiles: [], focusArea: '', isVerifying: false, questionImage: null, questionText: '', solution: null, outputFormat: 'steps', programmingLanguage: 'python' });
+  const [examPrepState, setExamPrepState] = useState<ExamPrepState>({ mode: 'quiz', topic: '', numQuestions: 5, quizType: QuizType.MCQ, uploadedFiles: [], focusArea: '', isVerifying: false, questionImage: null, questionText: '', solution: null, outputFormat: 'steps', programmingLanguage: 'python', graphInterval: '' });
   const [profileEditState, setProfileEditState] = useState<ProfileEditState>({ isEditing: false, details: null });
   const [notesViewState, setNotesViewState] = useState<NotesViewState>({ currentNoteId: null, searchTerm: '' });
   const [reportDraft, setReportDraft] = useState<ReportDraft>({ category: 'bug', description: '', attachment: null, contactEmail: '', contactWhatsApp: '' });
@@ -147,7 +148,6 @@ const App: React.FC = () => {
                   setSmartPlan={setSmartPlan} 
                   smartPlan={smartPlan} 
                   userDetails={userDetails}
-// FIX: Corrected a typo. The function is `setUserDetails`, not `setGlobalUserDetails`.
                   setUserDetails={setUserDetails}
                   savedTimetables={savedTimetables}
                   setSavedTimetables={setSavedTimetables}

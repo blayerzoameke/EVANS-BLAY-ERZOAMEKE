@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { UserDetails, Toast, ProfileEditState } from '../types.ts';
 import UserDetailsForm from './UserDetailsForm.tsx';
 import { PencilIcon } from './icons/PencilIcon.tsx';

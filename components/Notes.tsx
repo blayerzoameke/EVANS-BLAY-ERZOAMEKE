@@ -3,7 +3,7 @@ import type { Note, NotesViewState } from '../types.ts';
 import { StarIcon } from './icons/StarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { PlusIcon } from './icons/PlusIcon';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import ConfirmationModal from './ConfirmationModal.tsx';
 
 interface NotesProps {

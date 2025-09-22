@@ -1,7 +1,7 @@
 
 // FIX: Implement Terms component to resolve module error.
 import React from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 const Terms: React.FC = () => {
     const { t } = useLanguage();

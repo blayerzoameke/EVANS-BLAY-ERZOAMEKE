@@ -2,7 +2,7 @@
 
 // FIX: Implement Settings component to resolve module error.
 import React, { useState } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { ExportIcon } from './icons/ExportIcon';
 import { ImportIcon } from './icons/ImportIcon';
 import { TrashIcon } from './icons/TrashIcon';

@@ -1,6 +1,6 @@
 import React from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useTheme } from '../contexts/ThemeContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import type { Theme } from '../types.ts';
 import { TranslationKey } from '../lib/i18n.ts';
 import { useColorTheme, ColorTheme } from '../contexts/ColorThemeContext.tsx';

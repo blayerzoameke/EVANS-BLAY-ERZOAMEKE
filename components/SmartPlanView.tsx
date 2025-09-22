@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { SmartPlan, PlanSlot } from '../types.ts';
 import { ActivityType, DayOfWeek } from '../types.ts';
-import { DAYS_OF_WEEK } from '../constants';
-import { useLanguage } from '../contexts/LanguageContext';
+import { DAYS_OF_WEEK } from '../constants.ts';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 const getActivityColor = (type: ActivityType) => {
   const baseClasses = 'text-white shadow-lg border-l-4';

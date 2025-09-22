@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { ActiveSession, Toast, LearningHubState, UploadedFile } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { ExitIcon } from './icons/ExitIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import { PauseIcon } from './icons/PauseIcon';
@@ -20,7 +21,6 @@ interface FocusedStudyViewProps {
 const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, learningHubFile, onExit, addToast }) => {
     const { t } = useLanguage();
     const [showExitConfirm, setShowExitConfirm] = useState(false);
-    // FIX: Calculate total duration safely from session props.
     const totalDurationSeconds = session.durationMinutes ? session.durationMinutes * 60 : (session.endTime - session.startTime) / 1000;
     const initialTimeRemaining = Math.max(0, Math.round((session.endTime - Date.now()) / 1000));
 
@@ -52,7 +52,6 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, learningHu
                     }
                     
                     // Update progress
-                    // FIX: Use calculated total duration for progress.
                     const totalTime = totalDurationSeconds;
                     const progress = ((totalTime - prev) / totalTime) * 100;
                     setStudyProgress(progress);
@@ -131,7 +130,6 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, learningHu
         analysisMode: 'chat',
         analysisResults: { summarize: null, explain: null, read: null },
         chatHistory: [],
-// FIX: Added the missing `isProcessing` property to conform to the LearningHubState type.
         isProcessing: false,
     };
 
@@ -322,10 +320,8 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, learningHu
                     <div className="absolute top-20 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 max-w-xs">
                         <h4 className="font-semibold text-gray-800 dark:text-white mb-2">Session Info</h4>
                         <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                            {/* FIX: Use calculated duration. */}
                             <div>Duration: {Math.round(totalDurationSeconds / 60)} minutes</div>
                             <div>Progress: {studyProgress.toFixed(0)}%</div>
-                            {/* FIX: Use calculated duration for next break time. */}
                             <div>Next break: {Math.floor((25 * 60 - (totalDurationSeconds - timeRemaining) % (25 * 60)) / 60)} min</div>
                         </div>
                     </div>

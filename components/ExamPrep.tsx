@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { useDropzone } from 'react-dropzone';
 import { generateQuiz, extractTextFromDocument, isStudyMaterial, solveProblem, isImageAProblem } from '../services/geminiService.ts';
 import type { Toast, QuizQuestion, AnswerFeedback, QuizSummary, ImagePart, GenerationState, QuizState, Note, ExamPrepState } from '../types.ts';
@@ -26,10 +26,30 @@ interface ExamPrepProps {
     quizState: QuizState;
     setQuizState: React.Dispatch<React.SetStateAction<QuizState>>;
     notes: Note[];
-    setNotes: React.Dispatch<React.SetStateAction<Note[]>>;
+    setNotes: (notes: Note[]) => void;
     examPrepState: ExamPrepState;
     setExamPrepState: React.Dispatch<React.SetStateAction<ExamPrepState>>;
 }
+
+const DownloadIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg 
+    {...props}
+    xmlns="http://www.w3.org/2000/svg" 
+    width="24" 
+    height="24" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round"
+  >
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+    <polyline points="7 10 12 15 17 10"></polyline>
+    <line x1="12" y1="15" x2="12" y2="3"></line>
+  </svg>
+);
+
 
 const LoadingOverlay: React.FC<{ isLoading: boolean; message: string }> = ({ isLoading, message }) => {
     if (!isLoading) return null;
@@ -50,14 +70,13 @@ const KatexRenderer: React.FC<{ content: string; displayMode: boolean }> = React
     }
 });
 
-const GraphRenderer: React.FC<{ chartConfig: any }> = ({ chartConfig }) => {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const chartRef = useRef<any | null>(null); // Using any for Chart.js instance
+const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTMLCanvasElement | null> }> = ({ chartConfig, canvasRef }) => {
+    const chartInstanceRef = useRef<any | null>(null);
 
     useEffect(() => {
         if (canvasRef.current) {
-            if (chartRef.current) {
-                chartRef.current.destroy();
+            if (chartInstanceRef.current) {
+                chartInstanceRef.current.destroy();
             }
 
             const Chart = (window as any).Chart;
@@ -65,7 +84,7 @@ const GraphRenderer: React.FC<{ chartConfig: any }> = ({ chartConfig }) => {
                 const ctx = canvasRef.current.getContext('2d');
                 if (ctx) {
                     try {
-                        chartRef.current = new Chart(ctx, chartConfig);
+                        chartInstanceRef.current = new Chart(ctx, chartConfig);
                     } catch (e) {
                         console.error("Failed to create chart from config:", chartConfig, e);
                     }
@@ -76,36 +95,18 @@ const GraphRenderer: React.FC<{ chartConfig: any }> = ({ chartConfig }) => {
         }
         
         return () => {
-            if (chartRef.current) {
-                chartRef.current.destroy();
-                chartRef.current = null;
+            if (chartInstanceRef.current) {
+                chartInstanceRef.current.destroy();
+                chartInstanceRef.current = null;
             }
         };
-    }, [chartConfig]);
+    }, [chartConfig, canvasRef]);
 
     return <canvas ref={canvasRef} className="max-w-full" aria-label="Generated graph"></canvas>;
 };
 
 
 const FormattedContent: React.FC<{ content: string }> = React.memo(({ content }) => {
-    let chartConfig = null;
-    try {
-        const parsed = JSON.parse(content);
-        if (parsed && typeof parsed === 'object' && parsed.type && parsed.data && parsed.data.datasets) {
-            chartConfig = parsed;
-        }
-    } catch (e) {
-        // Not a JSON, or not a valid chart config, proceed as text
-    }
-
-    if (chartConfig) {
-        return (
-            <div className="my-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
-                <GraphRenderer chartConfig={chartConfig} />
-            </div>
-        );
-    }
-
     const renderInlineElements = (line: string) => {
         const inlineRegex = /(\$\$[\s\S]*?\$\$)|(\$.*?\$)|(\*\*.*?\*\*)/g;
         const parts = line.split(inlineRegex).filter(Boolean);
@@ -123,69 +124,56 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
         });
     };
 
-    const blocks = content.split(/(```[\s\S]*?```)/g).filter(Boolean);
+    const lines = content.split('\n');
+    const elements: JSX.Element[] = [];
+    let listItems: string[] = [];
 
-    return (
-        <div className="prose dark:prose-invert max-w-none text-left">
-            {blocks.map((block, index) => {
-                if (block.startsWith('```') && block.endsWith('```')) {
-                    const codeContent = block.slice(3, -3);
-                    const lang = codeContent.match(/^[a-zA-Z]+\n/)?.[0].trim() || '';
-                    const code = codeContent.replace(/^[a-zA-Z]+\n/, '');
-                    return (
-                        <div key={index} className="bg-gray-100 dark:bg-gray-900 rounded-md my-4">
-                             {lang && <div className="text-xs text-gray-500 px-4 pt-2 capitalize">{lang}</div>}
-                             <pre><code className="block whitespace-pre-wrap p-4 text-sm">{code}</code></pre>
-                        </div>
-                    );
-                }
+    const flushList = () => {
+        if (listItems.length > 0) {
+            elements.push(
+                <ul key={`ul-${elements.length}`} className="list-disc pl-6 my-2 space-y-1">
+                    {listItems.map((item, i) => (
+                        <li key={i}>{renderInlineElements(item)}</li>
+                    ))}
+                </ul>
+            );
+            listItems = [];
+        }
+    };
 
-                const lines = block.split('\n');
-                const elements: JSX.Element[] = [];
-                let listItems: string[] = [];
+    lines.forEach((line) => {
+        if (line.match(/^###\s/)) {
+            flushList();
+            elements.push(<h4 key={elements.length} className="font-bold text-lg mt-4 mb-2">{renderInlineElements(line.replace(/^###\s/, ''))}</h4>);
+        } else if (line.match(/^##\s/)) {
+            flushList();
+            elements.push(<h3 key={elements.length} className="font-bold text-xl mt-5 mb-2">{renderInlineElements(line.replace(/^##\s/, ''))}</h3>);
+        } else if (line.match(/^#\s/)) {
+            flushList();
+            elements.push(<h2 key={elements.length} className="font-bold text-2xl mt-6 mb-3">{renderInlineElements(line.replace(/^#\s/, ''))}</h2>);
+        } else if (line.match(/^\s*---\s*$/)) {
+            flushList();
+            elements.push(<hr key={elements.length} className="my-4" />);
+        } else if (line.match(/^\s*(\*|-)\s/)) {
+            listItems.push(line.replace(/^\s*(\*|-)\s/, ''));
+        } else if (line.trim() !== '') {
+            flushList();
+            elements.push(<p key={elements.length} className="my-2">{renderInlineElements(line)}</p>);
+        } else {
+            flushList();
+        }
+    });
 
-                const flushList = () => {
-                    if (listItems.length > 0) {
-                        elements.push(
-                            <ul key={`ul-${elements.length}`} className="list-disc pl-6 my-2 space-y-1">
-                                {listItems.map((item, i) => (
-                                    <li key={i}>{renderInlineElements(item)}</li>
-                                ))}
-                            </ul>
-                        );
-                        listItems = [];
-                    }
-                };
-
-                lines.forEach((line) => {
-                    if (line.match(/^###\s/)) {
-                        flushList();
-                        elements.push(<h4 key={elements.length} className="font-bold text-lg mt-4 mb-2">{renderInlineElements(line.replace(/^###\s/, ''))}</h4>);
-                    } else if (line.match(/^##\s/)) {
-                        flushList();
-                        elements.push(<h3 key={elements.length} className="font-bold text-xl mt-5 mb-2">{renderInlineElements(line.replace(/^##\s/, ''))}</h3>);
-                    } else if (line.match(/^#\s/)) {
-                        flushList();
-                        elements.push(<h2 key={elements.length} className="font-bold text-2xl mt-6 mb-3">{renderInlineElements(line.replace(/^#\s/, ''))}</h2>);
-                    } else if (line.match(/^\s*---\s*$/)) {
-                        flushList();
-                        elements.push(<hr key={elements.length} className="my-4" />);
-                    } else if (line.match(/^\s*(\*|-)\s/)) {
-                        listItems.push(line.replace(/^\s*(\*|-)\s/, ''));
-                    } else if (line.trim() !== '') {
-                        flushList();
-                        elements.push(<p key={elements.length} className="my-2">{renderInlineElements(line)}</p>);
-                    } else {
-                        flushList();
-                    }
-                });
-
-                flushList();
-                return elements;
-            })}
-        </div>
-    );
+    flushList();
+    return <>{elements}</>;
 });
+
+type SolutionBlock = {
+    type: 'text' | 'code' | 'graph';
+    content: string;
+    title: string;
+    lang?: string;
+};
 
 const ExamPrep: React.FC<ExamPrepProps> = ({ 
     addToast, 
@@ -203,8 +191,10 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
     const recognitionRef = useRef<any>(null);
     const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
     const [isListening, setIsListening] = useState(false);
+    const [solutionBlocks, setSolutionBlocks] = useState<SolutionBlock[]>([]);
+    const graphCanvasRef = useRef<HTMLCanvasElement | null>(null);
     
-    const { mode, topic, numQuestions, quizType, uploadedFiles, focusArea, isVerifying, questionImage, questionText, solution, outputFormat, programmingLanguage } = examPrepState;
+    const { mode, topic, numQuestions, quizType, uploadedFiles, focusArea, isVerifying, questionImage, questionText, solution, outputFormat, programmingLanguage, graphInterval } = examPrepState;
     const { quiz, currentQuestionIndex, userAnswers, feedback, summary } = quizState;
 
     const updateState = <K extends keyof ExamPrepState>(key: K, value: ExamPrepState[K]) => {
@@ -220,6 +210,41 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         };
     }, [mode]);
     
+    useEffect(() => {
+        if (!solution) {
+            setSolutionBlocks([]);
+            return;
+        }
+
+        const newBlocks: SolutionBlock[] = [];
+        
+        try {
+            const parsed = JSON.parse(solution);
+            if (parsed && typeof parsed === 'object' && parsed.type && parsed.data && parsed.data.datasets) {
+                newBlocks.push({ type: 'graph', content: solution, title: 'Graph' });
+                setSolutionBlocks(newBlocks);
+                return;
+            }
+        } catch (e) { /* Not a graph, continue */ }
+
+        const codeRegex = /(```[\s\S]*?```)/g;
+        const parts = solution.split(codeRegex).filter(Boolean);
+
+        parts.forEach(part => {
+            if (part.startsWith('```') && part.endsWith('```')) {
+                const codeContent = part.slice(3, -3);
+                const langMatch = codeContent.match(/^([a-zA-Z]+)\n/);
+                const lang = langMatch ? langMatch[1] : 'code';
+                const code = langMatch ? codeContent.substring(langMatch[0].length) : codeContent;
+                newBlocks.push({ type: 'code', content: code, title: `Code (${lang})`, lang });
+            } else if (part.trim()) {
+                newBlocks.push({ type: 'text', content: part, title: 'Explanation' });
+            }
+        });
+        setSolutionBlocks(newBlocks);
+
+    }, [solution]);
+
     const handleSolveQuestion = async () => {
         if (!questionText.trim() && !questionImage) {
             addToast('Please provide a question to solve.', 'error');
@@ -237,7 +262,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         }
 
         try {
-            const result = await solveProblem(questionText, imagePart, outputFormat, programmingLanguage);
+            const result = await solveProblem(questionText, imagePart, outputFormat, programmingLanguage, graphInterval);
             updateState('solution', result);
         } catch (error: any) {
             addToast(error.message || "An error occurred while solving the problem.", 'error');
@@ -252,6 +277,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
             questionImage: null,
             questionText: '',
             solution: null,
+            graphInterval: '',
         }));
     };
 
@@ -260,7 +286,6 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         if (files.length === 0) return;
 
         updateState('isVerifying', true);
-// FIX: Changed translation key from 'examPrep.verifying' to 'examprep.verifying' to match key definition.
         addToast(t('examprep.verifying'), 'info');
 
         const validFiles: File[] = [];
@@ -284,7 +309,6 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 if (isMaterial) {
                     validFiles.push(file);
                 } else {
-// FIX: Changed translation key from 'examPrep.error.notStudyMaterial' to 'examprep.error.notStudyMaterial' to match key definition.
                     addToast(t('examprep.error.notStudyMaterial', { fileName: file.name }), 'error');
                 }
             } catch (e) {
@@ -415,7 +439,6 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         setQuizState({ quiz: [], currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
 
         try {
-// FIX: Changed translation key from 'examPrep.extracting' to 'examprep.extracting' to match key definition.
             setGenerationState({ isLoading: true, message: t('examprep.extracting'), error: null, source: 'quiz' });
             const fileContents = await Promise.all(
                 uploadedFiles.map(file => 
@@ -441,17 +464,14 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 return;
             }
 
-// FIX: Changed translation key from 'examPrep.creatingQuiz' to 'examprep.creatingQuiz' to match key definition.
             setGenerationState({ isLoading: true, message: t('examprep.creatingQuiz'), error: null, source: 'quiz' });
             const questions = await generateQuiz(contentForQuiz, numQuestions, quizType, focusArea);
             if (questions && questions.length > 0) {
                 setQuizState(prev => ({ ...prev, quiz: questions, userAnswers: new Array(questions.length).fill(null) }));
             } else {
-// FIX: Changed translation key from 'examPrep.error.noQuestions' to 'examprep.error.noQuestions' to match key definition.
                 addToast(t('examprep.error.noQuestions'), 'warning');
             }
         } catch (error: any) {
-// FIX: Changed translation key from 'examPrep.error.generic' to 'examprep.error.generic' to match key definition.
             addToast(error.message || t('examprep.error.generic'), 'error');
         } finally {
             setGenerationState({ isLoading: false, message: '', error: null, source: null });
@@ -493,18 +513,32 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         setExamPrepState(prev => ({ ...prev, uploadedFiles: [], focusArea: '' }));
     };
     
-    const handleCopyToClipboard = () => {
-        if (!solution) return;
-// FIX: Changed translation key from 'examPrep.copySolution' to 'examprep.copySolution' to match key definition.
-        navigator.clipboard.writeText(solution).then(() => addToast(t('toasts.solutionCopied'), 'success')).catch(() => addToast('Failed to copy solution.', 'error'));
+    const handleCopyBlock = (content: string) => {
+        navigator.clipboard.writeText(content).then(() => addToast('Copied to clipboard!', 'success')).catch(() => addToast('Failed to copy.', 'error'));
     };
-    const handleSaveToNotes = () => {
-        if (!solution) return;
-        const noteTitle = `Problem Solution: ${questionText.substring(0, 40)}${questionText.length > 40 ? '...' : ''}` || 'Problem Solution';
-        const newNote: Note = { id: Date.now().toString(), title: noteTitle, content: `**Question:**\n${questionText}\n\n**Solution:**\n${solution}`, subject: 'Problem Solver', createdAt: new Date().toISOString(), isFavourite: false };
-        setNotes(prevNotes => [newNote, ...prevNotes]);
-// FIX: Changed translation key from 'examPrep.saveToNotes' to 'examprep.saveToNotes' to match key definition.
-        addToast(t('toasts.solutionSaved'), 'success');
+    
+    const handleSaveBlockToNotes = (block: SolutionBlock) => {
+        const noteTitle = `Solution: ${block.title}`;
+        const newNote: Note = { 
+            id: Date.now().toString(), 
+            title: noteTitle, 
+            content: block.content, 
+            subject: 'Problem Solver', 
+            createdAt: new Date().toISOString(), 
+            isFavourite: false 
+        };
+        // FIX: The 'setNotes' prop expects a value, not an updater function. Pass the new array directly.
+        setNotes([newNote, ...notes]);
+        addToast(`Saved ${block.title.toLowerCase()} to notes!`, 'success');
+    };
+    
+    const handleSaveGraphAsImage = () => {
+        if (graphCanvasRef.current) {
+            const link = document.createElement('a');
+            link.download = 'graph-solution.png';
+            link.href = graphCanvasRef.current.toDataURL('image/png');
+            link.click();
+        }
     };
     
     if (summary) {
@@ -592,7 +626,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                         <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-3">{t('examprep.subtitleV2')}</h3>
                         <a href="#" onClick={(e) => { e.preventDefault(); handleStartNewQuiz(); }} className="text-sm text-primary dark:text-primary-light hover:underline">Start Over</a>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-300 mb-6">Blay is your personal study assistant. Upload your materials, and I'll create a quiz to help you prepare.</p>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">i am Blay, your personal study assistant. Upload your materials, and I'll create a quiz to help you prepare.</p>
                     <div className="space-y-6">
                         <div>
                             <label className="block text-lg font-semibold mb-3">1. Upload Your Study Materials</label>
@@ -654,19 +688,37 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                                     </select>
                                 </div>
                                 {outputFormat === 'code' && (<div><label htmlFor="programmingLanguage" className="block font-medium mb-1">Language</label><select id="programmingLanguage" value={programmingLanguage} onChange={e => updateState('programmingLanguage', e.target.value)} className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg dark:bg-gray-700"><option value="python">Python</option><option value="javascript">JavaScript</option><option value="java">Java</option><option value="cpp">C++</option><option value="csharp">C#</option></select></div>)}
+                                {outputFormat === 'graph' && (<div><label htmlFor="graphInterval" className="block font-medium mb-1">Graph Interval (Optional)</label><input id="graphInterval" type="text" value={graphInterval} onChange={e => updateState('graphInterval', e.target.value)} placeholder="e.g., -10 to 10" className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg dark:bg-gray-700" /></div>)}
                             </div>
                         </div>
                         <div className="mt-8"><button onClick={handleSolveQuestion} disabled={generationState.isLoading} className="w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all">Solve Problem</button></div>
                         {solution && (
-                            <div className="mt-8 pt-6 border-t dark:border-gray-700">
-                                <div className="flex justify-between items-center mb-4">
+                            <div className="mt-8 pt-6 border-t dark:border-gray-700 space-y-4">
+                                <div className="flex justify-between items-center">
                                     <h3 className="text-2xl font-bold">Solution</h3>
                                     <div className="flex gap-2">
-                                        <button onClick={handleCopyToClipboard} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><CopyIcon className="w-4 h-4" /> {t('examprep.copySolution')}</button>
-                                        <button onClick={handleSaveToNotes} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><SaveIcon className="w-4 h-4" /> {t('examprep.saveToNotes')}</button>
+                                        <button onClick={() => handleCopyBlock(solution)} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><CopyIcon className="w-4 h-4" /> Copy Full Solution</button>
+                                        <button onClick={() => handleSaveBlockToNotes({type: 'text', title: 'Full Solution', content: solution})} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><SaveIcon className="w-4 h-4" /> Save Full Solution</button>
                                     </div>
                                 </div>
-                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"><FormattedContent content={solution} /></div>
+                                {solutionBlocks.map((block, index) => (
+                                    <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h4 className="font-semibold">{block.title}</h4>
+                                            <div className="flex items-center gap-2">
+                                                <button onClick={() => handleCopyBlock(block.content)} title={block.type === 'graph' ? 'Copy Config' : 'Copy'} className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><CopyIcon className="w-4 h-4" /></button>
+                                                {block.type === 'graph' ? (
+                                                     <button onClick={handleSaveGraphAsImage} title="Save as Image" className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><DownloadIcon className="w-4 h-4" /></button>
+                                                ) : (
+                                                    <button onClick={() => handleSaveBlockToNotes(block)} title="Save to Notes" className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><SaveIcon className="w-4 h-4" /></button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {block.type === 'text' && <FormattedContent content={block.content} />}
+                                        {block.type === 'code' && <pre><code className="block whitespace-pre-wrap p-2 text-sm bg-gray-800 text-white rounded-md">{block.content}</code></pre>}
+                                        {block.type === 'graph' && <GraphRenderer chartConfig={JSON.parse(block.content)} canvasRef={graphCanvasRef} />}
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>

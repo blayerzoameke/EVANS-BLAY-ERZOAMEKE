@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import type { UserDetails, ReportDraft } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { UploadIcon } from './icons/UploadIcon.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 

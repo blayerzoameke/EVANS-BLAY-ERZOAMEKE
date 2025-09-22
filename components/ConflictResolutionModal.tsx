@@ -1,9 +1,8 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
-// FIX: Imported ConflictInfo to be used in props. Added .ts extension.
 import type { ConflictInfo } from '../types.ts';
 
 // Helper component to parse and render simple markdown-like bold text
@@ -26,7 +25,6 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
 interface ConflictResolutionModalProps {
     isOpen: boolean;
     onClose: () => void;
-    // FIX: Changed prop from 'conflicts: Conflict[]' to 'conflict: ConflictInfo | null' to match usage.
     conflict: ConflictInfo | null;
     onResolve: (resolution: 'replace' | 'shift' | 'addExtra') => void;
 }

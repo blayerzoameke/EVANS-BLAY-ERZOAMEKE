@@ -3,7 +3,7 @@
 // FIX: Implement Library component to resolve module error.
 import React, { useState } from 'react';
 import { libraryResources } from '../data/libraryResources.ts';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { SearchIcon } from './icons/SearchIcon.tsx';
 import { BookIcon } from './icons/BookIcon.tsx';
 import { ToolsIcon } from './icons/ToolsIcon.tsx';

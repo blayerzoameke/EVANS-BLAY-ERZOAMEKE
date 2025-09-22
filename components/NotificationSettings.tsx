@@ -2,7 +2,7 @@
 import React from 'react';
 // FIX: Added .ts extension to import path.
 import type { NotificationSettings } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 interface NotificationSettingsProps {
     settings: NotificationSettings;

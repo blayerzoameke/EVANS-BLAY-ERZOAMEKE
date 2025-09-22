@@ -1,7 +1,7 @@
 import React from 'react';
-import { MenuIcon } from './icons/MenuIcon';
-import { LogoIcon } from './icons/LogoIcon';
-import { useLanguage } from '../contexts/LanguageContext';
+import { MenuIcon } from './icons/MenuIcon.tsx';
+import { LogoIcon } from './icons/LogoIcon.tsx';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 // FIX: Added .ts extension to import path.
 import { UserDetails, Toast } from '../types.ts';
 import type { View } from '../App.tsx';

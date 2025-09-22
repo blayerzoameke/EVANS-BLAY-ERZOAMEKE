@@ -1,8 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
-// FIX: Added .ts extension to import path.
 import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts';
-import { DAYS_OF_WEEK } from '../constants';
-import { useLanguage } from '../contexts/LanguageContext';
+import { DAYS_OF_WEEK } from '../constants.ts';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { useColorTheme } from '../contexts/ColorThemeContext.tsx';
 
 interface ProgressionProps {

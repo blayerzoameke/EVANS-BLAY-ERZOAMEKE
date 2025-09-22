@@ -3,10 +3,10 @@ import React from 'react';
 import { DayOfWeek } from '../types.ts';
 import { DAYS_OF_WEEK } from '../constants.ts';
 import type { Lecture, StudyGoal, AgendaItem } from '../types.ts';
-import { PlusIcon } from './icons/PlusIcon';
-import { TrashIcon } from './icons/TrashIcon';
+import { PlusIcon } from './icons/PlusIcon.tsx';
+import { TrashIcon } from './icons/TrashIcon.tsx';
 import TimeInput from './TimeInput.tsx';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 interface TimetableInputProps {
   lectures: Lecture[];

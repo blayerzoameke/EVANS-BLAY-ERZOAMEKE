@@ -1,13 +1,8 @@
-
-
-
-
 import React from 'react';
-// FIX: Added .tsx extension to import path.
 import type { View } from '../App.tsx';
 import { LogoIcon } from './icons/LogoIcon.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 interface SidebarProps {
   view: View;
@@ -36,6 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
     { id: 'notification', nameKey: 'sidebar.notification'},
     { id: 'language', nameKey: 'sidebar.language'},
     { id: 'theme', nameKey: 'sidebar.theme'},
+    { id: 'library', nameKey: 'sidebar.library' },
     { id: 'settings', nameKey: 'sidebar.settings' },
   ];
   

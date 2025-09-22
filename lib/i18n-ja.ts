@@ -6,6 +6,7 @@ export const translations = {
   'sidebar.examprep': '試験対策',
   'sidebar.mytimetables': '私の時間割',
   'sidebar.notes': 'ノート',
+  'sidebar.library': 'リソースライブラリ',
   'sidebar.profile': 'プロフィール',
   'sidebar.notification': '通知',
   'sidebar.language': '言語',

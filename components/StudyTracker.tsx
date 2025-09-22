@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { ActiveSession, Toast } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { PlayIcon } from './icons/PlayIcon';
 import { PauseIcon } from './icons/PauseIcon';
 import { StopIcon } from './icons/StopIcon';

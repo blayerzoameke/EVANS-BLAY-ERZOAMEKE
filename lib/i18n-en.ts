@@ -6,6 +6,7 @@ export const translations = {
   'sidebar.examprep': 'Exam Prep',
   'sidebar.mytimetables': 'My Timetables',
   'sidebar.notes': 'Notes',
+  'sidebar.library': 'Resource Library',
   'sidebar.profile': 'Profile',
   'sidebar.notification': 'Notifications',
   'sidebar.language': 'Language',

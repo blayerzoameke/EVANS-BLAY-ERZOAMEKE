@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { UserDetails, EducationalLevel } from '../types.ts';
 import { countries } from '../data/countries.ts';
 import { universities } from '../data/universities.ts';
