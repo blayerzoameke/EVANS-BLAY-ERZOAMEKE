@@ -1,553 +1,507 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, ImagePart, QuizQuestion, ChatTurn } from '../types.ts';
-import { QuizType } from '../types.ts';
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Type } from "@google/genai";
+import type { ImagePart, UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, QuizQuestion, QuizType, ChatTurn } from './types.ts';
 
-// @ts-ignore
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// --- Local Graph Generation (as provided by user) ---
 
-const graphSchema = {
-    type: Type.OBJECT,
-    properties: {
-        type: { type: Type.STRING, enum: ['line', 'bar', 'pie', 'doughnut', 'radar', 'polarArea', 'bubble', 'scatter'] },
+function parseExpressionSafely(expr: string): string {
+    if (!expr) return '';
+    
+    let cleaned = expr.trim()
+        .replace(/\s+/g, '') // Remove spaces
+        .replace(/\^/g, '**') // Convert ^ to **
+        .replace(/π|pi/gi, 'Math.PI') // Convert pi
+        .replace(/e(?![a-zA-Z])/g, 'Math.E') // Convert e constant
+        .replace(/\bsin\b/g, 'Math.sin')
+        .replace(/\bcos\b/g, 'Math.cos')
+        .replace(/\btan\b/g, 'Math.tan')
+        .replace(/\blog\b/g, 'Math.log10') // log = log base 10
+        .replace(/\bln\b/g, 'Math.log')   // ln = natural log
+        .replace(/\bsqrt\b/g, 'Math.sqrt')
+        .replace(/\babs\b/g, 'Math.abs')
+        .replace(/\bexp\b/g, 'Math.exp')
+        .replace(/\bfloor\b/g, 'Math.floor')
+        .replace(/\bceil\b/g, 'Math.ceil');
+    
+    // Handle implicit multiplication more carefully
+    cleaned = cleaned
+        .replace(/(\d)([a-zA-Z])/g, '$1*$2')     // 2x -> 2*x
+        .replace(/([a-zA-Z])(\d)/g, '$1*$2')     // x2 -> x*2
+        .replace(/\)([a-zA-Z]|\()/g, ')*$1')     // )(... -> )*(...)
+        .replace(/([a-zA-Z])\(/g, '$1*(');       // x(...) -> x*(...)
+    
+    return cleaned;
+}
+
+
+function buildAdvancedEvaluator(expr: string): ((x: number) => number) | null {
+    if (!expr) return null;
+    
+    const normalized = parseExpressionSafely(expr);
+    
+    try {
+        const fn = new Function('x', `
+            try {
+                const Math = globalThis.Math || window.Math;
+                if (typeof x !== 'number' || !isFinite(x)) return NaN;
+                const result = ${normalized};
+                
+                if (typeof result !== 'number' || !isFinite(result)) return NaN;
+                if (Math.abs(result) > 1000) return NaN;
+                
+                return result;
+            } catch (e) {
+                return NaN;
+            }
+        `);
+        
+        const testValues = [0, 1, -1, 0.5, 2, -2];
+        let validTests = 0;
+        for (const testVal of testValues) {
+            const result = fn(testVal);
+            if (typeof result === 'number' && isFinite(result)) {
+                validTests++;
+            }
+        }
+        
+        if (validTests < 2) {
+            throw new Error('Function produces too few valid results');
+        }
+        
+        return fn as (x: number) => number;
+    } catch (error) {
+        console.warn('Failed to build evaluator for:', expr, error);
+        return null;
+    }
+}
+
+export function generateChartConfigForFunction({ 
+    expr, 
+    xMin, 
+    xMax, 
+    samples = 500, 
+    titleOverride 
+}: { 
+    expr: string; 
+    xMin: number; 
+    xMax: number; 
+    samples?: number; 
+    titleOverride?: string | null; 
+}) {
+    const evaluator = buildAdvancedEvaluator(expr);
+    if (!evaluator) throw new Error(`Could not parse expression: ${expr}`);
+
+    const data: { x: number; y: number }[] = [];
+    const allYValues: number[] = [];
+    
+    for (let i = 0; i <= samples; i++) {
+        const x = xMin + (xMax - xMin) * (i / samples);
+        const y = evaluator(x);
+        
+        if (isFinite(y) && !isNaN(y) && Math.abs(y) < 1000) {
+            const roundedX = Math.round(x * 1e10) / 1e10;
+            const roundedY = Math.round(y * 1e10) / 1e10;
+            
+            data.push({ x: roundedX, y: roundedY });
+            allYValues.push(roundedY);
+        }
+    }
+
+    if (data.length === 0) {
+        throw new Error(`No valid data points generated for expression: ${expr}`);
+    }
+
+    let yMin, yMax;
+    
+    if (allYValues.length > 0) {
+        const sorted = [...allYValues].sort((a, b) => a - b);
+        const trimPercent = Math.min(0.15, 20 / sorted.length);
+        const lowerTrimIndex = Math.floor(sorted.length * trimPercent);
+        const upperTrimIndex = Math.floor(sorted.length * (1 - trimPercent));
+        const trimmedValues = sorted.slice(lowerTrimIndex, upperTrimIndex);
+        
+        if (trimmedValues.length > 0) {
+            yMin = trimmedValues[0];
+            yMax = trimmedValues[trimmedValues.length - 1];
+        } else {
+            yMin = sorted[0];
+            yMax = sorted[sorted.length - 1];
+        }
+        
+        const range = yMax - yMin;
+        let padding;
+        if (range < 1e-6) {
+            padding = Math.max(Math.abs(yMin) * 0.1, 1);
+        } else {
+            padding = Math.min(range * 0.15, 50);
+        }
+        
+        yMin -= padding;
+        yMax += padding;
+        
+        const maxRange = 1000;
+        if (yMax - yMin > maxRange) {
+            const center = (yMin + yMax) / 2;
+            yMin = center - maxRange / 2;
+            yMax = center + maxRange / 2;
+        }
+        
+        yMin = Math.max(yMin, -500);
+        yMax = Math.min(yMax, 500);
+    } else {
+        yMin = -10;
+        yMax = 10;
+    }
+
+    if (!isFinite(yMin) || !isFinite(yMax) || yMin >= yMax) {
+        yMin = -10;
+        yMax = 10;
+    }
+
+    return {
+        type: 'line',
         data: {
-            type: Type.OBJECT,
-            properties: {
-                labels: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    nullable: true,
-                },
-                datasets: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            label: { type: Type.STRING },
-                            data: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        x: { type: Type.NUMBER, nullable: true },
-                                        y: { type: Type.NUMBER, nullable: true },
-                                    },
-                                    nullable: true,
-                                },
-                            },
-                            backgroundColor: { type: Type.STRING, nullable: true },
-                            borderColor: { type: Type.STRING, nullable: true },
-                            fill: { type: Type.BOOLEAN, nullable: true },
-                        },
-                        required: ['label', 'data'],
-                    },
-                },
-            },
-            required: ['datasets'],
+            datasets: [{
+                label: `y = ${expr}`,
+                data: data,
+                borderColor: '#3e95cd',
+                backgroundColor: 'rgba(62, 149, 205, 0.1)',
+                fill: false,
+                tension: 0,
+                pointRadius: 0,
+                borderWidth: 2,
+                spanGaps: false
+            }]
         },
         options: {
-            type: Type.OBJECT,
-            properties: {
-                plugins: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: {
-                            type: Type.OBJECT,
-                            properties: {
-                                display: { type: Type.BOOLEAN, nullable: true },
-                                text: { type: Type.STRING, nullable: true },
-                            },
-                        },
-                    },
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                title: { display: true, text: titleOverride || `Graph of y = ${expr}` },
+                legend: { display: true }
+            },
+            scales: {
+                x: {
+                    type: 'linear', position: 'bottom', title: { display: true, text: 'x' },
+                    min: xMin, max: xMax, grid: { color: 'rgba(0,0,0,0.1)' }
                 },
-                scales: {
-                    type: Type.OBJECT,
-                    properties: {
-                        x: {
-                            type: Type.OBJECT,
-                            properties: {
-                                title: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        display: { type: Type.BOOLEAN, nullable: true },
-                                        text: { type: Type.STRING, nullable: true },
-                                    }
-                                },
-                                min: { type: Type.NUMBER, nullable: true },
-                                max: { type: Type.NUMBER, nullable: true },
-                            },
-                        },
-                        y: {
-                            type: Type.OBJECT,
-                            properties: {
-                                title: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        display: { type: Type.BOOLEAN, nullable: true },
-                                        text: { type: Type.STRING, nullable: true },
-                                    }
-                                },
-                                min: { type: Type.NUMBER, nullable: true },
-                                max: { type: Type.NUMBER, nullable: true },
-                            },
-                        }
-                    },
+                y: {
+                    type: 'linear', title: { display: true, text: 'y' },
+                    min: yMin, max: yMax, grid: { color: 'rgba(0,0,0,0.1)' }
                 }
             },
-            nullable: true,
-        },
-    },
-    required: ['type', 'data'],
-};
+            interaction: { intersect: false, mode: 'index' }
+        }
+    };
+}
 
-// --- Plan Generation Functions ---
 
-export const isImageTimetable = async (imagePart: ImagePart): Promise<boolean> => {
-    const prompt = 'Analyze the following image. Does it contain a timetable, schedule, or calendar? Respond with only "true" or "false".';
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, imagePart] },
-        });
-        const textResponse = response.text.trim().toLowerCase();
-        return textResponse === 'true';
-    } catch (error) {
-        console.error("Error verifying timetable image:", error);
-        return false;
-    }
-};
+// --- AI Service Setup ---
 
-export const generatePlanFromImage = async (
-    userDetails: UserDetails,
-    studyGoals: StudyGoal[],
-    generalGoals: string,
-    imagePart: ImagePart
-): Promise<SmartPlan> => {
-    const prompt = `
-You are an expert academic planner. Your task is to analyze the provided user details, study goals, general preferences, and an image of a timetable. Based on all this information, create a structured, smart, and balanced weekly study plan in JSON format.
+const API_KEY = process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
-**User Details:**
-- Name: ${userDetails.name}
-- Educational Level: ${userDetails.educationalLevel}
-- Institution: ${userDetails.institution || 'Not provided'}
-- Programme of Study: ${userDetails.programmeOfStudy || 'Not provided'}
+const safetySettings = [
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+];
 
-**Study Goals:**
-${studyGoals.map(g => `- Study ${g.subject} for ${g.hours} hours per week.`).join('\n') || 'No specific study goals provided.'}
+async function callApi(prompt: any, schema?: any, imagePart?: ImagePart) {
+    if (!API_KEY) return Promise.reject(new Error("API Key is not configured."));
 
-**General Goals & Preferences:**
-${generalGoals || 'No general preferences provided.'}
-
-**Timetable Image:**
-The user has provided an image of their existing timetable. Extract all fixed activities like lectures from this image.
-
-**Instructions:**
-1.  **Extract Fixed Activities:** Analyze the timetable image to identify all fixed lectures and their timings.
-2.  **Integrate Study Goals:** Schedule study sessions for the subjects listed in the study goals, respecting the required hours per week.
-3.  **Incorporate Preferences:** Take the user's general goals and preferences into account (e.g., study times, break lengths).
-4.  **Add Breaks:** Schedule short breaks (10-15 mins) and longer breaks (e.g., lunch). Ensure the schedule is not overwhelming.
-5.  **Output JSON:** Your entire response MUST be a single JSON object representing the weekly plan. The JSON should be an array of DayPlan objects.
-    - Each DayPlan object has a 'day' (e.g., "Monday") and a 'slots' array.
-    - Each slot in the 'slots' array must have 'activity' (string), 'startTime' (string, "HH:MM AM/PM"), 'endTime' (string, "HH:MM AM/PM"), and 'type' (string: "lecture", "study", "agenda", "break", "free").
-    - Ensure all time slots for a given day are contiguous and cover the main parts of the day.
-
-**JSON Schema:**
-\`\`\`json
-[
-  {
-    "day": "Monday",
-    "slots": [
-      { "activity": "Calculus II", "startTime": "09:00 AM", "endTime": "10:00 AM", "type": "lecture" },
-      { "activity": "Study: Physics", "startTime": "10:00 AM", "endTime": "12:00 PM", "type": "study" }
-    ]
-  },
-  ...
-]
-\`\`\`
-`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, imagePart] },
-        });
-        const jsonString = response.text.replace(/```json\n|```/g, '').trim();
-        return JSON.parse(jsonString) as SmartPlan;
-    } catch (error) {
-        console.error("Error generating plan from image:", error);
-        throw new Error("Failed to generate a plan from the timetable image. The image might be unclear or the structure too complex.");
-    }
-};
-
-export const generateSmartPlan = async (
-    userDetails: UserDetails,
-    lectures: Lecture[],
-    studyGoals: StudyGoal[],
-    agendaItems: AgendaItem[],
-    generalGoals: string
-): Promise<SmartPlan> => {
-    const prompt = `
-You are an expert academic planner. Your task is to create a structured, smart, and balanced weekly study plan in JSON format based on the provided user details and schedule information.
-
-**User Details:**
-- Name: ${userDetails.name}
-- Educational Level: ${userDetails.educationalLevel}
-- Institution: ${userDetails.institution || 'Not provided'}
-- Programme of Study: ${userDetails.programmeOfStudy || 'Not provided'}
-
-**Fixed Lectures:**
-${lectures.map(l => `- ${l.subject} on ${l.day} from ${l.startTime} to ${l.endTime}.`).join('\n') || 'No lectures provided.'}
-
-**Fixed Agenda Items:**
-${agendaItems.map(a => `- ${a.title} on ${a.day} from ${a.startTime} to ${a.endTime}.`).join('\n') || 'No other fixed activities provided.'}
-
-**Study Goals:**
-${studyGoals.map(g => `- Study ${g.subject} for ${g.hours} hours per week.`).join('\n') || 'No specific study goals provided.'}
-
-**General Goals & Preferences:**
-${generalGoals || 'No general preferences provided.'}
-
-**Instructions:**
-1.  **Schedule Fixed Activities:** Place all lectures and agenda items into the schedule first.
-2.  **Integrate Study Goals:** Schedule study sessions for the subjects listed in the study goals, respecting the required hours per week. Distribute these sessions logically throughout the week.
-3.  **Incorporate Preferences:** Take the user's general goals and preferences into account (e.g., preferred study times, break lengths).
-4.  **Add Breaks:** Intelligently schedule short breaks (10-15 mins) and longer breaks (e.g., lunch). Ensure the schedule is not overwhelming and promotes well-being. Fill any remaining large gaps with "Free Time".
-5.  **Output JSON:** Your entire response MUST be a single JSON object representing the weekly plan. The JSON should be an array of DayPlan objects.
-    - Each DayPlan object has a 'day' (e.g., "Monday") and a 'slots' array.
-    - Each slot in the 'slots' array must have 'activity' (string), 'startTime' (string, "HH:MM AM/PM"), 'endTime' (string, "HH:MM AM/PM"), and 'type' (string: "lecture", "study", "agenda", "break", "free").
-    - Ensure all time slots for a given day are contiguous and cover the main parts of the day (e.g., from 8 AM to 10 PM).
-
-**JSON Schema:**
-\`\`\`json
-[
-  {
-    "day": "Monday",
-    "slots": [
-      { "activity": "Calculus II", "startTime": "09:00 AM", "endTime": "10:00 AM", "type": "lecture" },
-      { "activity": "Study: Physics", "startTime": "10:00 AM", "endTime": "12:00 PM", "type": "study" }
-    ]
-  },
-  ...
-]
-\`\`\`
-`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }] },
-        });
-        const jsonString = response.text.replace(/```json\n|```/g, '').trim();
-        return JSON.parse(jsonString) as SmartPlan;
-    } catch (error) {
-        console.error("Error generating smart plan:", error);
-        throw new Error("Failed to generate a smart plan. The inputs might be conflicting or too complex.");
-    }
-};
-
-// --- Learning Hub & Exam Prep Functions ---
-
-export const isStudyMaterial = async (filePart: ImagePart): Promise<boolean> => {
-    const prompt = 'Analyze the following image or document page. Does it contain academic or study-related material (e.g., lecture slides, textbook pages, notes, diagrams)? Respond with only "true" or "false".';
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, filePart] },
-        });
-        return response.text.trim().toLowerCase() === 'true';
-    } catch (error) {
-        console.error("Error verifying study material:", error);
-        return false;
-    }
-};
-
-export const getDocumentContext = async (filePart: ImagePart): Promise<string> => {
-    const prompt = 'Analyze the provided document page. What is the primary subject or topic? For example: "Quantum Mechanics", "History of Rome", "Calculus II". Respond with only the subject name.';
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, filePart] },
-        });
-        return response.text.trim();
-    } catch (error) {
-        console.error("Error getting document context:", error);
-        return 'General';
-    }
-};
-
-export const extractTextFromDocument = async (filePart: ImagePart): Promise<string> => {
-    const prompt = 'Extract all text from the provided image or document page. Preserve formatting like paragraphs and headings where possible.';
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, filePart] },
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Error extracting text from document:", error);
-        throw new Error("Failed to extract text from the document.");
-    }
-};
-
-export const summarizeDocument = async (filePart: ImagePart, context: string): Promise<string> => {
-    const prompt = `You are a helpful academic assistant. The user has uploaded a document about "${context}". Please provide a concise summary of the key points from the provided page. Use Markdown for formatting.`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, filePart] },
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Error summarizing document:", error);
-        throw new Error("Failed to generate a summary for the document.");
-    }
-};
-
-export const explainDocument = async (filePart: ImagePart, context: string): Promise<string> => {
-    const prompt = `You are an expert teacher. The user has uploaded a document about "${context}". Explain the main concepts from this document page in a clear and simple way. Use analogies and examples where helpful. Use Markdown for formatting and LaTeX for equations.`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, filePart] },
-        });
-        return response.text;
-    } catch (error) {
-        console.error("Error explaining document:", error);
-        throw new Error("Failed to generate an explanation for the document.");
-    }
-};
-
-export const chatWithDocumentStream = async (
-    filePart: ImagePart,
-    userMessage: string,
-    chatHistory: ChatTurn[],
-    context: string
-): Promise<AsyncGenerator<GenerateContentResponse>> => {
-    const historyFormatted = chatHistory.map(turn => `User: ${turn.user}\nBlay: ${turn.blay}`).join('\n\n');
-    const prompt = `You are Blay, a helpful AI study assistant. You are chatting with a user about a document they uploaded. The document's main topic is "${context}". The user's new message is: "${userMessage}". Please provide a helpful and conversational response based on the document content and the chat history.`;
-    try {
-        return await ai.models.generateContentStream({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, filePart] },
-        });
-    } catch (error) {
-        console.error("Error chatting with document:", error);
-        throw new Error("Failed to get a response from the document chat.");
-    }
-};
-
-export const isImageAProblem = async (imagePart: ImagePart): Promise<boolean> => {
-    const prompt = `Analyze the following image. Does it contain an academic problem, question, or equation that can be solved (e.g., math, physics, chemistry, programming)? Respond with only "true" or "false".`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }, imagePart] },
-        });
-        return response.text.trim().toLowerCase() === 'true';
-    } catch (error) {
-        console.error("Error verifying problem image:", error);
-        return false;
-    }
-};
-
-export const generateQuiz = async (
-    content: string,
-    numQuestions: number,
-    quizType: QuizType,
-    focusArea: string
-): Promise<QuizQuestion[]> => {
-    const prompt = `You are an expert quiz creator for students. Based on the following study material, create a quiz with ${numQuestions} questions of the type "${quizType}".
-
-**Focus Area (if provided):** ${focusArea || 'The entire document.'}
-
-**Study Material Content (first 30k chars):**
----
-${content.substring(0, 30000)}
----
-
-Your entire response MUST be a single JSON object containing a "questions" array, conforming to the provided schema. Do not include any other text, comments, or markdown.`;
-
-    const questionSchema: any = {
-        type: Type.OBJECT,
-        properties: {
-            question: { type: Type.STRING },
-            options: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true, description: 'Only for Multiple Choice questions.' },
-            correctAnswer: { type: Type.STRING },
-            explanation: { type: Type.STRING },
-            topic: { type: Type.STRING },
-            type: { type: Type.STRING, enum: [quizType] },
-        },
-        required: ['question', 'correctAnswer', 'explanation', 'topic', 'type']
+    const contents = imagePart ? { parts: [{ text: prompt }, imagePart] } : prompt;
+    const config = {
+        responseMimeType: schema ? "application/json" : "text/plain",
+        responseSchema: schema,
+        temperature: 0.2,
+        topP: 0.8,
+        topK: 10,
     };
 
-    if (quizType === QuizType.MCQ) {
-        questionSchema.properties.options.nullable = false;
-        questionSchema.required.push('options');
-    }
-
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }] },
+            contents,
+            // FIX: Corrected API call structure. `safetySettings` must be inside the `config` object.
             config: {
-                responseMimeType: "application/json",
-                responseSchema: { type: Type.OBJECT, properties: { questions: { type: Type.ARRAY, items: questionSchema } }, required: ['questions'] },
-            }
+                ...config,
+                safetySettings,
+            },
         });
-        return (JSON.parse(response.text.trim())).questions as QuizQuestion[];
-    } catch (error) {
-        console.error("Error generating quiz:", error);
-        throw new Error("Failed to generate the quiz. The study material might be too short or complex.");
+        const text = response.text.trim();
+        const cleanText = text.replace(/^```json\s*|```\s*$/g, '');
+        if (schema) {
+            return JSON.parse(cleanText);
+        }
+        return cleanText;
+    } catch (error: any) {
+        console.error("Gemini API call failed:", error);
+        const message = error.toString();
+        if (message.includes('API key not valid')) {
+             throw new Error("The provided API key is not valid. Please check your configuration.");
+        }
+        throw new Error(`AI service failed. Please try again later. Raw error: ${message}`);
     }
+}
+
+// --- Schemas for JSON output ---
+
+const planSlotSchema = {
+    type: Type.OBJECT,
+    properties: {
+        activity: { type: Type.STRING },
+        startTime: { type: Type.STRING },
+        endTime: { type: Type.STRING },
+        type: { type: Type.STRING, enum: ['lecture', 'study', 'agenda', 'break', 'free'] },
+    },
+    required: ['activity', 'startTime', 'endTime', 'type']
 };
 
-// --- Helper functions for local graph generation ---
-function parseIntervalString(interval: string | undefined): { xMin: number; xMax: number } | null {
-  if (!interval) return null;
-  let s = interval.replace(/–|—/g, ' to ').replace(/\s+/g, ' ').trim().toLowerCase();
-  const mFrom = s.match(/from\s+(.+?)\s+to\s+(.+)/i);
-  const mTo = !mFrom ? s.match(/^(.+?)\s+to\s+(.+)$/i) : null;
-  const parts = mFrom ? [mFrom[1], mFrom[2]] : (mTo ? [mTo[1], mTo[2]] : null);
-  if (!parts) return null;
+const dayPlanSchema = {
+    type: Type.OBJECT,
+    properties: {
+        day: { type: Type.STRING, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
+        slots: { type: Type.ARRAY, items: planSlotSchema },
+    },
+    required: ['day', 'slots']
+};
 
-  const a = parseNumberWithPi(parts[0]);
-  const b = parseNumberWithPi(parts[1]);
-  if (!isFinite(a) || !isFinite(b)) return null;
-  return { xMin: Math.min(a, b), xMax: Math.max(a, b) };
+const smartPlanSchema = {
+    type: Type.ARRAY,
+    items: dayPlanSchema
+};
+
+const quizQuestionSchema = {
+    type: Type.OBJECT,
+    properties: {
+        question: { type: Type.STRING },
+        options: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Only for Multiple Choice questions.' },
+        correctAnswer: { type: Type.STRING },
+        explanation: { type: Type.STRING },
+        topic: { type: Type.STRING },
+        type: { type: Type.STRING, enum: ['Multiple Choice', 'Conceptual', 'Theory-based'] },
+    },
+    required: ['question', 'correctAnswer', 'explanation', 'topic', 'type']
+};
+
+const quizSchema = {
+    type: Type.OBJECT,
+    properties: {
+        questions: { type: Type.ARRAY, items: quizQuestionSchema }
+    },
+    required: ['questions']
+};
+
+const graphSchema = {
+  type: Type.OBJECT,
+  properties: {
+    type: { type: Type.STRING },
+    data: {
+      type: Type.OBJECT,
+      properties: {
+        datasets: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              label: { type: Type.STRING },
+              data: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { x: { type: Type.NUMBER }, y: { type: Type.NUMBER } } } },
+              borderColor: { type: Type.STRING },
+              backgroundColor: { type: Type.STRING },
+              fill: { type: Type.BOOLEAN },
+            },
+          },
+        },
+      },
+    },
+    options: {
+      type: Type.OBJECT,
+      properties: {
+        responsive: { type: Type.BOOLEAN },
+        plugins: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.OBJECT, properties: { display: { type: Type.BOOLEAN }, text: { type: Type.STRING } } },
+            legend: { type: Type.OBJECT, properties: { display: { type: Type.BOOLEAN } } },
+          },
+        },
+        scales: {
+          type: Type.OBJECT,
+          properties: {
+            x: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, min: { type: Type.NUMBER }, max: { type: Type.NUMBER } } },
+            y: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, min: { type: Type.NUMBER }, max: { type: Type.NUMBER } } },
+          },
+        },
+      },
+    },
+  },
+};
+
+
+// --- Exported Service Functions ---
+
+export async function isImageTimetable(image: ImagePart): Promise<boolean> {
+    const prompt = "Analyze this image. Is it a picture of a school timetable, schedule, or calendar? Respond with only 'true' or 'false'.";
+    const result = await callApi(prompt, undefined, image);
+    return result.toLowerCase().includes('true');
 }
 
-function parseNumberWithPi(tok: string): number {
-  if (!tok) return NaN;
-  tok = tok.trim().replace(/\s+/g, '').replace('π', 'pi').replace('PI', 'pi');
-  const re = /^([+-]?\d*\.?\d*)?pi(?:\/([+-]?\d*\.?\d*))?$/i;
-  const m = tok.match(re);
-  if (m) {
-    let coeffStr = m[1];
-    let denomStr = m[2];
-    let coeff = (!coeffStr || coeffStr === '+') ? 1 : (coeffStr === '-') ? -1 : parseFloat(coeffStr);
-    const denom = denomStr ? parseFloat(denomStr) : 1;
-    if (!isFinite(coeff) || !isFinite(denom) || denom === 0) return NaN;
-    return (coeff * Math.PI) / denom;
-  }
-  try {
-    const safe = tok.replace(/pi/gi, `(${Math.PI})`);
-    if (!/^[0-9\.\+\-\*\/\(\)\s\(\)eE]*$/.test(safe)) return Number(tok);
-    // eslint-disable-next-line no-new-func
-    const val = new Function(`return (${safe});`)();
-    return typeof val === 'number' && isFinite(val) ? val : NaN;
-  } catch {
-    return Number(tok);
-  }
+export async function generatePlanFromImage(userDetails: UserDetails, studyGoals: StudyGoal[], generalGoals: string, image: ImagePart): Promise<SmartPlan> {
+    const prompt = `
+        Based on the provided user details, study goals, general goals, and the timetable image, generate a smart weekly study plan.
+        User Details: ${JSON.stringify(userDetails)}
+        Study Goals: ${JSON.stringify(studyGoals)}
+        General Goals/Preferences: ${generalGoals}
+        The image contains the user's fixed schedule. Analyze it to identify lectures and other fixed commitments.
+        Then, intelligently schedule study sessions for the subjects mentioned in study goals, respecting the user's preferences and ensuring a balanced week with adequate breaks.
+        
+        Your response MUST be a single, raw, valid JSON array of DayPlan objects and nothing else. Adhere strictly to the required JSON schema. Do not include any explanatory text, comments, or markdown formatting before or after the JSON array.
+        Ensure all string values within the JSON are properly escaped if they contain special characters.
+    `;
+    return await callApi(prompt, smartPlanSchema, image);
 }
 
-function extractExpressionFromText(text: string): string | null {
-  if (!text) return null;
-  let m = text.match(/y\s*=\s*([^\n,;]+)/i) || text.match(/f\s*\(\s*x\s*\)\s*=\s*([^\n,;]+)/i) || text.match(/plot\s+(.+?)(?:\s+from|\s*$)/i);
-  if (m) return m[1].trim();
-  const fnMatch = text.match(/([a-zA-Z0-9\^\-\+\*\/\(\)\s]*?(?:sin|cos|tan|exp|log|sqrt)[^(0-9a-zA-Z]*\([^)]*\))/i);
-  return fnMatch ? fnMatch[1].trim() : null;
+export async function generateSmartPlan(userDetails: UserDetails, lectures: Lecture[], studyGoals: StudyGoal[], agendaItems: AgendaItem[], generalGoals: string): Promise<SmartPlan> {
+    const prompt = `
+        Generate a smart weekly study plan based on the following information:
+        User Details: ${JSON.stringify(userDetails)}
+        Lectures: ${JSON.stringify(lectures)}
+        Study Goals: ${JSON.stringify(studyGoals)}
+        Other Agenda Items: ${JSON.stringify(agendaItems)}
+        General Goals/Preferences: ${generalGoals}
+        
+        Analyze the user's fixed commitments and intelligently schedule study sessions to meet their goals. Create a balanced weekly schedule with adequate breaks.
+
+        Your response MUST be a single, raw, valid JSON array of DayPlan objects and nothing else. Adhere strictly to the required JSON schema. Do not include any explanatory text, comments, or markdown formatting before or after the JSON array.
+        Ensure all string values within the JSON are properly escaped if they contain special characters.
+    `;
+    return await callApi(prompt, smartPlanSchema);
 }
 
-function buildEvaluator(expr: string): ((x: number) => number) | null {
-  if (!expr) return null;
-  const normalized = expr.replace(/\^/g, '**');
-  try {
-    // eslint-disable-next-line no-new-func
-    const fn = new Function('x', `with (Math) { return ${normalized}; }`);
-    fn(0); // Quick test
-    return (x: number) => {
-      try {
-        const r = fn(x);
-        return typeof r === 'number' && isFinite(r) ? r : NaN;
-      } catch { return NaN; }
-    };
-  } catch { return null; }
+export async function isStudyMaterial(file: ImagePart): Promise<boolean> {
+    const prompt = "Analyze this document/image. Does it contain educational content like lecture notes, textbook pages, or academic slides? Respond with only 'true' or 'false'.";
+    const result = await callApi(prompt, undefined, file);
+    return result.toLowerCase().includes('true');
 }
 
-function generateChartConfigForFunction({ expr, xMin, xMax, samples = 400, titleOverride, lineColor = '#3e95cd' }: { expr: string; xMin: number; xMax: number; samples?: number; titleOverride?: string | null; lineColor?: string; }) {
-  const evaluator = buildEvaluator(expr);
-  if (!evaluator) throw new Error('Could not build evaluator for expression: ' + expr);
-
-  const points: { x: number; y: number | null }[] = [];
-  let yMin = Infinity, yMax = -Infinity;
-  for (let i = 0; i <= samples; i++) {
-    const x = xMin + (xMax - xMin) * (i / samples);
-    let y: number | null = evaluator(x);
-    if (!isFinite(y) || (y && Math.abs(y) > 1e8)) y = null;
-    else { if (y < yMin) yMin = y; if (y > yMax) yMax = y; }
-    points.push({ x, y });
-  }
-
-  const padding = (yMax - yMin) === 0 ? 1 : Math.abs(yMax - yMin) * 0.12;
-  return {
-    type: 'line',
-    data: { datasets: [{ label: expr, data: points, borderColor: lineColor, backgroundColor: lineColor, fill: false, pointRadius: 0, borderWidth: 2, tension: 0.1 }] },
-    options: { responsive: true, plugins: { title: { display: true, text: titleOverride || `Plot of ${expr}` } }, scales: { x: { type: 'linear', title: { display: true, text: 'x' } }, y: { title: { display: true, text: 'y' }, suggestedMin: yMin - padding, suggestedMax: yMax + padding } } }
-  };
+export async function getDocumentContext(file: ImagePart): Promise<string> {
+    const prompt = "Briefly identify the main subject and topic of this document in 2-5 words. Examples: 'Quantum Mechanics', 'World History', 'Calculus Formulas'.";
+    return await callApi(prompt, undefined, file);
 }
 
-function round(v: number, d = 4) { return Math.round(v * (10 ** d)) / (10 ** d); }
+export async function summarizeDocument(file: ImagePart, context: string): Promise<string> {
+    const prompt = `Based on the document about "${context}", provide a concise summary of the key points. Use markdown for formatting (headings, lists, bold).`;
+    return await callApi(prompt, undefined, file);
+}
 
-// --- Problem Solving Function ---
+export async function explainDocument(file: ImagePart, context: string): Promise<string> {
+    const prompt = `Based on the document about "${context}", explain the main concepts in a simple and easy-to-understand way. Use analogies and examples. Use markdown for formatting.`;
+    return await callApi(prompt, undefined, file);
+}
 
-export const solveProblem = async (questionText: string, imagePart: ImagePart | null, outputFormat: string, language?: string, graphInterval?: string): Promise<string> => {
-    let prompt: string;
-    const modelConfig: any = { model: 'gemini-2.5-flash' };
+export async function extractTextFromDocument(file: ImagePart): Promise<string> {
+    const prompt = "Extract all text from this document. Preserve the original formatting as much as possible.";
+    return await callApi(prompt, undefined, file);
+}
 
-    if (outputFormat === 'graph') {
-        const exprCandidate = extractExpressionFromText(questionText);
-        let interval = parseIntervalString(graphInterval);
-        if (!interval) {
-            const eLow = exprCandidate?.toLowerCase() || '';
-            if (/\bsin\b|\bcos\b/.test(eLow)) interval = { xMin: -2 * Math.PI, xMax: 2 * Math.PI };
-            else if (/\btan\b/.test(eLow)) interval = { xMin: -Math.PI / 2 + 0.01, xMax: Math.PI / 2 - 0.01 };
-            else interval = { xMin: -10, xMax: 10 };
-        }
-        if (exprCandidate) {
-            try {
-                const cfg = generateChartConfigForFunction({ expr: exprCandidate, xMin: interval.xMin, xMax: interval.xMax, titleOverride: `y = ${exprCandidate}` });
-                return JSON.stringify(cfg);
-            } catch (err) { console.warn('Local chart generation failed, falling back to AI.', err); }
-        }
+export async function chatWithDocumentStream(file: ImagePart, question: string, history: ChatTurn[], context: string) {
+    const historyText = history.map(turn => `User: ${turn.user}\nBlay: ${turn.blay}`).join('\n\n');
+    const prompt = `You are a helpful study assistant. The user has uploaded a document about "${context}".
+    Here is the conversation history so far:
+    ${historyText}
 
-        prompt = `You are an expert academic problem solver. Your task is to provide a single, valid Chart.js JSON configuration object to visually represent the solution to the following problem.
-Problem:
----
-${questionText}
----
-**CRITICAL INSTRUCTIONS for Function Plots (e.g., y = 2^x, sin(x)):**
-- The chart type must be 'line'.
-- The data for each dataset MUST be an array of objects with numerical 'x' and 'y' properties. Example: "data": [{"x": 0, "y": 1}, {"x": 1, "y": 2}].
-- Generate at least 200 data points evenly spaced across the chosen interval to create a smooth and accurate curve.
-- DO NOT use the labels property in the data object for function plots. Use numerical x values inside the dataset's data array instead.
-- For styling, in each dataset object, set borderColor to a distinct, vibrant color (e.g., '#3e95cd') and set fill: false.
-- CRITICAL: Based on the generated data points, determine and explicitly set appropriate 'min' and 'max' values for both the x and y axes in the 'scales' options to ensure the graph is well-proportioned and all key features are visible.
-`;
-        prompt += graphInterval ? `- The graph must be plotted over the specified interval: ${graphInterval}.\n` : `- Since no interval was provided, choose a sensible default interval that clearly shows the function's behavior (for sine/cos use -2π..2π, otherwise -10..10).\n`;
-        prompt += `- Include the function and chosen interval in the chart's title and include axis titles for both X and Y.`;
+    The user's new question is: "${question}"
 
-        modelConfig.config = { responseMimeType: "application/json", responseSchema: graphSchema };
-    } else {
-        prompt = `You are an expert academic problem solver. Your task is to provide a clear, step-by-step solution to the following problem.
-Problem:
----
-${questionText}
----
-Instructions:
-- Analyze the problem carefully. If an image is provided, it is part of the problem statement.
-- Provide the solution in the format: "${outputFormat}".\n`;
-        if (outputFormat === 'code' && language) {
-            prompt += `- The programming language for the code solution must be: ${language}.\n`;
-        }
-        prompt += `- Format your response using Markdown. Use LaTeX for mathematical equations (inline with $...$ and display with $$...$$). For code, use triple backticks with the language specified (e.g., \`\`\`python).`;
-    }
-
-    const contents: any = { parts: [{ text: prompt }] };
-    if (imagePart) contents.parts.push(imagePart);
-    modelConfig.contents = contents;
-
+    Using the content of the provided document, answer the user's question. If the document doesn't contain the answer, say so. Keep your answer concise and helpful.`;
+    
     try {
-        const response = await ai.models.generateContent(modelConfig);
-        return response.text;
-    } catch (error) {
-        console.error("Error solving problem:", error);
-        throw new Error("Failed to solve the problem. The question might be too complex or not suitable for the selected format.");
+        const response = await ai.models.generateContentStream({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: prompt }, file] },
+            config: { temperature: 0.5, topP: 0.9, topK: 20, safetySettings },
+        });
+        return response;
+    } catch (error: any) {
+        console.error("Gemini API stream call failed:", error);
+        throw new Error(`AI service failed.`);
     }
-};
+}
+
+export async function generateQuiz(content: string, numQuestions: number, quizType: QuizType, focusArea: string): Promise<QuizQuestion[]> {
+    const prompt = `
+      Analyze the following text content and generate a quiz with exactly ${numQuestions} questions of type "${quizType}".
+      ${focusArea ? `Focus specifically on this area: "${focusArea}".` : ''}
+
+      Your response MUST be a single, raw, valid JSON object and nothing else. Do not include any explanatory text, markdown formatting like \`\`\`json, or any characters before or after the JSON object.
+
+      The JSON object must have a single root key "questions", which is an array of question objects. Each question object must conform to this structure:
+      - "question": string
+      - "options": string[] (only for Multiple Choice)
+      - "correctAnswer": string
+      - "explanation": string
+      - "topic": string
+      - "type": string (must be "${quizType}")
+
+      CRITICAL INSTRUCTION: All string values within the JSON must be properly escaped.
+      - Newlines must be represented as "\\n".
+      - Double quotes within a string must be escaped with a backslash, like so: "This is a \\"quote\\". ".
+      - Backslashes themselves must be escaped: "C:\\\\path".
+
+      This is extremely important to prevent parsing errors.
+
+      Text Content to Analyze:
+      ---
+      ${content.substring(0, 20000)}
+      ---
+    `;
+    const result = await callApi(prompt, quizSchema);
+    return result.questions;
+}
+
+export async function isImageAProblem(image: ImagePart): Promise<boolean> {
+    const prompt = "Does this image contain a solvable academic problem (math, physics, chemistry, etc.)? Exclude charts, graphs, or pure text. Respond with only 'true' or 'false'.";
+    const result = await callApi(prompt, undefined, image);
+    return result.toLowerCase().includes('true');
+}
+
+export async function solveProblem(
+    questionText: string,
+    questionImage: ImagePart | null,
+    outputFormat: 'steps' | 'latex' | 'code' | 'graph',
+    programmingLanguage: string,
+    graphInterval: string
+): Promise<string> {
+    if (outputFormat === 'graph') {
+        const match = questionText.match(/(?:plot|graph|draw)\s+(?:y\s*=\s*)?(.+)/i);
+        const expr = match ? match[1].trim() : questionText.trim();
+        
+        let xMin = -10, xMax = 10;
+        const intervalMatch = graphInterval.match(/(-?\d+(?:\.\d+)?)\s*to\s*(-?\d+(?:\.\d+)?)/i);
+        if (intervalMatch) {
+            xMin = parseFloat(intervalMatch[1]);
+            xMax = parseFloat(intervalMatch[2]);
+        }
+        
+        try {
+            const chartConfig = generateChartConfigForFunction({ expr, xMin, xMax });
+            return JSON.stringify(chartConfig);
+        } catch (localError) {
+            console.warn("Local graph generation failed, falling back to API:", localError);
+            const prompt = `Generate a JSON object for Chart.js to plot the function: y = ${expr}. ${graphInterval ? `Use the interval ${graphInterval} for the x-axis.` : 'Choose a sensible default interval that shows the key features of the graph.'} The JSON must be a valid Chart.js configuration. Ensure the y-axis is scaled appropriately to prevent distortion, especially for functions that go to infinity. For functions with discontinuities like tan(x), create separate datasets for each continuous segment. Your response MUST be ONLY the raw JSON object, without any markdown formatting, comments, or other text.`;
+            return await callApi(prompt, graphSchema);
+        }
+    }
+
+    let prompt = '';
+    if (outputFormat === 'steps') {
+        prompt = `Solve the following problem step-by-step. Explain each step clearly. Use markdown for formatting, including LaTeX for equations (e.g., $ax^2+bx+c=0$). Problem: ${questionText}`;
+    } else if (outputFormat === 'latex') {
+        prompt = `Provide the full LaTeX solution for this problem: ${questionText}. Output only the LaTeX code, enclosed in $$...$$.`;
+    } else if (outputFormat === 'code') {
+        prompt = `Write a ${programmingLanguage} function or script to solve this problem: ${questionText}. Include comments to explain the code. Output only the code block with language identifier.`;
+    }
+
+    return await callApi(prompt, undefined, questionImage || undefined);
+}

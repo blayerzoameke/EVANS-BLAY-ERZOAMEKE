@@ -39,6 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
     { id: 'report', nameKey: 'sidebar.report'},
     { id: 'feedback', nameKey: 'sidebar.feedback' },
     { id: 'help', nameKey: 'sidebar.help' },
+    { id: 'tutorial', nameKey: 'sidebar.tutorial' },
     { id: 'about', nameKey: 'sidebar.about' },
   ];
 

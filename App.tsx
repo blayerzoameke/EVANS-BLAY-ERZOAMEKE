@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -25,6 +23,7 @@ import BreakView from './components/BreakView.tsx';
 import FocusedStudyView from './components/FocusedStudyView.tsx';
 import Library from './components/Library.tsx';
 import Terms from './components/Terms.tsx';
+import Tutorial from './components/Tutorial.tsx';
 
 import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft } from './types.ts';
 import { EducationalLevel, QuizType } from './types.ts';
@@ -46,7 +45,8 @@ export type View =
   | 'help'
   | 'about'
   | 'library'
-  | 'terms';
+  | 'terms'
+  | 'tutorial';
 
 const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -231,6 +231,8 @@ const App: React.FC = () => {
         return <Library />;
       case 'terms':
         return <Terms />;
+      case 'tutorial':
+        return <Tutorial />;
       default:
         return <div>Not Found</div>;
     }
@@ -252,7 +254,7 @@ const App: React.FC = () => {
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           {renderView()}
-          {activeSession?.type === 'study' && !activeSession.isUntracked && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} />}
+          {activeSession?.type === 'study' && !activeSession.isUntracked && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} setView={setView} />}
         </main>
       </div>
        {activeSession?.type === 'break' && <BreakView session={activeSession} />}

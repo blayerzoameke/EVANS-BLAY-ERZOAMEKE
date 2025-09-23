@@ -340,7 +340,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               ) : (
                  <div>
-                   <div {...getRootProps()} className={`group p-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isManualInputStarted ? 'opacity-50 cursor-not-allowed' : 'hover:border-primary'} border-gray-300 dark:border-gray-600 text-center ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : ''}`}>
+                    <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 text-center">{t('dashboard.step2.title')}</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-6 text-center">{t('dashboard.step2.subtitle')}</p>
+                   <div {...getRootProps()} className={`group p-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${isManualInputStarted ? 'opacity-50 cursor-not-allowed' : 'hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'} border-gray-300 dark:border-gray-600 text-center ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : ''}`}>
                      <input {...getInputProps()} />
                      {imagePreview ? (
                          <div className="relative">
@@ -351,6 +353,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <>
                             <UploadIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                             <p className="font-semibold text-gray-700 dark:text-gray-300">{isManualInputStarted ? t('dashboard.uploadDisabled') : t('dashboard.uploadTimetable')}</p>
+                            <p className="text-sm text-gray-500">{t('dashboard.uploadTimetable.hint')}</p>
                         </>
                      )}
                    </div>
@@ -359,6 +362,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                      <span className="flex-shrink mx-4 text-gray-500 font-semibold">OR</span>
                      <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
                    </div>
+                    <div className="text-center mb-4">
+                        <p className="text-gray-600 dark:text-gray-400">{t('dashboard.manualEntry')}</p>
+                    </div>
                    <TimetableInput 
                        lectures={lectures} setLectures={setLectures} 
                        studyGoals={studyGoals} setStudyGoals={setStudyGoals}

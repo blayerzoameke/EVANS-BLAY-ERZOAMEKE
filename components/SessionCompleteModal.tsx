@@ -1,16 +1,16 @@
-
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
-import type { ActiveSession } from '../types';
+import type { ActiveSession } from '../types.ts';
 
 interface SessionCompleteModalProps {
     isOpen: boolean;
-    onClose: (target: 'dashboard' | 'hub') => void;
+    onNavigate: (target: 'dashboard' | 'hub') => void;
+    onStartBreak?: () => void;
     session: ActiveSession;
     wasTracked: boolean;
 }
 
-const SessionCompleteModal: React.FC<SessionCompleteModalProps> = ({ isOpen, onClose, session, wasTracked }) => {
+const SessionCompleteModal: React.FC<SessionCompleteModalProps> = ({ isOpen, onNavigate, onStartBreak, session, wasTracked }) => {
     const { t } = useLanguage();
     if (!isOpen) return null;
 
@@ -35,12 +35,20 @@ const SessionCompleteModal: React.FC<SessionCompleteModalProps> = ({ isOpen, onC
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-4">
-                    <button onClick={() => onClose('hub')} className="flex-1 px-6 py-3 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
-                        {t('sessionComplete.backToHub')}
-                    </button>
-                    <button onClick={() => onClose('dashboard')} className="flex-1 px-6 py-3 bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-800">
-                        {t('sessionComplete.backToDash')}
-                    </button>
+                    {isNextBreak && onStartBreak ? (
+                        <button onClick={onStartBreak} className="flex-1 px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">
+                            {t('sessionComplete.startBreak')}
+                        </button>
+                    ) : (
+                        <>
+                            <button onClick={() => onNavigate('hub')} className="flex-1 px-6 py-3 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
+                                {t('sessionComplete.backToHub')}
+                            </button>
+                            <button onClick={() => onNavigate('dashboard')} className="flex-1 px-6 py-3 bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-800">
+                                {t('sessionComplete.backToDash')}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

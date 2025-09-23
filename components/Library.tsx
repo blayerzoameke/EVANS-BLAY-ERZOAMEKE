@@ -1,5 +1,3 @@
-
-
 // FIX: Implement Library component to resolve module error.
 import React, { useState } from 'react';
 import { libraryResources } from '../data/libraryResources.ts';
@@ -8,8 +6,10 @@ import { SearchIcon } from './icons/SearchIcon.tsx';
 import { BookIcon } from './icons/BookIcon.tsx';
 import { ToolsIcon } from './icons/ToolsIcon.tsx';
 import { WriteIcon } from './icons/WriteIcon.tsx';
+import { BuildingIcon } from './icons/BuildingIcon.tsx';
 
 const categoryIcons: { [key: string]: React.FC<React.SVGProps<SVGSVGElement>> } = {
+    'digital-book-libraries': BuildingIcon,
     'study-techniques': BookIcon,
     'productivity-tools': ToolsIcon,
     'writing-aids': WriteIcon,
@@ -23,8 +23,8 @@ const Library: React.FC = () => {
     const categories = Array.from(new Set(libraryResources.map(r => r.category)));
 
     const filteredResources = libraryResources.filter(resource =>
-        resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.description.toLowerCase().includes(searchTerm.toLowerCase())
+        t(resource.titleKey as any).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t(resource.descriptionKey as any).toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -69,8 +69,8 @@ const Library: React.FC = () => {
                                         rel="noopener noreferrer"
                                         className="block p-6 bg-white dark:bg-gray-800 rounded-lg shadow border dark:border-gray-700 transition-transform hover:scale-105 hover:shadow-lg"
                                     >
-                                        <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{resource.title}</h4>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{resource.description}</p>
+                                        <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{t(resource.titleKey as any)}</h4>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{t(resource.descriptionKey as any)}</p>
                                     </a>
                                 ))}
                             </div>
