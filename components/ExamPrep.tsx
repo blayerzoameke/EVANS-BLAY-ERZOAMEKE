@@ -289,29 +289,36 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 }
 
                 if (graphFunction) {
-                    const intervalSettings = graphPlotter.parseInterval(graphInterval);
-                    const smartInterval = graphPlotter.determineSmartInterval(graphFunction);
+                    const expressions = graphFunction.split(',').map((e: string) => e.trim()).filter((e: string) => e);
+                    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f97316', '#ec4899', '#8b5cf6'];
 
-                    const config: GraphConfig = {
-                        expr: graphFunction,
-                        xMin: intervalSettings?.xMin ?? smartInterval.xMin,
-                        xMax: intervalSettings?.xMax ?? smartInterval.xMax,
-                        samples: intervalSettings?.samples ?? 100,
-                        angleMode: intervalSettings?.angleMode ?? 'radians'
-                    };
-                    
-                    const points = graphPlotter.generatePoints(config);
+                    const datasets = expressions.map((expr: string, index: number) => {
+                        const intervalSettings = graphPlotter.parseInterval(graphInterval);
+                        const smartInterval = graphPlotter.determineSmartInterval(expr);
+
+                        const config: GraphConfig = {
+                            expr: expr,
+                            xMin: intervalSettings?.xMin ?? smartInterval.xMin,
+                            xMax: intervalSettings?.xMax ?? smartInterval.xMax,
+                            samples: intervalSettings?.samples ?? 100,
+                            angleMode: intervalSettings?.angleMode ?? 'radians'
+                        };
+                        
+                        const points = graphPlotter.generatePoints(config);
+
+                        return {
+                            label: `y = ${expr}`,
+                            data: points,
+                            borderColor: colors[index % colors.length],
+                            fill: false,
+                            tension: 0.1
+                        };
+                    });
 
                     const chartConfig = {
                         type: 'line',
                         data: {
-                            datasets: [{
-                                label: suggestedTitle || `y = ${graphFunction}`,
-                                data: points,
-                                borderColor: '#3b82f6',
-                                fill: false,
-                                tension: 0.1
-                            }]
+                            datasets,
                         },
                         options: {
                            parsing: {
