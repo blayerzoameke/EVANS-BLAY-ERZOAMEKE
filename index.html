@@ -83,6 +83,19 @@
 </head>
   <body class="bg-gray-100 dark:bg-gray-900">
     <div id="root"></div>
+    <script>
+      // FOR LOCAL DEVELOPMENT ONLY:
+      // 1. Get your own API key from Google AI Studio at https://aistudio.google.com/app/apikey
+      // 2. Replace the placeholder string below with your actual API key.
+      // 3. Do not share this key or commit it to version control.
+      if (!window.process) {
+        window.process = {
+          env: {
+            API_KEY: 'REPLACE_WITH_YOUR_API_KEY',
+          },
+        };
+      }
+    </script>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

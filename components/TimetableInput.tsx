@@ -1,5 +1,4 @@
 import React from 'react';
-// FIX: Import DAYS_OF_WEEK to use a strongly-typed array for iterating.
 import { DayOfWeek } from '../types.ts';
 import { DAYS_OF_WEEK } from '../constants.ts';
 import type { Lecture, StudyGoal, AgendaItem } from '../types.ts';
@@ -38,22 +37,24 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
 }) => {
   const { t } = useLanguage();
   
-  const createUpdater = <T extends {id: string}>(setter: React.Dispatch<React.SetStateAction<T[]>>) => 
-    (id: string, field: keyof T, value: any) => {
-      setter(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  const updateLecture = (id: string, field: keyof Lecture, value: any) => {
+    setLectures(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
-  
-  const createRemover = <T extends {id: string}>(setter: React.Dispatch<React.SetStateAction<T[]>>) => 
-    (id: string) => {
-      setter(prev => prev.filter(item => item.id !== id));
+  const removeLecture = (id: string) => {
+    setLectures(prev => prev.filter(item => item.id !== id));
   };
-
-  const updateLecture = createUpdater(setLectures);
-  const removeLecture = createRemover(setLectures);
-  const updateStudyGoal = createUpdater(setStudyGoals);
-  const removeStudyGoal = createRemover(setStudyGoals);
-  const updateAgendaItem = createUpdater(setAgendaItems);
-  const removeAgendaItem = createRemover(setAgendaItems);
+  const updateStudyGoal = (id: string, field: keyof StudyGoal, value: any) => {
+    setStudyGoals(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+  const removeStudyGoal = (id: string) => {
+    setStudyGoals(prev => prev.filter(item => item.id !== id));
+  };
+  const updateAgendaItem = (id: string, field: keyof AgendaItem, value: any) => {
+    setAgendaItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+  const removeAgendaItem = (id: string) => {
+    setAgendaItems(prev => prev.filter(item => item.id !== id));
+  };
 
   const addLecture = () => setLectures(p => [...p, { id: Date.now().toString(), subject: '', day: DayOfWeek.Monday, startTime: '09:00 AM', endTime: '10:00 AM' }]);
   const addStudyGoal = () => setStudyGoals(p => [...p, { id: Date.now().toString(), subject: '', hours: 3 }]);
@@ -77,7 +78,6 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
               <div>
                   <label htmlFor={`lec-day-${lec.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('common.day')}</label>
                   <select id={`lec-day-${lec.id}`} value={lec.day} onChange={e => updateLecture(lec.id, 'day', e.target.value as DayOfWeek)} className={selectClasses} disabled={disabled || manualSectionsDisabled}>
-                    {/* FIX: Use DAYS_OF_WEEK array to prevent type errors. */}
                     {DAYS_OF_WEEK.map(day => <option key={day} value={day}>{day}</option>)}
                   </select>
               </div>
@@ -131,7 +131,6 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
               <div>
                 <label htmlFor={`agenda-day-${item.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('common.day')}</label>
                 <select id={`agenda-day-${item.id}`} value={item.day} onChange={e => updateAgendaItem(item.id, 'day', e.target.value as DayOfWeek)} className={selectClasses} disabled={disabled}>
-                  {/* FIX: Use DAYS_OF_WEEK array to prevent type errors. */}
                   {DAYS_OF_WEEK.map(day => <option key={day} value={day}>{day}</option>)}
                 </select>
               </div>

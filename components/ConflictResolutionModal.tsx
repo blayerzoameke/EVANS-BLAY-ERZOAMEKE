@@ -1,11 +1,8 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import type { ConflictInfo } from '../types.ts';
 
-// Helper component to parse and render simple markdown-like bold text
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
   const parts = text.split(/(\*\*.*?\*\*)/g).filter(part => part);
   
@@ -32,27 +29,7 @@ interface ConflictResolutionModalProps {
 const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = ({ isOpen, onClose, conflict, onResolve }) => {
     const { t } = useLanguage();
     const [selectedResolution, setSelectedResolution] = useState<'replace' | 'shift' | 'addExtra'>('replace');
-    const [countdown, setCountdown] = useState(15);
     
-    useEffect(() => {
-        if (!isOpen) return;
-
-        setCountdown(15); // Reset on open
-        const timer = setInterval(() => {
-            setCountdown(prev => {
-                if (prev <= 1) {
-                    clearInterval(timer);
-                    onResolve('replace'); // Auto-resolve with default
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [isOpen, onResolve]);
-
-
     if (!isOpen || !conflict) {
         return null;
     }
@@ -64,18 +41,18 @@ const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = ({ isOpe
     const options = [
         {
             id: 'replace',
-            title: t('conflict.replace'),
-            description: t('conflict.replace.desc', { uploadedSubject: conflict.uploadedSubject })
+            titleKey: 'conflict.replace',
+            descriptionKey: 'conflict.replace.desc'
         },
         {
             id: 'shift',
-            title: t('conflict.shift'),
-            description: t('conflict.shift.desc', { plannedSubject: conflict.plannedSubject, uploadedSubject: conflict.uploadedSubject })
+            titleKey: 'conflict.shift',
+            descriptionKey: 'conflict.shift.desc'
         },
         {
             id: 'addExtra',
-            title: t('conflict.addExtra'),
-            description: t('conflict.addExtra.desc', { plannedSubject: conflict.plannedSubject, uploadedSubject: conflict.uploadedSubject })
+            titleKey: 'conflict.addExtra',
+            descriptionKey: 'conflict.addExtra.desc'
         }
     ];
 
@@ -109,28 +86,23 @@ const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = ({ isOpe
                                 </div>
                                 <div className="ml-3 text-sm">
                                     <label htmlFor={option.id} className="font-medium text-gray-900 dark:text-gray-100">
-                                        {option.title}
+                                        {t(option.titleKey as any)}
                                     </label>
                                     <p id={`${option.id}-description`} className="text-gray-500 dark:text-gray-400">
-                                       <FormattedText text={option.description} />
+                                       <FormattedText text={t(option.descriptionKey as any, { uploadedSubject: conflict.uploadedSubject, plannedSubject: conflict.plannedSubject })} />
                                     </p>
                                 </div>
                             </div>
                         ))}
                     </fieldset>
                 </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700 flex justify-between items-center gap-3">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                        Auto-confirming in {countdown}s...
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">
-                            {t('common.cancel')}
-                        </button>
-                        <button onClick={handleConfirm} className="px-4 py-2 bg-blue-700 text-white rounded-md">
-                            Confirm & Start
-                        </button>
-                    </div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700 flex justify-end items-center gap-3">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">
+                        {t('common.cancel')}
+                    </button>
+                    <button onClick={handleConfirm} className="px-4 py-2 bg-blue-700 text-white rounded-md">
+                        {t('common.confirm')}
+                    </button>
                 </div>
             </div>
         </div>

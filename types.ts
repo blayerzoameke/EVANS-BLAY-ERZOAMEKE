@@ -1,3 +1,4 @@
+
 import type { View } from './App.tsx';
 
 export type Theme = 'light' | 'dark' | 'system';
@@ -72,6 +73,8 @@ export interface PlanSlot {
   type: ActivityType;
   link?: string;
   code?: string;
+  isLocked?: boolean;
+  durationMinutes?: number;
 }
 
 export type DayPlan = {
@@ -146,6 +149,10 @@ export interface LearningHubState {
     };
     chatHistory: ChatTurn[];
     isProcessing: boolean;
+    intendedStudyContext?: {
+        subject: string;
+        fromSlot: PlanSlot;
+    } | null;
 }
 
 export enum QuizType {
@@ -223,6 +230,7 @@ export interface DashboardInputState {
     imagePreview: string | null;
     step: 1 | 2;
     isManualPlan: boolean;
+    isEditing: boolean;
 }
 
 export interface ExamPrepState {

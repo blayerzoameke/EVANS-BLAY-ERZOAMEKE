@@ -1,6 +1,3 @@
-
-
-// FIX: Added .ts extension to import path.
 import { DayOfWeek } from './types.ts';
 
 export const DAYS_OF_WEEK: DayOfWeek[] = [

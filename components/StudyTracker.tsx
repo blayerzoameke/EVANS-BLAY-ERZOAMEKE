@@ -151,15 +151,10 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ session, setSession, addToa
     }
   };
 
-  const handleNavigate = (target: 'dashboard' | 'hub') => {
+  const handleNavigate = (target: 'dashboard' | 'uploadslides') => {
     setIsComplete(false);
     setSession(null);
-    // FIX: Map 'hub' to the 'uploadslides' view to resolve the type error.
-    if (target === 'hub') {
-        setView('uploadslides');
-    } else {
-        setView(target);
-    }
+    setView(target);
   };
 
 
@@ -216,9 +211,9 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ session, setSession, addToa
             isOpen={showStopConfirm}
             onClose={() => setShowStopConfirm(false)}
             onConfirm={confirmStop}
-            title="End Session Early?"
-            message="Are you sure you want to end this study session early? Your progress will be saved."
-            confirmText="End Session"
+            title={t('confirmation.endSession.title')}
+            message={t('confirmation.endSession.message')}
+            confirmText={t('confirmation.endSession.confirm')}
             confirmColor="red"
         />
     </>

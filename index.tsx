@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Added .tsx extension to import path.
 import App from './App.tsx';
 import { LanguageProvider } from './contexts/LanguageContext.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';

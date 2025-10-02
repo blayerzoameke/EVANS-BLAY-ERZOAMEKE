@@ -2,7 +2,6 @@ import React from 'react';
 import { MenuIcon } from './icons/MenuIcon.tsx';
 import { LogoIcon } from './icons/LogoIcon.tsx';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
-// FIX: Added .ts extension to import path.
 import { UserDetails, Toast } from '../types.ts';
 import type { View } from '../App.tsx';
 import { ShareIcon } from './icons/ShareIcon.tsx';
@@ -32,8 +31,6 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
   const { t } = useLanguage();
 
   const handleShare = async () => {
-    // FIX: Replaced window.location.href with a hardcoded, valid canonical URL
-    // to prevent "Invalid URL" errors with the Web Share API in certain environments.
     const appUrl = 'https://edublay-study-hub.web.app/';
 
     const shareData = {

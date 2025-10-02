@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { UserDetails, EducationalLevel } from '../types.ts';
@@ -35,8 +36,10 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
 
     const programmeLabel =
         userDetails.educationalLevel === EducationalLevel.HIGH_SCHOOL || userDetails.educationalLevel === EducationalLevel.OTHER
-            ? 'Course of Study'
-            : 'Programme of Studies';
+            ? t('userDetails.courseOfStudy')
+            : t('userDetails.programmeOfStudies');
+            
+    const isUniversityLevel = ![EducationalLevel.HIGH_SCHOOL, EducationalLevel.OTHER].includes(userDetails.educationalLevel);
 
     return (
         <div className="space-y-4">
@@ -47,7 +50,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
             {showExtendedFields && (
                 <>
                      <div>
-                        <label htmlFor="biography" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Biography ({t('common.optional')})</label>
+                        <label htmlFor="biography" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('profile.biography')} ({t('common.optional')})</label>
                         <textarea 
                             name="biography" 
                             id="biography" 
@@ -55,13 +58,22 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
                             value={userDetails.biography || ''} 
                             onChange={handleInputChange} 
                             className={`${inputClasses} resize-y`} 
-                            placeholder="Tell us a little about yourself..."
+                            placeholder={t('profile.biographyPlaceholder')}
                             maxLength={500}
                         />
                         <p className="text-xs text-right text-gray-500 dark:text-gray-400 mt-1">{(userDetails.biography || '').length} / 500</p>
                     </div>
                 </>
             )}
+
+            <div>
+                <label htmlFor="educationalLevel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.level')}</label>
+                <select name="educationalLevel" id="educationalLevel" value={userDetails.educationalLevel} onChange={handleInputChange} className={inputClasses}>
+                    {Object.values(EducationalLevel).map(level => (
+                        <option key={level} value={level}>{level}</option>
+                    ))}
+                </select>
+            </div>
 
             <div>
                 <label htmlFor="programmeOfStudy" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{programmeLabel}</label>
@@ -72,22 +84,17 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
                     value={userDetails.programmeOfStudy || ''}
                     onChange={handleInputChange}
                     className={inputClasses}
-                    placeholder="e.g., Computer Engineering, General Arts"
+                    placeholder={t('userDetails.programmePlaceholder')}
                 />
             </div>
-
-            <div>
-                <label htmlFor="educationalLevel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.level')}</label>
-                <select name="educationalLevel" id="educationalLevel" value={userDetails.educationalLevel} onChange={handleInputChange} className={inputClasses}>
-                    {Object.values(EducationalLevel).map(level => (
-                        <option key={level} value={level}>{level}</option>
-                    ))}
-                </select>
-            </div>
-            {userDetails.educationalLevel !== EducationalLevel.HIGH_SCHOOL && (
+            
+            {isUniversityLevel ? (
                 <>
                     <div>
-                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.country')}</label>
+                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('userDetails.country')}
+                            <span className="text-red-500 ml-1">*</span>
+                        </label>
                          <SearchableDropdown
                             id="country"
                             name="country"
@@ -111,7 +118,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
                     </div>
                     {showExtendedFields && (
                         <div>
-                            <label htmlFor="institutionAbbreviation" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Institution Abbreviation ({t('common.optional')})</label>
+                            <label htmlFor="institutionAbbreviation" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('profile.institutionAbbr')} ({t('common.optional')})</label>
                             <input
                                 type="text"
                                 name="institutionAbbreviation"
@@ -119,13 +126,27 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
                                 value={userDetails.institutionAbbreviation || ''}
                                 onChange={handleInputChange}
                                 className={inputClasses}
-                                placeholder="e.g., MIT, KNUST"
+                                placeholder={t('profile.institutionAbbrPlaceholder')}
                                 maxLength={10}
                             />
                         </div>
                     )}
                 </>
+            ) : (
+                 <div>
+                    <label htmlFor="institution" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.institution')}</label>
+                    <input
+                        type="text"
+                        name="institution"
+                        id="institution"
+                        value={userDetails.institution || ''}
+                        onChange={handleInputChange}
+                        className={inputClasses}
+                        placeholder={t('userDetails.institutionPlaceholder.school' as any)}
+                    />
+                </div>
             )}
+            
              <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.email')} ({t('common.optional')})</label>
                 <input type="email" name="email" id="email" value={userDetails.email || ''} onChange={handleInputChange} className={inputClasses} />

@@ -1,6 +1,5 @@
 
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
-// FIX: Added .ts extension to import path.
 import { Language, translations, getTranslator, supportedLanguages, TranslationKey } from '../lib/i18n.ts';
 
 interface LanguageContextType {
@@ -22,7 +21,6 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     const defaultLang = savedLang || browserLang;
     
     if (supportedLanguages.some(l => l.code === defaultLang)) {
-      // FIX: Cast defaultLang to Language type to satisfy the state setter's type requirement.
       setLanguageState(defaultLang as Language);
     } else {
       setLanguageState('en');

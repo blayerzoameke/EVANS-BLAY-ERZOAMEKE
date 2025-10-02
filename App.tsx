@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -25,7 +27,7 @@ import Library from './components/Library.tsx';
 import Terms from './components/Terms.tsx';
 import Tutorial from './components/Tutorial.tsx';
 
-import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft } from './types.ts';
+import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft, PlanSlot } from './types.ts';
 import { EducationalLevel, QuizType } from './types.ts';
 
 export type View =
@@ -52,6 +54,7 @@ const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<View>('dashboard');
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [smartPlan, setSmartPlan] = useState<SmartPlan | null>(null);
   const [savedTimetables, setSavedTimetables] = useState<StoredPlan[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -62,9 +65,10 @@ const App: React.FC = () => {
   const [trackedData, setTrackedData] = useState<TrackedSession[]>([]);
   const [generationState, setGenerationState] = useState<GenerationState>({ isLoading: false, message: '', error: null, source: null });
   const [quizState, setQuizState] = useState<QuizState>({ quiz: [], currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
+  const [intendedStudyContext, setIntendedStudyContext] = useState<{ subject: string; fromSlot: PlanSlot } | null>(null);
 
   // Persistent component states
-  const [dashboardInputs, setDashboardInputs] = useState<DashboardInputState>({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false });
+  const [dashboardInputs, setDashboardInputs] = useState<DashboardInputState>({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false, isEditing: false });
   const [examPrepState, setExamPrepState] = useState<ExamPrepState>({ mode: 'quiz', topic: '', numQuestions: 5, quizType: QuizType.MCQ, uploadedFiles: [], focusArea: '', isVerifying: false, questionImage: null, questionText: '', solution: null, outputFormat: 'steps', programmingLanguage: 'python', graphInterval: '' });
   const [profileEditState, setProfileEditState] = useState<ProfileEditState>({ isEditing: false, details: null });
   const [notesViewState, setNotesViewState] = useState<NotesViewState>({ currentNoteId: null, searchTerm: '' });
@@ -75,11 +79,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadData = () => {
       try {
+        const savedOnboarding = localStorage.getItem('hasCompletedOnboarding');
         const savedUserDetails = localStorage.getItem('userDetails');
-        if (savedUserDetails) {
+
+        if (savedOnboarding === 'true' && savedUserDetails) {
             const parsedDetails = JSON.parse(savedUserDetails);
-            setUserDetails(parsedDetails);
-            setReportDraft(prev => ({...prev, contactEmail: parsedDetails.email || ''}));
+            if (parsedDetails && parsedDetails.name) {
+                setUserDetails(parsedDetails);
+                setHasCompletedOnboarding(true);
+                setReportDraft(prev => ({...prev, contactEmail: parsedDetails.email || ''}));
+            }
         }
 
         const savedPlans = localStorage.getItem('savedTimetables');
@@ -96,6 +105,20 @@ const App: React.FC = () => {
         
         const savedTrackedData = localStorage.getItem('trackedData');
         if (savedTrackedData) setTrackedData(JSON.parse(savedTrackedData));
+
+        const savedQuizProgress = localStorage.getItem('quizProgress');
+        if (savedQuizProgress) {
+            const parsedProgress = JSON.parse(savedQuizProgress);
+            if (parsedProgress && parsedProgress.quiz && parsedProgress.quiz.length > 0) {
+                setQuizState({
+                    quiz: parsedProgress.quiz,
+                    currentQuestionIndex: parsedProgress.currentQuestionIndex,
+                    userAnswers: parsedProgress.userAnswers,
+                    feedback: null,
+                    summary: null,
+                });
+            }
+        }
 
       } catch (error) {
         console.error("Failed to load data from localStorage", error);
@@ -118,11 +141,27 @@ const App: React.FC = () => {
   };
 
   useEffect(() => persistState('userDetails', userDetails), [userDetails]);
+  useEffect(() => persistState('hasCompletedOnboarding', hasCompletedOnboarding), [hasCompletedOnboarding]);
   useEffect(() => persistState('savedTimetables', savedTimetables), [savedTimetables]);
   useEffect(() => persistState('notes', notes), [notes]);
   useEffect(() => persistState('smartPlan', smartPlan), [smartPlan]);
   useEffect(() => persistState('notificationSettings', notificationSettings), [notificationSettings]);
   useEffect(() => persistState('trackedData', trackedData), [trackedData]);
+
+  useEffect(() => {
+    // Only save if there's an active quiz that is not yet completed
+    if (quizState.quiz.length > 0 && !quizState.summary) {
+        const progressToSave = {
+            quiz: quizState.quiz,
+            currentQuestionIndex: quizState.currentQuestionIndex,
+            userAnswers: quizState.userAnswers,
+        };
+        persistState('quizProgress', progressToSave);
+    } else {
+        // If the quiz is finished or empty, ensure any saved progress is cleared
+        localStorage.removeItem('quizProgress');
+    }
+  }, [quizState]);
 
   const addToast = useCallback((message: string, type: Toast['type']) => {
     const newToast = { id: Date.now(), message, type };
@@ -135,11 +174,16 @@ const App: React.FC = () => {
   
   const handleOnboardingComplete = (details: UserDetails) => {
     setUserDetails(details);
+    setHasCompletedOnboarding(true);
     setReportDraft(prev => ({...prev, contactEmail: details.email || ''}));
   };
   
   const learningHubFile = learningHubState.file;
-  const isStudyMode = activeSession?.type === 'study' && activeSession.isUntracked;
+  const isStudyMode = activeSession?.type === 'study' && learningHubFile;
+
+  const handleStartBreak = (breakSession: ActiveSession) => {
+      setActiveSession(breakSession);
+  };
 
   const renderView = () => {
     switch (view) {
@@ -159,6 +203,8 @@ const App: React.FC = () => {
                   setGenerationState={setGenerationState}
                   dashboardInputs={dashboardInputs}
                   setDashboardInputs={setDashboardInputs}
+                  setView={setView}
+                  setIntendedStudyContext={setIntendedStudyContext}
                />;
       case 'profile':
         return <Profile 
@@ -182,6 +228,7 @@ const App: React.FC = () => {
       case 'uploadslides':
         return <UploadSlides
                   smartPlan={smartPlan}
+                  setSmartPlan={setSmartPlan as (plan: SmartPlan) => void}
                   activeSession={activeSession}
                   setActiveSession={setActiveSession}
                   setView={setView}
@@ -190,6 +237,8 @@ const App: React.FC = () => {
                   setLearningHubState={setLearningHubState}
                   notes={notes}
                   setNotes={setNotes}
+                  intendedStudyContext={intendedStudyContext}
+                  setIntendedStudyContext={setIntendedStudyContext}
                 />;
       case 'examprep':
         return <ExamPrep 
@@ -238,12 +287,24 @@ const App: React.FC = () => {
     }
   };
 
-  if (!userDetails) {
+  if (!hasCompletedOnboarding) {
     return <Onboarding onComplete={handleOnboardingComplete} addToast={addToast} />;
   }
   
   if (isStudyMode) {
-     return <FocusedStudyView session={activeSession} learningHubFile={learningHubFile} onExit={() => { setActiveSession(null); setView('uploadslides'); }} addToast={addToast} />;
+     return <FocusedStudyView 
+                session={activeSession!} 
+                learningHubFile={learningHubFile} 
+                onExit={() => { 
+                    setActiveSession(null); 
+                    setLearningHubState(prev => ({...prev, file: null}));
+                }} 
+                addToast={addToast}
+                onStartBreak={handleStartBreak}
+                trackedData={trackedData}
+                setTrackedData={setTrackedData}
+                setSession={setActiveSession}
+            />;
   }
 
   return (
@@ -254,10 +315,10 @@ const App: React.FC = () => {
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           {renderView()}
-          {activeSession?.type === 'study' && !activeSession.isUntracked && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} setView={setView} />}
+          {!isStudyMode && activeSession?.type === 'study' && !activeSession.isUntracked && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} setView={setView} />}
         </main>
       </div>
-       {activeSession?.type === 'break' && <BreakView session={activeSession} />}
+       {activeSession?.type === 'break' && <BreakView session={activeSession} setSession={setActiveSession} />}
     </div>
   );
 };

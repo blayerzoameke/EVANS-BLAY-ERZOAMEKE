@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
-import { CloseIcon } from './icons/CloseIcon';
+import { CloseIcon } from './icons/CloseIcon.tsx';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 interface CropImageModalProps {
     isOpen: boolean;
@@ -49,6 +50,7 @@ async function getCroppedImg(
 }
 
 const CropImageModal: React.FC<CropImageModalProps> = ({ isOpen, onClose, imageSrc, onCropComplete }) => {
+    const { t } = useLanguage();
     const [crop, setCrop] = useState<Crop>();
     const imgRef = useRef<HTMLImageElement>(null);
 
@@ -83,7 +85,7 @@ const CropImageModal: React.FC<CropImageModalProps> = ({ isOpen, onClose, imageS
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[100] p-4" onClick={onClose}>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">Crop Profile Picture</h3>
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">{t('cropModal.title')}</h3>
                     <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
                         <CloseIcon className="w-5 h-5" />
                     </button>
@@ -100,10 +102,10 @@ const CropImageModal: React.FC<CropImageModalProps> = ({ isOpen, onClose, imageS
                 </div>
                 <div className="flex justify-end gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700">
                     <button onClick={onClose} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">
-                        Cancel
+                        {t('common.cancel')}
                     </button>
                     <button onClick={handleCrop} className="px-6 py-2 text-white bg-blue-700 rounded-md hover:bg-blue-800">
-                        Apply Crop
+                        {t('cropModal.apply')}
                     </button>
                 </div>
             </div>

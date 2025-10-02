@@ -55,6 +55,41 @@ const DonutChart: React.FC<{ data: { type: string; value: number; color: string 
     );
 };
 
+const timeToMinutes = (time: string): number => {
+    if (!time) return 0;
+    try {
+        const timeLower = time.toLowerCase().replace(/\s/g, '');
+        const isPM = timeLower.includes('pm');
+        const isAM = timeLower.includes('am');
+
+        const timeOnly = timeLower.replace('am', '').replace('pm', '');
+        
+        let [hourStr, minuteStr] = timeOnly.split(':');
+        
+        if (!minuteStr) minuteStr = '0';
+
+        let hours = parseInt(hourStr, 10);
+        const minutes = parseInt(minuteStr, 10);
+
+        if (isNaN(hours) || isNaN(minutes)) {
+            console.warn(`Could not parse time: ${time}`);
+            return 0;
+        }
+        
+        if (isPM && hours !== 12) {
+            hours += 12;
+        }
+        if (isAM && hours === 12) {
+            hours = 0;
+        }
+
+        return hours * 60 + minutes;
+    } catch (e) {
+        console.error("Failed to parse time string:", time, e);
+        return 0;
+    }
+};
+
 const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
   const { t } = useLanguage();
   const { colorTheme } = useColorTheme();
@@ -92,30 +127,6 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
     const totals = { study: 0, lecture: 0, agenda: 0, break: 0, free: 0 };
     const studyBySubject = new Map<string, number>();
     const dailyTotals = new Map<string, number>();
-
-    const timeToMinutes = (time: string): number => {
-        if (!time || !time.includes(':')) return 0;
-        try {
-            const timeParts = time.split(' ');
-            const [hourStr, minuteStr] = timeParts[0].split(':');
-            let hours = parseInt(hourStr, 10);
-            const minutes = parseInt(minuteStr, 10);
-
-            if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'PM' && hours !== 12) {
-                hours += 12;
-            }
-            if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'AM' && hours === 12) {
-                hours = 0; // Midnight case
-            }
-            
-            if (isNaN(hours) || isNaN(minutes)) return 0;
-
-            return hours * 60 + minutes;
-        } catch (e) {
-            console.error("Malformed time value in timeToMinutes:", time, e);
-            return 0;
-        }
-    };
 
     for (const day of plan) {
       let dayTotalMinutes = 0;
@@ -250,12 +261,12 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
                                 </div>
                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 relative">
                                     <div className="bg-study/30 h-4 rounded-full" style={{ width: `${(item.scheduledHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
-                                    <div className="bg-study h-4 rounded-full absolute top-0 left-0" style={{ width: `${(item.trackedHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
+                                    <div className="bg-green-500 h-4 rounded-full absolute top-0 left-0" style={{ width: `${(item.trackedHours / Math.max(item.scheduledHours, item.trackedHours, 1)) * 100}%` }}></div>
                                 </div>
                             </div>
                         ))}
                          <div className="flex items-center justify-end space-x-4 text-xs pt-2">
-                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-study mr-1.5"></span> Tracked</div>
+                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-green-500 mr-1.5"></span> Tracked</div>
                             <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-study/30 mr-1.5"></span> Scheduled</div>
                         </div>
                     </div>

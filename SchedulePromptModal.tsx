@@ -15,36 +15,21 @@ interface SchedulePromptModalProps {
 }
 
 const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
+    if (!time || !time.includes(':')) return 0;
     try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
+        const timeParts = time.split(' ');
+        const [hourStr, minuteStr] = timeParts[0].split(':');
         let hours = parseInt(hourStr, 10);
         const minutes = parseInt(minuteStr, 10);
 
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
+        if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'PM' && hours !== 12) {
             hours += 12;
         }
-        if (isAM && hours === 12) {
-            hours = 0;
+        if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'AM' && hours === 12) {
+            hours = 0; // Midnight case
         }
-
         return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
+    } catch {
         return 0;
     }
 };
@@ -61,14 +46,9 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
         : `${duration} ${t('common.minutes')}`;
 
     const isNextBreak = nextSlot?.type === 'break';
-    const breakText = isNextBreak ? ` ${t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime })}` : '';
-    
-    const message = t('schedulePrompt.message', {
-        course: slot.activity,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        duration: durationText
-    }) + breakText;
+    const breakText = isNextBreak ? ` There is a break scheduled from ${nextSlot.startTime} to ${nextSlot.endTime}.` : '';
+
+    const message = `You are scheduled to study ${slot.activity} from ${slot.startTime} to ${slot.endTime} (Duration: ${durationText}).${breakText}`;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -89,13 +69,13 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
                         onClick={onConfirm}
                         className="flex-1 py-2 px-4 rounded-md text-md font-semibold transition-colors bg-blue-700 text-white hover:bg-blue-800"
                     >
-                        {t('schedulePrompt.confirmButton', { course: slot.activity })}
+                        Yes, it is {slot.activity}
                     </button>
                     <button
                         onClick={onReject}
                         className="flex-1 py-2 px-4 rounded-md text-md font-semibold transition-colors bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500"
                     >
-                        {t('schedulePrompt.rejectButton')}
+                        No, it is a different course
                     </button>
                 </div>
             </div>

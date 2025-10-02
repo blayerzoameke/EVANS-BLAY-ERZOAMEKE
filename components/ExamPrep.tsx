@@ -1,6 +1,9 @@
+
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { useDropzone } from 'react-dropzone';
+// FIX: Added .ts extension to import path.
 import { generateQuiz, extractTextFromDocument, isStudyMaterial, solveProblem, isImageAProblem } from '../services/geminiService.ts';
 import type { Toast, QuizQuestion, AnswerFeedback, QuizSummary, ImagePart, GenerationState, QuizState, Note, ExamPrepState } from '../types.ts';
 import { QuizType } from '../types.ts';
@@ -17,6 +20,7 @@ import katex from 'katex';
 import CameraCaptureModal from './CameraCaptureModal.tsx';
 import { SaveIcon } from './icons/SaveIcon.tsx';
 import { CopyIcon } from './icons/CopyIcon.tsx';
+import { AdvancedGraphPlotter, type GraphConfig } from '../utils/AdvancedGraphPlotter.ts';
 
 interface ExamPrepProps {
     addToast: (message: string, type: Toast['type']) => void;
@@ -85,7 +89,58 @@ const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTM
                 const ctx = canvasRef.current.getContext('2d');
                 if (ctx) {
                     try {
-                        chartInstanceRef.current = new Chart(ctx, chartConfig);
+                        const isDarkMode = document.documentElement.classList.contains('dark');
+                        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                        const textColor = isDarkMode ? '#e5e7eb' : '#374151';
+
+                        const defaultOptions = {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: { color: textColor, font: { size: 14 } }
+                                },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    backgroundColor: isDarkMode ? '#374151' : '#fff',
+                                    titleColor: isDarkMode ? '#fff' : '#333',
+                                    bodyColor: isDarkMode ? '#ddd' : '#666',
+                                    borderColor: gridColor,
+                                    borderWidth: 1,
+                                },
+                            },
+                            scales: {
+                                x: {
+                                    type: 'linear',
+                                    grid: { color: gridColor },
+                                    ticks: { color: textColor },
+                                },
+                                y: {
+                                    grid: { color: gridColor },
+                                    ticks: { color: textColor },
+                                },
+                            },
+                            elements: {
+                                line: { tension: 0.4, borderWidth: 3 },
+                                point: { radius: 3, hoverRadius: 6 },
+                            },
+                            animation: { duration: 1000, easing: 'easeInOutQuad' },
+                        };
+
+                        const finalConfig = {
+                            ...chartConfig,
+                            options: {
+                                ...defaultOptions,
+                                ...chartConfig.options, // AI can override some, but our base styles will apply
+                                plugins: { ...defaultOptions.plugins, ...chartConfig.options?.plugins },
+                                scales: { ...defaultOptions.scales, ...chartConfig.options?.scales },
+                                elements: { ...defaultOptions.elements, ...chartConfig.options?.elements },
+                            }
+                        };
+                        
+                        chartInstanceRef.current = new Chart(ctx, finalConfig);
                     } catch (e) {
                         console.error("Failed to create chart from config:", chartConfig, e);
                     }
@@ -103,7 +158,11 @@ const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTM
         };
     }, [chartConfig, canvasRef]);
 
-    return <canvas ref={canvasRef} className="max-w-full" aria-label="Generated graph"></canvas>;
+    return (
+        <div className="relative h-96 w-full">
+             <canvas ref={canvasRef} aria-label="Generated graph"></canvas>
+        </div>
+    );
 };
 
 
@@ -126,7 +185,8 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
     };
 
     const lines = content.split('\n');
-    const elements: JSX.Element[] = [];
+    // FIX: Changed type from JSX.Element[] to React.ReactNode[] to resolve "Cannot find namespace 'JSX'" error.
+    const elements: React.ReactNode[] = [];
     let listItems: string[] = [];
 
     const flushList = () => {
@@ -195,6 +255,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
     const [solutionBlocks, setSolutionBlocks] = useState<SolutionBlock[]>([]);
     const graphCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const baseTextOnMicStart = useRef('');
+    const [graphPlotter] = useState(() => new AdvancedGraphPlotter());
     
     const { mode, topic, numQuestions, quizType, uploadedFiles, focusArea, isVerifying, questionImage, questionText, solution, outputFormat, programmingLanguage, graphInterval } = examPrepState;
     const { quiz, currentQuestionIndex, userAnswers, feedback, summary } = quizState;
@@ -220,14 +281,53 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
 
         const newBlocks: SolutionBlock[] = [];
         
-        try {
-            const parsed = JSON.parse(solution);
-            if (parsed && typeof parsed === 'object' && parsed.type && parsed.data && parsed.data.datasets) {
-                newBlocks.push({ type: 'graph', content: solution, title: t('examprep.solver.format.graph') });
+        if (outputFormat === 'graph') {
+            try {
+                const { explanation, graphFunction, suggestedTitle } = JSON.parse(solution);
+                if (explanation) {
+                    newBlocks.push({ type: 'text', content: explanation, title: t('examprep.solution.title') });
+                }
+
+                if (graphFunction) {
+                    const intervalSettings = graphPlotter.parseInterval(graphInterval);
+                    const smartInterval = graphPlotter.determineSmartInterval(graphFunction);
+
+                    const config: GraphConfig = {
+                        expr: graphFunction,
+                        xMin: intervalSettings?.xMin ?? smartInterval.xMin,
+                        xMax: intervalSettings?.xMax ?? smartInterval.xMax,
+                        samples: intervalSettings?.samples ?? 100,
+                        angleMode: intervalSettings?.angleMode ?? 'radians'
+                    };
+                    
+                    const points = graphPlotter.generatePoints(config);
+
+                    const chartConfig = {
+                        type: 'line',
+                        data: {
+                            datasets: [{
+                                label: suggestedTitle || `y = ${graphFunction}`,
+                                data: points,
+                                borderColor: '#3b82f6',
+                                fill: false,
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                           parsing: {
+                              xAxisKey: 'x',
+                              yAxisKey: 'y'
+                           }
+                        }
+                    };
+                    newBlocks.push({ type: 'graph', content: JSON.stringify(chartConfig), title: suggestedTitle || t('examprep.solver.format.graph') });
+                }
                 setSolutionBlocks(newBlocks);
                 return;
+            } catch (e) {
+                console.warn("Could not parse graph solution as new format, falling back.", e);
             }
-        } catch (e) { /* Not a graph, continue */ }
+        }
 
         const codeRegex = /(```[\s\S]*?```)/g;
         const parts = solution.split(codeRegex).filter(Boolean);
@@ -245,7 +345,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         });
         setSolutionBlocks(newBlocks);
 
-    }, [solution, t]);
+    }, [solution, t, outputFormat, graphInterval, graphPlotter]);
 
     const handleSolveQuestion = async () => {
         if (!questionText.trim() && !questionImage) {
@@ -480,8 +580,16 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 return;
             }
 
+            // Safeguard against exceeding the token limit for quiz generation.
+            const MAX_CONTENT_LENGTH = 2500000; // A safe character limit to stay under the ~1M token limit.
+            let contentToSend = contentForQuiz;
+            if (contentForQuiz.length > MAX_CONTENT_LENGTH) {
+                contentToSend = contentForQuiz.substring(0, MAX_CONTENT_LENGTH);
+                addToast(t('toasts.quizContentTruncated' as any), 'warning');
+            }
+
             setGenerationState({ isLoading: true, message: t('examprep.creatingQuiz'), error: null, source: 'quiz' });
-            const questions = await generateQuiz(contentForQuiz, numQuestions, quizType, focusArea);
+            const questions = await generateQuiz(contentToSend, numQuestions, quizType, focusArea);
             if (questions && questions.length > 0) {
                 setQuizState(prev => ({ ...prev, quiz: questions, userAnswers: new Array(questions.length).fill(null) }));
             } else {

@@ -15,11 +15,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, addToast }) => {
   const { t } = useLanguage();
   const [step, setStep] = useState(1);
   const [userDetails, setUserDetails] = useState<UserDetails>(emptyUserDetails);
+  const [error, setError] = useState<string | null>(null);
 
   const handleNext = () => {
     if (step === 2) {
       if (!userDetails.name.trim()) {
-        addToast(t('onboarding.error.nameRequired'), 'error');
+        setError(t('onboarding.error.nameRequired'));
         return;
       }
     }
@@ -27,10 +28,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, addToast }) => {
   };
   
   const handleComplete = () => {
+      setError(null);
       if (!userDetails.name.trim()) {
-        addToast(t('onboarding.error.nameRequired'), 'error');
+        setError(t('onboarding.error.nameRequired'));
         return;
       }
+      const isUniversityLevel = ![EducationalLevel.HIGH_SCHOOL, EducationalLevel.OTHER].includes(userDetails.educationalLevel);
+      if (isUniversityLevel && !userDetails.country) {
+        setError(t('common.countryRequired'));
+        return;
+    }
       onComplete(userDetails);
   }
 
@@ -67,6 +74,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, addToast }) => {
           <div className="animate-fade-in">
             <h2 className="text-xl font-semibold text-center mb-4">{t('onboarding.step2.title')}</h2>
             <UserDetailsForm userDetails={userDetails} setUserDetails={setUserDetails} />
+            {error && <p className="text-red-500 text-sm mt-4 text-center">{error}</p>}
             <button onClick={handleComplete} className="mt-6 w-full py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors">
               {t('onboarding.step2.button')}
             </button>

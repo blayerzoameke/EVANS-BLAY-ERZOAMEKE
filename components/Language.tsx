@@ -26,8 +26,8 @@ const LanguageSettings: React.FC = () => {
         <>
             <div className="max-w-2xl mx-auto space-y-8">
                 <div>
-                    <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('language.title')}</h2>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">{t('language.subtitle')}</p>
+                    <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('language.title' as any)}</h2>
+                    <p className="text-gray-500 dark:text-gray-400 mt-1">{t('language.subtitle' as any)}</p>
                 </div>
                 
                 <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow">

@@ -4,7 +4,7 @@ import type { ActiveSession } from '../types.ts';
 
 interface SessionCompleteModalProps {
     isOpen: boolean;
-    onNavigate: (target: 'dashboard' | 'hub') => void;
+    onNavigate: (target: 'dashboard' | 'uploadslides') => void;
     onStartBreak?: () => void;
     session: ActiveSession;
     wasTracked: boolean;
@@ -41,7 +41,7 @@ const SessionCompleteModal: React.FC<SessionCompleteModalProps> = ({ isOpen, onN
                         </button>
                     ) : (
                         <>
-                            <button onClick={() => onNavigate('hub')} className="flex-1 px-6 py-3 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
+                            <button onClick={() => onNavigate('uploadslides')} className="flex-1 px-6 py-3 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500">
                                 {t('sessionComplete.backToHub')}
                             </button>
                             <button onClick={() => onNavigate('dashboard')} className="flex-1 px-6 py-3 bg-blue-700 text-white font-semibold rounded-lg hover:bg-blue-800">
