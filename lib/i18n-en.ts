@@ -1,5 +1,3 @@
-
-
 // FIX: Create lib/i18n-en.ts to provide English translations.
 export const translations = {
     "common.save": "Save",
@@ -22,8 +20,10 @@ export const translations = {
     "common.copy": "Copy",
     "common.saveToNotes": "Save to Notes",
     "common.or": "OR",
+    "common.close": "Close",
 
     "header.title": "EduBlay Study Hub",
+    "header.openSidebar": "Open sidebar",
 
     "sidebar.dashboard": "Dashboard",
     "sidebar.progression": "My Progression",
@@ -58,6 +58,12 @@ export const translations = {
     "userDetails.programmeOfStudies": "Programme of Studies",
     "userDetails.programmePlaceholder": "e.g., Computer Engineering, General Arts",
     
+    "eduLevel.highSchool": "High School",
+    "eduLevel.undergraduate": "Undergraduate",
+    "eduLevel.postgraduate": "Postgraduate",
+    "eduLevel.doctorate": "Doctorate",
+    "eduLevel.other": "Other",
+
     "onboarding.welcome": "Your Personalized Academic Assistant",
     "onboarding.error.nameRequired": "Full Name is required.",
     "onboarding.step1.title": "Welcome to EduBlay!",
@@ -78,7 +84,7 @@ export const translations = {
     "dashboard.planNamePlaceholder": "e.g., Semester 1 Plan",
     "dashboard.uploadTimetable": "Click or drag & drop your timetable image here",
     "dashboard.uploadTimetable.hint": ".png, .jpg, .jpeg",
-    "dashboard.uploadDisabled": "Manual entry started. Clear image to enable.",
+    "dashboard.uploadDisabled": "Manual entry started. Clear to upload an image.",
     "dashboard.manualEntry": "Fill in your lectures, study goals, and other commitments below.",
     "dashboard.generatePlan": "Generate My Smart Plan",
     "dashboard.regeneratePlan": "Regenerate Plan",
@@ -87,6 +93,7 @@ export const translations = {
     "dashboard.error.fillDetails": "Please fill in your name and educational level.",
     "dashboard.error.noInput": "Please provide some input, either by uploading an image or entering details manually.",
     "dashboard.error.notATimetable": "The uploaded image does not appear to be a timetable. Please try another image.",
+    "dashboard.alt.timetablePreview": "Timetable preview",
 
     "timetableinput.lectures": "Lectures / Classes",
     "timetableinput.subject": "Subject / Course Name",
@@ -158,8 +165,16 @@ export const translations = {
     "toasts.sessionResumed": "Study session resumed.",
     "toasts.sessionPaused": "Study session paused.",
     "toasts.quizContentTruncated": "The combined study material was too large and has been truncated to generate the quiz.",
+    "toasts.fileProcessingError": "Failed to process file.",
+    // FIX: Add missing translation key to resolve TypeScript error.
+    "toasts.error.fileProcessingErrorNamed": "Failed to process \"{fileName}\". It might be corrupted.",
+    "toasts.noFreeSlot": "Could not find a free slot. Adding as extra.",
+    "toasts.error.solveProblem": "An error occurred while solving the problem.",
+    "toasts.error.unexpected": "An unexpected error occurred.",
+    "toasts.error.imageProcessing": "An unexpected error occurred during image processing.",
 
     "profile.title": "My Profile",
+    "profile.alt": "Profile picture",
     "profile.loading": "Loading profile...",
     "profile.biography": "Biography",
     "profile.biographyPlaceholder": "Tell us a little about yourself...",
@@ -171,6 +186,8 @@ export const translations = {
     "profile.biographyTitle": "Biography",
     "profile.detailsTitle": "Details",
     "profile.notProvided": "Not provided",
+    "profile.alt.profilePicture": "Profile picture",
+    "profile.alt.institutionLogo": "Institution logo",
 
     "mytimetables.title": "My Saved Timetables",
     "mytimetables.subtitle": "Load, rename, or delete your saved study plans.",
@@ -242,6 +259,7 @@ export const translations = {
     "uploadslides.stopReading": "Stop",
     "uploadslides.selectAction": "Select an action above to get started.",
     "uploadslides.fileFormatHint": "PDF, PPTX, DOCX, JPG, PNG (Max 25MB)",
+    "uploadslides.loading.content": "Loading content...",
     
     "examprep.main.title": "Exam Preparation Center",
     "examprep.tab.quiz": "Quiz Generator",
@@ -294,12 +312,13 @@ export const translations = {
     "examprep.solver.format.steps": "Step-by-step",
     "examprep.solver.format.latex": "LaTeX",
     "examprep.solver.format.code": "Code",
-    "examprep.solver.format.graph": "Graph (Chart.js)",
+    "examprep.solver.format.graph": "Graph",
     "examprep.solver.language": "Programming Language",
     "examprep.solver.graphInterval": "Graph Settings (interval, points)",
     "examprep.solver.graphIntervalPlaceholder": "e.g., -10, 10, 20 points",
     "examprep.solver.solve": "Solve Problem",
     "examprep.solver.generatingSolution": "Generating solution...",
+    "examprep.solver.graphAriaLabel": "Generated graph",
     "examprep.solution.title": "Solution",
     "examprep.solution.copyFull": "Copy Full Solution",
     "examprep.solution.saveFull": "Save Full Solution to Notes",
@@ -308,6 +327,17 @@ export const translations = {
     "examprep.saveToNotes": "Save block to Notes",
     "examprep.solution.codeTitle": "Code ({lang})",
     "examprep.solution.saveAsImage": "Save Graph as Image",
+    "examprep.solution.explanationTitle": "Explanation",
+    "examprep.solver.alt.questionPreview": "Question preview",
+
+    "quizType.mcq": "Multiple Choice",
+    "quizType.conceptual": "Conceptual",
+    "quizType.theory": "Theory-based",
+
+    "fileviewer.noMaterial": "No study material loaded for this session.",
+    "fileviewer.previewNotAvailable": "Live Preview Not Available",
+    "fileviewer.unsupportedType": "This file type ({type}) cannot be displayed directly. You can still use the Learning Hub features like Summarize, Explain, and Chat.",
+    "fileviewer.downloadFile": "Download {name}",
 
     "focusedStudy.title": "Focused Study Session",
     "focusedStudy.untracked": "Untracked",
@@ -321,12 +351,15 @@ export const translations = {
     "focusedStudy.paused.title": "Session Paused",
     "focusedStudy.paused.body": "Take a moment. Your timer is stopped.",
     "focusedStudy.paused.button": "Resume Session",
+    "focusedStudy.break.recharge": "Take a 5-minute break to recharge",
     "focusedStudy.break.watch": "Want to watch something?",
     "focusedStudy.break.placeholder": "Paste a YouTube, TikTok link...",
     "focusedStudy.break.stretch": "Stretch",
     "focusedStudy.break.hydrate": "Hydrate",
     "focusedStudy.break.air": "Fresh Air",
     "focusedStudy.break.snack": "Healthy Snack",
+    "focusedStudy.resumeTitle": "Resume",
+    "focusedStudy.pauseTitle": "Pause",
     
     "sessionCustomization.title": "Customize Your Study Session",
     "sessionCustomization.duration": "Study Duration (minutes)",
@@ -377,6 +410,9 @@ export const translations = {
     "settings.data.export": "Export Data",
     "settings.data.import": "Import Data",
     "settings.data.clear": "Clear All Data",
+    "settings.importSuccess": "Data imported successfully! Please refresh the page.",
+    "settings.importError": "Failed to import data. The file might be corrupted.",
+    "settings.clearSuccess": "All data has been cleared. The app will now reload.",
     
     "reports.title": "Report an Issue",
     "reports.subtitle": "Help us improve by reporting bugs or suggesting features.",
@@ -409,6 +445,7 @@ export const translations = {
     "feedback.commentsPlaceholder": "What do you like? What could be improved?",
     "feedback.permission": "I agree that my feedback can be used as a testimonial.",
     "feedback.submit": "Submit Feedback",
+    "feedback.success": "Thank you for your feedback! Your email client should open shortly.",
 
     "help.title": "Help Center",
     "help.subtitle": "Find answers to frequently asked questions.",
@@ -546,6 +583,7 @@ export const translations = {
 
     "breakview.title": "Break Time!",
     "breakview.body": "Time to relax and recharge. Your next session will start soon.",
+    "breakview.skip": "Skip Break",
 
     "studyModal.title": "Prepare for Focused Study",
     "studyModal.sessionInfo": "You are about to study:",
@@ -555,10 +593,11 @@ export const translations = {
     "studyModal.breakActivity": "Break Activity",
     "studyModal.breakLink": "Break Activity Link (e.g., YouTube video)",
     "studyModal.startStudying": "Start Studying",
+    "studyModal.breakInfo": "Your break is from {startTime} to {endTime}.",
 
     "schedulePrompt.title": "Scheduled Study Session",
     "schedulePrompt.message": "You are scheduled to study **{course}** from **{startTime}** to **{endTime}** (Duration: {duration}).",
-    "schedulePrompt.breakInfo": "There is a break scheduled from **{startTime}** to **{endTime}**.",
+    "schedulePrompt.breakInfo": " There is a break scheduled from **{startTime}** to **{endTime}**.",
     "schedulePrompt.confirmButton": "Yes, it is {course}",
     "schedulePrompt.rejectButton": "No, it is a different course",
 
@@ -633,6 +672,9 @@ export const translations = {
     "sessionComplete.backToDash": "Back to Dashboard",
 
     "studytracker.title": "Live Study Session",
+    "studytracker.resume": "Resume",
+    "studytracker.pause": "Pause",
+    "studytracker.stop": "Stop Session",
     
     "untrackedStudyModal.title": "Untracked Study Session Setup",
     "untrackedStudyModal.duration": "Study Duration (minutes)",
@@ -650,10 +692,19 @@ export const translations = {
     
     "language.title": "Language Settings",
     "language.subtitle": "Choose the language for the application.",
+    
+    "searchableDropdown.noResults": "No results found",
 
     "advancedStudy.title": "Advanced Study Setup",
     "advancedStudy.subject": "Study Subject",
     "advancedStudy.subject.placeholder": "e.g., Quantum Physics Chapter 3",
     "advancedStudy.duration": "Study Duration (minutes)",
-    "advancedStudy.start": "Start Focused Study Session"
+    "advancedStudy.start": "Start Focused Study Session",
+    "advancedStudy.source": "Study Source",
+    "advancedStudy.source.document": "Current Document",
+    "advancedStudy.source.note": "From My Notes",
+    "advancedStudy.selectNote": "Select a Note",
+
+    "timeInput.placeholder": "e.g., 09:00 AM",
+    "timeInput.noMatch": "No matching times"
 }

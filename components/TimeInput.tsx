@@ -1,5 +1,7 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ClockIcon } from './icons/ClockIcon';
+import { ClockIcon } from './icons/ClockIcon.tsx';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 const generateTimeOptions = () => {
     const times = [];
@@ -25,6 +27,7 @@ interface TimeInputProps {
 }
 
 const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, id, disabled = false }) => {
+  const { t } = useLanguage();
   const [inputValue, setInputValue] = useState(value);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -77,7 +80,7 @@ const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, id, disabled = f
         value={inputValue}
         onChange={handleInputChange}
         onFocus={() => !disabled && setIsOpen(true)}
-        placeholder="HH:MM AM/PM"
+        placeholder={t('timeInput.placeholder' as any)}
         autoComplete="off"
         className={`${baseClasses} ${disabledClasses}`}
         disabled={disabled}
@@ -96,7 +99,7 @@ const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, id, disabled = f
               </li>
             ))
           ) : (
-            <li className="px-3 py-2 text-gray-500">No matching times</li>
+            <li className="px-3 py-2 text-gray-500">{t('timeInput.noMatch' as any)}</li>
           )}
         </ul>
       )}

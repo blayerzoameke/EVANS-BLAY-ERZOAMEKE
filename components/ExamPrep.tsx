@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { useDropzone } from 'react-dropzone';
@@ -41,7 +39,7 @@ const DownloadIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     xmlns="http://www.w3.org/2000/svg" 
     width="24" 
     height="24" 
-    viewBox="0 0 24 24" 
+    viewBox="0 0 24" 
     fill="none" 
     stroke="currentColor" 
     strokeWidth="2" 
@@ -76,6 +74,7 @@ const KatexRenderer: React.FC<{ content: string; displayMode: boolean }> = React
 });
 
 const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTMLCanvasElement | null> }> = ({ chartConfig, canvasRef }) => {
+    const { t } = useLanguage();
     const chartInstanceRef = useRef<any | null>(null);
 
     useEffect(() => {
@@ -92,6 +91,8 @@ const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTM
                         const isDarkMode = document.documentElement.classList.contains('dark');
                         const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
                         const textColor = isDarkMode ? '#e5e7eb' : '#374151';
+                        const axisLineColor = isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)';
+                        const zeroLineColor = isDarkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)';
 
                         const defaultOptions = {
                             responsive: true,
@@ -114,11 +115,27 @@ const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTM
                             scales: {
                                 x: {
                                     type: 'linear',
-                                    grid: { color: gridColor },
+                                    grid: {
+                                        color: (context: any) => context.tick.value === 0 ? zeroLineColor : gridColor,
+                                        lineWidth: (context: any) => context.tick.value === 0 ? 2 : 1,
+                                    },
+                                    border: {
+                                        display: true,
+                                        color: axisLineColor,
+                                        width: 2,
+                                    },
                                     ticks: { color: textColor },
                                 },
                                 y: {
-                                    grid: { color: gridColor },
+                                    grid: {
+                                        color: (context: any) => context.tick.value === 0 ? zeroLineColor : gridColor,
+                                        lineWidth: (context: any) => context.tick.value === 0 ? 2 : 1,
+                                    },
+                                    border: {
+                                        display: true,
+                                        color: axisLineColor,
+                                        width: 2,
+                                    },
                                     ticks: { color: textColor },
                                 },
                             },
@@ -160,7 +177,7 @@ const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTM
 
     return (
         <div className="relative h-96 w-full">
-             <canvas ref={canvasRef} aria-label="Generated graph"></canvas>
+             <canvas ref={canvasRef} aria-label={t('examprep.solver.graphAriaLabel' as any)}></canvas>
         </div>
     );
 };
@@ -347,7 +364,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 const code = langMatch ? codeContent.substring(langMatch[0].length) : codeContent;
                 newBlocks.push({ type: 'code', content: code, title: t('examprep.solution.codeTitle', { lang }), lang });
             } else if (part.trim()) {
-                newBlocks.push({ type: 'text', content: part, title: 'Explanation' });
+                newBlocks.push({ type: 'text', content: part, title: t('examprep.solution.explanationTitle' as any) });
             }
         });
         setSolutionBlocks(newBlocks);
@@ -374,7 +391,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
             const result = await solveProblem(questionText, imagePart, outputFormat, programmingLanguage, graphInterval);
             updateState('solution', result);
         } catch (error: any) {
-            addToast(error.message || "An error occurred while solving the problem.", 'error');
+            addToast(error.message || t('toasts.error.solveProblem'), 'error');
         } finally {
             setGenerationState({ isLoading: false, message: '', error: null, source: null });
         }
@@ -400,7 +417,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         const validFiles: File[] = [];
         for (const file of files) {
             if (file.size > 25 * 1024 * 1024) { // 25MB limit
-                addToast(`File "${file.name}" is too large (> 25MB).`, 'warning');
+                addToast(t('toasts.fileSizeTooLarge', { fileName: file.name, size: 25 }), 'warning');
                 continue;
             }
 
@@ -421,13 +438,14 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                     addToast(t('examprep.error.notStudyMaterial', { fileName: file.name }), 'error');
                 }
             } catch (e) {
-                addToast(`Could not process "${file.name}". It might be corrupted.`, 'error');
+                // FIX: Corrected translation key to match i18n file.
+                addToast(t('toasts.error.fileProcessingErrorNamed', { fileName: file.name }), 'error');
             }
         }
 
         updateState('uploadedFiles', [...uploadedFiles, ...validFiles]);
         if (validFiles.length > 0) {
-            addToast(`${validFiles.length} valid file(s) added.`, 'success');
+            addToast(t('toasts.filesAdded', { count: validFiles.length }), 'success');
         }
         updateState('isVerifying', false);
     }, [addToast, t, uploadedFiles, updateState]);
@@ -442,7 +460,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         const file = acceptedFiles[0];
         if (file) {
             if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                addToast('Image must be less than 5MB.', 'error');
+                addToast(t('toasts.imageSizeError5'), 'error');
                 return;
             }
             const reader = new FileReader();
@@ -645,7 +663,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
     };
     
     const handleCopyBlock = (content: string) => {
-        navigator.clipboard.writeText(content).then(() => addToast(t('toasts.solutionCopied'), 'success')).catch(() => addToast('Failed to copy.', 'error'));
+        navigator.clipboard.writeText(content).then(() => addToast(t('toasts.solutionCopied'), 'success')).catch(() => addToast(t('toasts.copyError'), 'error'));
     };
     
     const handleSaveBlockToNotes = (block: SolutionBlock) => {
@@ -739,6 +757,12 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
     }
 
     const buttonGroupClasses = `flex-1 group p-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors hover:border-cyan-500 hover:bg-cyan-50 dark:hover:bg-cyan-900/50 border-gray-300 dark:border-gray-600 text-center`;
+
+    const quizTypeOptions = [
+        { value: QuizType.MCQ, labelKey: 'quizType.mcq' },
+        { value: QuizType.CONCEPTUAL, labelKey: 'quizType.conceptual' },
+        { value: QuizType.THEORY, labelKey: 'quizType.theory' },
+    ];
     
     return (
         <div className="max-w-4xl mx-auto space-y-8 relative">
@@ -773,92 +797,153 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                             <div className="mt-4 space-y-2">
                                 {uploadedFiles.map((file, index) => (
                                     <div key={index} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-md">
-                                        <div className="flex items-center gap-2 overflow-hidden"><DocumentIcon className="w-5 h-5 text-gray-500 shrink-0" /><span className="text-sm font-medium truncate" title={file.name}>{file.name}</span></div>
-                                        <button onClick={() => removeFile(index)} className="p-1 text-gray-400 hover:text-red-500 shrink-0"><CloseIcon className="w-4 h-4" /></button>
+                                        <div className="flex items-center gap-2 truncate">
+                                            <DocumentIcon className="w-5 h-5 text-gray-500 shrink-0" />
+                                            <span className="text-sm font-medium truncate">{file.name}</span>
+                                        </div>
+                                        <button onClick={() => removeFile(index)} className="p-1 text-gray-400 hover:text-red-500"><CloseIcon className="w-4 h-4" /></button>
                                     </div>
                                 ))}
                             </div>
                         </div>
+
                         <div>
-                            <label htmlFor="focusArea" className="block text-lg font-semibold mb-3">{t('examprep.quiz.step2')}</label>
-                            <input id="focusArea" type="text" value={focusArea} onChange={e => updateState('focusArea', e.target.value)} placeholder={t('examprep.quiz.focusPlaceholder')} className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl dark:bg-gray-700 focus:border-primary focus:ring-4 focus:ring-primary/20 dark:focus:ring-primary/30" />
+                            <label htmlFor="focus-area" className="block text-lg font-semibold mb-3">{t('examprep.quiz.step2')}</label>
+                            <input type="text" id="focus-area" value={focusArea} onChange={e => updateState('focusArea', e.target.value)} placeholder={t('examprep.quiz.focusPlaceholder')} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
                         </div>
+                        
                         <div>
                             <label className="block text-lg font-semibold mb-3">{t('examprep.quiz.step3')}</label>
-                            <div className="grid md:grid-cols-2 gap-4">
-                                <div><label htmlFor="numQuestions" className="block font-medium mb-1">{t('examprep.quiz.numQuestions')}</label><input id="numQuestions" type="number" value={numQuestions} onChange={e => updateState('numQuestions', parseInt(e.target.value, 10))} min="1" max="20" className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg dark:bg-gray-700" /></div>
-                                <div><label htmlFor="quizType" className="block font-medium mb-1">{t('examprep.quiz.quizType')}</label><select id="quizType" value={quizType} onChange={e => updateState('quizType', e.target.value as QuizType)} className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg dark:bg-gray-700">{Object.values(QuizType).map(type => (<option key={type} value={type}>{type}</option>))}</select></div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="num-questions" className="block text-sm font-medium mb-1">{t('examprep.quiz.numQuestions')}</label>
+                                    <select id="num-questions" value={numQuestions} onChange={e => updateState('numQuestions', parseInt(e.target.value, 10))} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                        {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="quiz-type" className="block text-sm font-medium mb-1">{t('examprep.quiz.quizType')}</label>
+                                    <select id="quiz-type" value={quizType} onChange={e => updateState('quizType', e.target.value as QuizType)} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                        {quizTypeOptions.map(({ value, labelKey }) => (
+                                            <option key={value} value={value}>{t(labelKey as any)}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
-                        <div className="mt-8"><button onClick={handleGenerateQuiz} disabled={generationState.isLoading || isVerifying} className="w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all">{isVerifying ? t('examprep.quiz.verifyingFiles') : t('examprep.quiz.generate')}</button></div>
+
+                        <button onClick={handleGenerateQuiz} disabled={uploadedFiles.length === 0 || generationState.isLoading || isVerifying} className="w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all">
+                           {generationState.isLoading ? t('examprep.creatingQuiz') : t('examprep.quiz.generate')}
+                        </button>
                     </div>
                 </div>
             )}
+
             {mode === 'solve' && (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
-                    <div className="flex justify-between items-center"><h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-3">{t('examprep.solver.title')}</h3><a href="#" onClick={(e) => { e.preventDefault(); clearSolution(); }} className="text-sm text-primary dark:text-primary-light hover:underline">{t('examprep.solver.clear')}</a></div>
+                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+                     <div className="flex justify-between items-center">
+                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-3">{t('examprep.solver.title')}</h3>
+                        <a href="#" onClick={(e) => { e.preventDefault(); clearSolution(); }} className="text-sm text-primary dark:text-primary-light hover:underline">{t('examprep.solver.clear')}</a>
+                    </div>
                     <p className="text-gray-600 dark:text-gray-300 mb-6">{t('examprep.solver.intro')}</p>
+                    
                     <div className="space-y-6">
                         <div>
-                            <label htmlFor="questionText" className="block text-lg font-semibold mb-3">{t('examprep.solver.step1')}</label>
-                            <textarea id="questionText" value={questionText} onChange={e => updateState('questionText', e.target.value)} placeholder={t('examprep.solver.questionPlaceholder')} rows={4} className="w-full p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl dark:bg-gray-700 focus:border-primary focus:ring-4 focus:ring-primary/20 dark:focus:ring-primary/30" />
-                            <div className="flex items-center gap-4 mt-2">
-                                <div {...getProblemImageRootProps()} className={`${buttonGroupClasses} ${isProblemImageDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : ''}`}><input {...getProblemImageInputProps()} /><UploadIcon className="w-6 h-6 mx-auto mb-1 text-gray-400" /><p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('examprep.solver.uploadImage')}</p></div>
-                                <button onClick={handleCameraClick} className={buttonGroupClasses}><CameraIcon className="w-6 h-6 mx-auto mb-1 text-gray-400" /><p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('examprep.solver.useCamera')}</p></button>
-                                <button onClick={handleMicClick} className={`${buttonGroupClasses} ${isListening ? 'border-red-500 bg-red-50 dark:bg-red-900/50' : ''}`}><MicrophoneIcon className={`w-6 h-6 mx-auto mb-1 transition-colors ${isListening ? 'text-red-500' : 'text-gray-400'}`} /><p className={`text-sm font-semibold transition-colors ${isListening ? 'text-red-500' : 'text-gray-700 dark:text-gray-300'}`}>{isListening ? t('examprep.solver.stopMic') : t('examprep.solver.useMic')}</p></button>
+                            <label className="block text-lg font-semibold mb-3">{t('examprep.solver.step1')}</label>
+                            <textarea value={questionText} onChange={(e) => updateState('questionText', e.target.value)} rows={4} placeholder={t('examprep.solver.questionPlaceholder')} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 mb-4" />
+                            <div className="flex gap-4">
+                               <div {...getProblemImageRootProps()} className={buttonGroupClasses}>
+                                    <input {...getProblemImageInputProps()} />
+                                    <CameraIcon className="w-8 h-8 mx-auto mb-1 text-gray-400 group-hover:text-cyan-500" />
+                                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 group-hover:text-cyan-600">{t('examprep.solver.uploadImage')}</span>
+                               </div>
+                               <button onClick={handleCameraClick} className={buttonGroupClasses}>
+                                    <CameraIcon className="w-8 h-8 mx-auto mb-1 text-gray-400 group-hover:text-cyan-500" />
+                                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 group-hover:text-cyan-600">{t('examprep.solver.useCamera')}</span>
+                               </button>
+                               <button onClick={handleMicClick} className={`${buttonGroupClasses} ${isListening ? 'border-red-500 bg-red-50 dark:bg-red-900/50' : ''}`}>
+                                    <MicrophoneIcon className={`w-8 h-8 mx-auto mb-1 text-gray-400 ${isListening ? 'text-red-500' : 'group-hover:text-cyan-500'}`} />
+                                    <span className={`text-sm font-semibold text-gray-600 dark:text-gray-300 ${isListening ? 'text-red-600' : 'group-hover:text-cyan-600'}`}>{isListening ? t('examprep.solver.stopMic') : t('examprep.solver.useMic')}</span>
+                               </button>
                             </div>
-                             {questionImage && <div className="mt-4"><img src={questionImage} alt="Question preview" className="max-h-40 mx-auto rounded-lg shadow-md" /></div>}
+                             {questionImage && (
+                                <div className="relative mt-4">
+                                    <img src={questionImage} alt={t('examprep.solver.alt.questionPreview' as any)} className="max-h-48 rounded-md mx-auto shadow-md" />
+                                    <button onClick={() => updateState('questionImage', null)} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full leading-none">&times;</button>
+                                </div>
+                             )}
                         </div>
+
                         <div>
                             <label className="block text-lg font-semibold mb-3">{t('examprep.solver.step2')}</label>
-                            <div className="grid md:grid-cols-2 gap-4">
+                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label htmlFor="outputFormat" className="block font-medium mb-1">{t('examprep.solver.outputFormat')}</label>
-                                    <select id="outputFormat" value={outputFormat} onChange={e => updateState('outputFormat', e.target.value as any)} className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg dark:bg-gray-700">
+                                    <label htmlFor="output-format" className="block text-sm font-medium mb-1">{t('examprep.solver.outputFormat')}</label>
+                                    <select id="output-format" value={outputFormat} onChange={e => updateState('outputFormat', e.target.value as any)} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
                                         <option value="steps">{t('examprep.solver.format.steps')}</option>
                                         <option value="latex">{t('examprep.solver.format.latex')}</option>
                                         <option value="code">{t('examprep.solver.format.code')}</option>
                                         <option value="graph">{t('examprep.solver.format.graph')}</option>
                                     </select>
                                 </div>
-                                {outputFormat === 'code' && (<div><label htmlFor="programmingLanguage" className="block font-medium mb-1">{t('examprep.solver.language')}</label><select id="programmingLanguage" value={programmingLanguage} onChange={e => updateState('programmingLanguage', e.target.value)} className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg dark:bg-gray-700"><option value="python">Python</option><option value="javascript">JavaScript</option><option value="java">Java</option><option value="cpp">C++</option><option value="csharp">C#</option></select></div>)}
-                                {outputFormat === 'graph' && (<div><label htmlFor="graphInterval" className="block font-medium mb-1">{t('examprep.solver.graphInterval')}</label><input id="graphInterval" type="text" value={graphInterval} onChange={e => updateState('graphInterval', e.target.value)} placeholder={t('examprep.solver.graphIntervalPlaceholder')} className="w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg dark:bg-gray-700" /></div>)}
+                                {outputFormat === 'code' && (
+                                    <div>
+                                        <label htmlFor="language" className="block text-sm font-medium mb-1">{t('examprep.solver.language')}</label>
+                                        <select id="language" value={programmingLanguage} onChange={e => updateState('programmingLanguage', e.target.value)} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
+                                            <option value="python">Python</option>
+                                            <option value="javascript">JavaScript</option>
+                                            <option value="java">Java</option>
+                                            <option value="c++">C++</option>
+                                            <option value="matlab">MATLAB</option>
+                                        </select>
+                                    </div>
+                                )}
+                                {outputFormat === 'graph' && (
+                                    <div>
+                                        <label htmlFor="graph-interval" className="block text-sm font-medium mb-1">{t('examprep.solver.graphInterval')}</label>
+                                        <input type="text" id="graph-interval" value={graphInterval} onChange={e => updateState('graphInterval', e.target.value)} placeholder={t('examprep.solver.graphIntervalPlaceholder')} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <div className="mt-8"><button onClick={handleSolveQuestion} disabled={generationState.isLoading} className="w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all">{t('examprep.solver.solve')}</button></div>
-                        {solution && (
-                            <div className="mt-8 pt-6 border-t dark:border-gray-700 space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h3 className="text-2xl font-bold">{t('examprep.solution.title')}</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => handleCopyBlock(solution)} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><CopyIcon className="w-4 h-4" /> {t('examprep.solution.copyFull')}</button>
-                                        <button onClick={() => handleSaveBlockToNotes({type: 'text', title: t('examprep.solution.title'), content: solution})} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><SaveIcon className="w-4 h-4" /> {t('examprep.solution.saveFull')}</button>
-                                    </div>
-                                </div>
+
+                        <button onClick={handleSolveQuestion} disabled={(!questionText.trim() && !questionImage) || generationState.isLoading} className="w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all">
+                             {generationState.isLoading ? t('examprep.solver.generatingSolution') : t('examprep.solver.solve')}
+                        </button>
+                    </div>
+                    {solution && (
+                        <div className="mt-8 pt-6 border-t dark:border-gray-700">
+                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">{t('examprep.solution.title')}</h3>
+                            <div className="space-y-6">
                                 {solutionBlocks.map((block, index) => (
-                                    <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border dark:border-gray-600">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <h4 className="font-semibold">{block.title}</h4>
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => handleCopyBlock(block.content)} title={block.type === 'graph' ? t('examprep.solution.copyConfig') : t('examprep.copySolution')} className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><CopyIcon className="w-4 h-4" /></button>
-                                                {block.type === 'graph' ? (
-                                                     <button onClick={handleSaveGraphAsImage} title={t('examprep.solution.saveAsImage')} className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><DownloadIcon className="w-4 h-4" /></button>
-                                                ) : (
-                                                    <button onClick={() => handleSaveBlockToNotes(block)} title={t('examprep.saveToNotes')} className="p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"><SaveIcon className="w-4 h-4" /></button>
-                                                )}
-                                            </div>
+                                    <div key={index} className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg relative group">
+                                         <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {block.type === 'graph' && (
+                                                <button onClick={handleSaveGraphAsImage} title={t('examprep.solution.saveAsImage')} className="p-1.5 bg-gray-200 dark:bg-gray-800 rounded-md hover:bg-gray-300"><DownloadIcon className="w-4 h-4" /></button>
+                                            )}
+                                            <button onClick={() => handleCopyBlock(block.content)} title={t('examprep.copySolution')} className="p-1.5 bg-gray-200 dark:bg-gray-800 rounded-md hover:bg-gray-300"><CopyIcon className="w-4 h-4" /></button>
+                                            <button onClick={() => handleSaveBlockToNotes(block)} title={t('examprep.saveToNotes')} className="p-1.5 bg-gray-200 dark:bg-gray-800 rounded-md hover:bg-gray-300"><SaveIcon className="w-4 h-4" /></button>
                                         </div>
                                         {block.type === 'text' && <FormattedContent content={block.content} />}
-                                        {block.type === 'code' && <pre><code className="block whitespace-pre-wrap p-2 text-sm bg-gray-800 text-white rounded-md">{block.content}</code></pre>}
-                                        {block.type === 'graph' && <GraphRenderer chartConfig={JSON.parse(block.content)} canvasRef={graphCanvasRef} />}
+                                        {block.type === 'code' && <pre><code className="block whitespace-pre-wrap text-sm">{block.content}</code></pre>}
+                                        {block.type === 'graph' && (
+                                            <GraphRenderer chartConfig={JSON.parse(block.content)} canvasRef={graphCanvasRef} />
+                                        )}
                                     </div>
                                 ))}
                             </div>
-                        )}
-                    </div>
-                </div>
+                        </div>
+                    )}
+                 </div>
             )}
-             <CameraCaptureModal isOpen={isCameraModalOpen} onClose={() => setIsCameraModalOpen(false)} onCapture={handleCapture} />
+            
+            {isCameraModalOpen && (
+                <CameraCaptureModal 
+                    isOpen={isCameraModalOpen} 
+                    onClose={() => setIsCameraModalOpen(false)}
+                    onCapture={handleCapture}
+                />
+            )}
         </div>
     );
 };

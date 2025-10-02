@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { UserDetails, EducationalLevel } from '../types.ts';
@@ -41,6 +40,14 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
             
     const isUniversityLevel = ![EducationalLevel.HIGH_SCHOOL, EducationalLevel.OTHER].includes(userDetails.educationalLevel);
 
+    const eduLevelOptions = [
+        { value: EducationalLevel.HIGH_SCHOOL, labelKey: 'eduLevel.highSchool' },
+        { value: EducationalLevel.UNDERGRADUATE, labelKey: 'eduLevel.undergraduate' },
+        { value: EducationalLevel.POSTGRADUATE, labelKey: 'eduLevel.postgraduate' },
+        { value: EducationalLevel.DOCTORATE, labelKey: 'eduLevel.doctorate' },
+        { value: EducationalLevel.OTHER, labelKey: 'eduLevel.other' },
+    ];
+
     return (
         <div className="space-y-4">
             <div>
@@ -69,8 +76,8 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
             <div>
                 <label htmlFor="educationalLevel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.level')}</label>
                 <select name="educationalLevel" id="educationalLevel" value={userDetails.educationalLevel} onChange={handleInputChange} className={inputClasses}>
-                    {Object.values(EducationalLevel).map(level => (
-                        <option key={level} value={level}>{level}</option>
+                    {eduLevelOptions.map(({ value, labelKey }) => (
+                        <option key={value} value={value}>{t(labelKey as any)}</option>
                     ))}
                 </select>
             </div>

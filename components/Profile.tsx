@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { UserDetails, Toast, ProfileEditState } from '../types.ts';
+import { UserDetails, Toast, ProfileEditState, EducationalLevel } from '../types.ts';
 import UserDetailsForm from './UserDetailsForm.tsx';
 import { PencilIcon } from './icons/PencilIcon.tsx';
 import { SaveIcon } from './icons/SaveIcon.tsx';
@@ -38,7 +38,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
 
     const { isEditing, details: editableDetails } = profileEditState;
 
-    if (!initialDetails) return <div>Loading profile...</div>;
+    if (!initialDetails) return <div>{t('profile.loading')}</div>;
 
     const handleEditClick = () => {
         setProfileEditState({ isEditing: true, details: initialDetails });
@@ -46,7 +46,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
 
     const handleSave = () => {
         if (!editableDetails || !editableDetails.name.trim()) {
-            addToast('Full Name is required.', 'error');
+            addToast(t('profile.error.nameRequired'), 'error');
             return;
         }
         setUserDetails(editableDetails);
@@ -66,7 +66,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
         const file = e.target.files?.[0];
         if (file && file.type.startsWith('image/')) {
             if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                addToast('Profile picture must be less than 5MB.', 'error');
+                addToast(t('toasts.imageSizeErrorProfile'), 'error');
                 return;
             }
             const reader = new FileReader();
@@ -76,7 +76,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
             };
             reader.readAsDataURL(file);
         } else if (file) {
-            addToast('Please select a valid image file.', 'error');
+            addToast(t('toasts.invalidImageFile'), 'error');
         }
         if (e.target) e.target.value = '';
     };
@@ -91,7 +91,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
         const file = e.target.files?.[0];
         if (file && file.type.startsWith('image/')) {
             if (file.size > 2 * 1024 * 1024) { // 2MB limit
-                addToast('Institution logo must be less than 2MB.', 'error');
+                addToast(t('toasts.imageSizeErrorLogo'), 'error');
                 return;
             }
             const reader = new FileReader();
@@ -99,14 +99,25 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                 setEditableDetails(prev => prev ? { ...prev, institutionLogo: reader.result as string } : null);
             };
             reader.readAsDataURL(file);
-            addToast('Institution logo updated!', 'success');
+            addToast(t('toasts.logoUpdated'), 'success');
         } else if (file) {
-            addToast('Please select a valid image file for logo.', 'error');
+            addToast(t('toasts.invalidImageFileLogo'), 'error');
         }
     };
     
     const displayDetails = isEditing ? editableDetails : initialDetails;
-    if (!displayDetails) return <div>Loading...</div>;
+    if (!displayDetails) return <div>{t('profile.loading')}</div>;
+
+    const getEduLevelTranslation = (level: EducationalLevel): string => {
+        const mapping: Record<EducationalLevel, string> = {
+            [EducationalLevel.HIGH_SCHOOL]: 'eduLevel.highSchool',
+            [EducationalLevel.UNDERGRADUATE]: 'eduLevel.undergraduate',
+            [EducationalLevel.POSTGRADUATE]: 'eduLevel.postgraduate',
+            [EducationalLevel.DOCTORATE]: 'eduLevel.doctorate',
+            [EducationalLevel.OTHER]: 'eduLevel.other',
+        };
+        return t(mapping[level] as any);
+    }
 
     return (
         <div className="max-w-2xl mx-auto">
@@ -124,7 +135,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                     <div className="flex items-start gap-10">
                         <div className="relative group">
                             {displayDetails.profilePicture ? (
-                                <img src={displayDetails.profilePicture} alt="Profile" className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 dark:border-gray-700" />
+                                <img src={displayDetails.profilePicture} alt={t('profile.alt.profilePicture' as any)} className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 dark:border-gray-700" />
                             ) : (
                                 <div className="w-32 h-32 rounded-full bg-primary text-primary-text flex items-center justify-center font-bold text-5xl border-4 border-gray-200 dark:border-gray-700">
                                     {getInitials(displayDetails.name)}
@@ -132,7 +143,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                             )}
                             {isEditing && (
                                 <>
-                                    <button onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Change profile picture">
+                                    <button onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" aria-label={t('profile.changePictureAria')}>
                                         <PencilIcon className="w-8 h-8" />
                                     </button>
                                     <input type="file" ref={fileInputRef} onChange={handlePictureUpload} className="hidden" accept="image/png, image/jpeg, image/webp" />
@@ -142,7 +153,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                         <div className="flex flex-col items-center mt-4">
                             <div className="relative group">
                                 {displayDetails.institutionLogo ? (
-                                    <img src={displayDetails.institutionLogo} alt="Institution Logo" className="w-24 h-24 rounded-full object-contain border-2 border-gray-200 dark:border-gray-600" />
+                                    <img src={displayDetails.institutionLogo} alt={t('profile.alt.institutionLogo' as any)} className="w-24 h-24 rounded-full object-contain border-2 border-gray-200 dark:border-gray-600" />
                                 ) : (
                                     <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center border-2 border-gray-200 dark:border-gray-600">
                                         <BuildingIcon className="w-12 h-12 text-gray-400" />
@@ -150,7 +161,7 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                                 )}
                                 {isEditing && (
                                     <>
-                                        <button onClick={() => logoInputRef.current?.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Change institution logo">
+                                        <button onClick={() => logoInputRef.current?.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" aria-label={t('profile.changeLogoAria')}>
                                             <PencilIcon className="w-6 h-6" />
                                         </button>
                                         <input type="file" ref={logoInputRef} onChange={handleLogoUpload} className="hidden" accept="image/png, image/jpeg, image/webp, image/svg+xml" />
@@ -183,15 +194,15 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                     <div className="space-y-6">
                          {initialDetails.biography && (
                             <div>
-                                <h4 className="font-semibold text-gray-800 dark:text-gray-300 mb-1 border-b pb-1 dark:border-gray-600">Biography</h4>
+                                <h4 className="font-semibold text-gray-800 dark:text-gray-300 mb-1 border-b pb-1 dark:border-gray-600">{t('profile.biographyTitle')}</h4>
                                 <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap pt-2">{initialDetails.biography}</p>
                             </div>
                          )}
                          <div>
-                            <h4 className="font-semibold text-gray-800 dark:text-gray-300 mb-1 border-b pb-1 dark:border-gray-600">Details</h4>
+                            <h4 className="font-semibold text-gray-800 dark:text-gray-300 mb-1 border-b pb-1 dark:border-gray-600">{t('profile.detailsTitle')}</h4>
                             <div className="space-y-4 pt-2">
-                                <div><p className="text-sm text-gray-500">{t('userDetails.email')}</p><p className="text-lg">{initialDetails.email || 'Not provided'}</p></div>
-                                <div><p className="text-sm text-gray-500">{t('userDetails.level')}</p><p className="text-lg">{initialDetails.educationalLevel}</p></div>
+                                <div><p className="text-sm text-gray-500">{t('userDetails.email')}</p><p className="text-lg">{initialDetails.email || t('profile.notProvided')}</p></div>
+                                <div><p className="text-sm text-gray-500">{t('userDetails.level')}</p><p className="text-lg">{getEduLevelTranslation(initialDetails.educationalLevel)}</p></div>
                                 {initialDetails.country && <div><p className="text-sm text-gray-500">{t('userDetails.country')}</p><p className="text-lg">{initialDetails.country}</p></div>}
                                 {initialDetails.institution && <div><p className="text-sm text-gray-500">{t('userDetails.institution')}</p><p className="text-lg">{initialDetails.institution}</p></div>}
                             </div>

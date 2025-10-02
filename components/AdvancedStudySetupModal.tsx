@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon';
@@ -55,12 +56,12 @@ const AdvancedStudySetupModal: React.FC<AdvancedStudySetupModalProps> = ({ isOpe
                 </div>
                 <div className="p-6 space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Study Source</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('advancedStudy.source')}</label>
                         <div className="mt-2 grid grid-cols-2 gap-2 rounded-md bg-gray-100 dark:bg-gray-800 p-1">
                             {fileContext && (
-                                <button onClick={() => setStudySource('document')} className={`px-3 py-1.5 text-sm font-medium rounded ${studySource === 'document' ? 'bg-white dark:bg-gray-700 shadow' : ''}`}>Current Document</button>
+                                <button onClick={() => setStudySource('document')} className={`px-3 py-1.5 text-sm font-medium rounded ${studySource === 'document' ? 'bg-white dark:bg-gray-700 shadow' : ''}`}>{t('advancedStudy.source.document')}</button>
                             )}
-                            <button onClick={() => setStudySource('note')} className={`px-3 py-1.5 text-sm font-medium rounded ${studySource === 'note' ? 'bg-white dark:bg-gray-700 shadow' : ''} ${!fileContext ? 'col-span-2' : ''}`}>From My Notes</button>
+                            <button onClick={() => setStudySource('note')} className={`px-3 py-1.5 text-sm font-medium rounded ${studySource === 'note' ? 'bg-white dark:bg-gray-700 shadow' : ''} ${!fileContext ? 'col-span-2' : ''}`}>{t('advancedStudy.source.note')}</button>
                         </div>
                     </div>
 
@@ -73,7 +74,7 @@ const AdvancedStudySetupModal: React.FC<AdvancedStudySetupModalProps> = ({ isOpe
 
                     {studySource === 'note' && (
                          <div>
-                            <label htmlFor="note-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select a Note</label>
+                            <label htmlFor="note-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('advancedStudy.selectNote')}</label>
                             <select id="note-select" value={selectedNoteId} onChange={e => setSelectedNoteId(e.target.value)} className={`${inputClasses} mt-1`}>
                                 {notes.map(note => <option key={note.id} value={note.id}>{note.title}</option>)}
                             </select>

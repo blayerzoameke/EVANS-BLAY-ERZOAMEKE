@@ -1,5 +1,4 @@
 
-
 // FIX: Implement Settings component to resolve module error.
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
@@ -52,10 +51,10 @@ const Settings: React.FC<SettingsProps> = ({ notificationSettings, setNotificati
                         Object.keys(data).forEach(key => {
                             localStorage.setItem(key, data[key]);
                         });
-                        alert('Data imported successfully! Please refresh the page.');
+                        alert(t('settings.importSuccess'));
                         window.location.reload();
                     } catch (error) {
-                        alert('Failed to import data. The file might be corrupted.');
+                        alert(t('settings.importError'));
                     }
                 };
                 reader.readAsText(file);
@@ -66,7 +65,7 @@ const Settings: React.FC<SettingsProps> = ({ notificationSettings, setNotificati
 
     const handleClearData = () => {
         localStorage.clear();
-        alert('All data has been cleared. The app will now reload.');
+        alert(t('settings.clearSuccess'));
         window.location.reload();
     };
 

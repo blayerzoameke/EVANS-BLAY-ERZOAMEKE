@@ -1,14 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import type { UploadedFile } from '../types.ts';
 import { PdfIcon } from './icons/PdfIcon.tsx';
 import { PowerPointIcon } from './icons/PowerPointIcon.tsx';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 interface FileViewerProps {
     file: UploadedFile | null;
 }
 
 const FileViewer: React.FC<FileViewerProps> = ({ file }) => {
+    const { t } = useLanguage();
     const [fileUrl, setFileUrl] = useState<string | null>(null);
 
     useEffect(() => {
@@ -26,7 +27,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file }) => {
     if (!file || !fileUrl) {
         return (
             <div className="h-full flex items-center justify-center text-center text-gray-500 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <p>No study material loaded for this session.</p>
+                <p>{t('fileviewer.noMaterial' as any)}</p>
             </div>
         );
     }
@@ -54,16 +55,16 @@ const FileViewer: React.FC<FileViewerProps> = ({ file }) => {
             ) : (
                 <div className="h-full flex flex-col items-center justify-center text-center text-gray-700 dark:text-gray-300 p-8">
                      {isPptx ? <PowerPointIcon className="w-24 h-24 text-orange-500 mb-4" /> : <PdfIcon className="w-24 h-24 text-red-500 mb-4" />}
-                    <h3 className="text-xl font-bold mb-2">Live Preview Not Available</h3>
+                    <h3 className="text-xl font-bold mb-2">{t('fileviewer.previewNotAvailable' as any)}</h3>
                     <p className="text-gray-500 dark:text-gray-400 mb-4">
-                        This file type ({file.type}) cannot be displayed directly. You can still use the Learning Hub features like Summarize, Explain, and Chat.
+                        {t('fileviewer.unsupportedType' as any, { type: file.type })}
                     </p>
                     <a 
                         href={fileUrl} 
                         download={file.name}
                         className="px-4 py-2 bg-primary text-primary-text rounded-md hover:bg-primary-dark"
                     >
-                        Download {file.name}
+                        {t('fileviewer.downloadFile' as any, { name: file.name })}
                     </a>
                 </div>
             )}

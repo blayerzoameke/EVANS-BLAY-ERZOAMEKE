@@ -198,10 +198,10 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ session, setSession, addToa
           </div>
           
           <div className="flex justify-center items-center gap-4">
-            <button onClick={handlePauseToggle} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500" title={isPaused ? "Resume" : "Pause"}>
+            <button onClick={handlePauseToggle} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500" title={isPaused ? t('studytracker.resume' as any) : t('studytracker.pause' as any)}>
                 {isPaused ? <PlayIcon className="w-6 h-6" /> : <PauseIcon className="w-6 h-6" />}
             </button>
-            <button onClick={handleStop} className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600" title="Stop Session">
+            <button onClick={handleStop} className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600" title={t('studytracker.stop' as any)}>
                 <StopIcon className="w-6 h-6" />
             </button>
           </div>

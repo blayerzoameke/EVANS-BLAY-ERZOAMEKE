@@ -233,7 +233,7 @@ export const generatePlanFromImage = async (
                           type: { type: Type.STRING },
                           isLocked: { type: Type.BOOLEAN, nullable: true },
                           code: { type: Type.STRING, nullable: true },
-// FIX: Corrected schema type from "string" to Type.STRING.
+                          // FIX: Corrected schema type from "string" to Type.STRING.
                           link: { type: Type.STRING, nullable: true }
                       },
                       required: ['activity', 'startTime', 'endTime', 'type']

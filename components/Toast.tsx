@@ -1,9 +1,8 @@
 
-
 import React, { useEffect } from 'react';
-// FIX: Added .ts extension to import path.
 import type { Toast as ToastType } from '../types.ts';
 import { CloseIcon } from './icons/CloseIcon.tsx';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 interface ToastProps {
     toast: ToastType;
@@ -11,6 +10,7 @@ interface ToastProps {
 }
 
 const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
+    const { t } = useLanguage();
     useEffect(() => {
         const timer = setTimeout(() => {
             onDismiss(toast.id);
@@ -30,9 +30,9 @@ const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
                 type="button"
                 className="ml-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700"
                 onClick={() => onDismiss(toast.id)}
-                aria-label="Close"
+                aria-label={t('common.close')}
             >
-                <span className="sr-only">Close</span>
+                <span className="sr-only">{t('common.close')}</span>
                 <CloseIcon className="w-5 h-5" />
             </button>
         </div>

@@ -1,5 +1,4 @@
 
-import type { View } from './App.tsx';
 
 export type Theme = 'light' | 'dark' | 'system';
 

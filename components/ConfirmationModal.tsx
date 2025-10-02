@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
@@ -78,7 +79,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         </button>
                     )}
                     <button onClick={handleCancelClick} className={cancelButtonClasses}>{cancelText || t('common.cancel')}</button>
-                    <button onClick={onConfirm} className={confirmButtonClasses}>{confirmText || 'Confirm'}</button>
+                    <button onClick={onConfirm} className={confirmButtonClasses}>{confirmText || t('common.confirm')}</button>
                 </div>
             </div>
         </div>

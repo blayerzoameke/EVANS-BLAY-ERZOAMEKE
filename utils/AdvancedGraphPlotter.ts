@@ -72,6 +72,12 @@ export class AdvancedGraphPlotter {
             .replace(/π|pi/gi, 'PI')
             .replace(/\b(e)\b/g, 'E'); // Match 'e' as a whole word
 
+        // FIX: Add parentheses to disambiguate operator precedence for unary minus with exponentiation.
+        // This regex handles cases like `-x**2` or `-(x+1)**2` by converting them to `-(x**2)` and `-((x+1)**2)`.
+        cleaned = cleaned.replace(/-((?:\w+|\([^)]*\))\*\*(?:\w+|\([^)]*\)))/g, '-($1)');
+        // This regex handles cases like `x**-2` by converting it to `x**(-2)`.
+        cleaned = cleaned.replace(/\*\*((?:-|\+)(?:\w+|\([^)]*\)))/g, '**($1)');
+
         // Implicit multiplication:
         // number before letter or opening paren: 2x -> 2*x, 3(x+1) -> 3*(x+1)
         cleaned = cleaned.replace(/(\d(?:\.\d+)?)(\b[a-zA-Z](?![a-zA-Z\d]))/g, '$1*$2');

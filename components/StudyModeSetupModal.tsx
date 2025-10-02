@@ -1,10 +1,8 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import type { PlanSlot } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { CloseIcon } from './icons/CloseIcon';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface StudyModeSetupModalProps {
     isOpen: boolean;
@@ -52,7 +50,7 @@ const StudyModeSetupModal: React.FC<StudyModeSetupModalProps> = ({ isOpen, onClo
                     {breakSlot ? (
                         <div>
                             <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">{t('studyModal.breakSetup')}</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Your break is from {breakSlot.startTime} to {breakSlot.endTime}.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{t('studyModal.breakInfo', { startTime: breakSlot.startTime, endTime: breakSlot.endTime })}</p>
                             <div className="mt-4 space-y-4">
                                 <div>
                                     <label htmlFor="break-activity" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('studyModal.breakActivity')}</label>

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts';
 import { DAYS_OF_WEEK } from '../constants.ts';
@@ -20,8 +21,9 @@ const StatsCard: React.FC<{ title: string; children: React.ReactNode; className?
 );
 
 const DonutChart: React.FC<{ data: { type: string; value: number; color: string }[] }> = ({ data }) => {
+    const { t } = useLanguage();
     const total = data.reduce((sum, item) => sum + item.value, 0);
-    if (total === 0) return <div className="flex items-center justify-center h-48 w-48 rounded-full bg-gray-200 dark:bg-gray-700"><span className="text-gray-500">No Data</span></div>;
+    if (total === 0) return <div className="flex items-center justify-center h-48 w-48 rounded-full bg-gray-200 dark:bg-gray-700"><span className="text-gray-500">{t('progression.noData')}</span></div>;
 
     const radius = 80;
     const circumference = 2 * Math.PI * radius;
@@ -189,15 +191,15 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
         hours: (dailyTotals.get(day) || 0) / 60
       })),
       activityDistribution: [
-        { type: 'Study', value: totals.study, color: chartColors.study, legendColor: 'bg-study' },
-        { type: 'Lecture', value: totals.lecture, color: chartColors.lecture, legendColor: 'bg-lecture' },
-        { type: 'Agenda', value: totals.agenda, color: chartColors.agenda, legendColor: 'bg-agenda' },
-        { type: 'Break', value: totals.break, color: chartColors.break, legendColor: 'bg-break' },
-        { type: 'Free', value: totals.free, color: chartColors.free, legendColor: 'bg-free' },
+        { type: t('progression.activity.study'), value: totals.study, color: chartColors.study, legendColor: 'bg-study' },
+        { type: t('progression.activity.lecture'), value: totals.lecture, color: chartColors.lecture, legendColor: 'bg-lecture' },
+        { type: t('progression.activity.agenda'), value: totals.agenda, color: chartColors.agenda, legendColor: 'bg-agenda' },
+        { type: t('progression.activity.break'), value: totals.break, color: chartColors.break, legendColor: 'bg-break' },
+        { type: t('progression.activity.free'), value: totals.free, color: chartColors.free, legendColor: 'bg-free' },
       ],
       trackedVsScheduled,
     };
-  }, [plan, trackedData, chartColors]);
+  }, [plan, trackedData, chartColors, t]);
 
   if (!plan || !stats) {
     return (
@@ -266,8 +268,8 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
                             </div>
                         ))}
                          <div className="flex items-center justify-end space-x-4 text-xs pt-2">
-                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-green-500 mr-1.5"></span> Tracked</div>
-                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-study/30 mr-1.5"></span> Scheduled</div>
+                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-green-500 mr-1.5"></span>{t('progression.legend.tracked')}</div>
+                            <div className="flex items-center"><span className="w-3 h-3 rounded-sm bg-study/30 mr-1.5"></span>{t('progression.legend.scheduled')}</div>
                         </div>
                     </div>
                 ) : (
@@ -275,7 +277,7 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
                 )}
             </StatsCard>
             <StatsCard title={t('progression.dailyScheduled')}>
-                 <div className="flex justify-between items-end h-56 space-x-2 md:space-x-4" aria-label="Daily scheduled hours chart">
+                 <div className="flex justify-between items-end h-56 space-x-2 md:space-x-4" aria-label={t('progression.dailyChartLabel')}>
                     {stats.dailyHours.map(item => (
                       <div key={item.day} className="flex-1 flex flex-col items-center group transition-colors duration-300 p-1 rounded-t-md hover:bg-slate-100 dark:hover:bg-slate-800">
                           <div className="relative w-full h-full flex items-end">

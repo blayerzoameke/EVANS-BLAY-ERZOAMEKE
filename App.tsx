@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -29,6 +28,7 @@ import Tutorial from './components/Tutorial.tsx';
 
 import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft, PlanSlot } from './types.ts';
 import { EducationalLevel, QuizType } from './types.ts';
+import { useLanguage } from './contexts/LanguageContext.tsx';
 
 export type View =
   | 'dashboard'
@@ -51,6 +51,7 @@ export type View =
   | 'tutorial';
 
 const App: React.FC = () => {
+  const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<View>('dashboard');
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
@@ -122,7 +123,7 @@ const App: React.FC = () => {
 
       } catch (error) {
         console.error("Failed to load data from localStorage", error);
-        addToast("Could not load saved data.", "error");
+        addToast(t('toasts.loadError'), "error");
       }
     };
     loadData();
@@ -283,7 +284,7 @@ const App: React.FC = () => {
       case 'tutorial':
         return <Tutorial />;
       default:
-        return <div>Not Found</div>;
+        return <div>{t('common.notFound')}</div>;
     }
   };
 

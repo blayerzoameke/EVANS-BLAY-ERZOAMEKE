@@ -370,7 +370,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             context: fileContext,
         };
      } catch(e: any) {
-        addToast(e.message || 'Failed to process file.', 'error');
+        addToast(e.message || t('toasts.fileProcessingError'), 'error');
         return null;
      }
   }, [addToast, t]);
@@ -489,7 +489,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             if(shifted) break;
         }
         if(!shifted){
-             addToast("Could not find a free slot. Adding as extra.", "warning");
+             addToast(t('toasts.noFreeSlot'), "warning");
              const lastSlot = newPlan[dayPlanIndex].slots[newPlan[dayPlanIndex].slots.length - 1];
              const newStartTime = timeToMinutes(lastSlot.endTime);
              slotToCustomize = {...slotToCustomize, startTime: minutesToTime(newStartTime), endTime: minutesToTime(newStartTime + slotDuration)};
@@ -606,7 +606,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
         setLearningHubState(prev => {
             const newHistory = [...prev.chatHistory];
             if (newHistory.length > 0) {
-                 newHistory[newHistory.length - 1] = { ...newHistory[newHistory.length - 1], blay: "Sorry, an error occurred. Please try again." };
+                 newHistory[newHistory.length - 1] = { ...newHistory[newHistory.length - 1], blay: t('toasts.chatError') };
             }
             return { ...prev, chatHistory: newHistory };
         });
@@ -638,7 +638,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const copyContent = () => {
       const content = analysisResults[analysisMode as 'summarize' | 'explain' | 'read'];
       if (content) {
-          navigator.clipboard.writeText(content).then(() => addToast('Copied to clipboard!', 'success'));
+          navigator.clipboard.writeText(content).then(() => addToast(t('toasts.copied'), 'success'));
       }
   };
 
@@ -657,7 +657,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     
     return (
         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 flex-1 overflow-y-auto">
-            <FormattedContent content={content || "No content available."} />
+            <FormattedContent content={content || t('uploadslides.noContent')} />
         </div>
     );
   };
@@ -700,7 +700,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                     ) : (
                         <div className="overflow-y-auto h-full pr-4 -mr-4">
                             {isProcessing && !analysisResults.read ? <LoadingIndicator message={loadingMessage} /> : (
-                                <FormattedContent content={analysisResults.read || t('uploadslides.noContent')} />
+                                <FormattedContent content={analysisResults.read || t('uploadslides.loading.content' as any)} />
                             )}
                         </div>
                     )}
@@ -730,7 +730,6 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
           <div className="flex-1 overflow-hidden">
             
-            {/*// FIX: Remove redundant check for 'analysisMode' which was causing a TypeScript error. The 'read-focus' case is already handled by a previous if-statement, making this check unnecessary.*/}
             {analysisMode !== 'none' && (
                 <div className="h-full flex flex-col">
                     <div className="flex justify-between items-center mb-2">

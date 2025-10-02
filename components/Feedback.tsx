@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { StarIcon } from './icons/StarIcon';
@@ -28,7 +29,7 @@ const Feedback: React.FC<FeedbackProps> = ({ feedbackDraft, setFeedbackDraft }) 
         
         window.location.href = `mailto:blayerzoameke@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-        setSuccessMessage('Thank you for your feedback! Your email client should open shortly.');
+        setSuccessMessage(t('feedback.success'));
         setFeedbackDraft({ rating: 0, category: 'compliment', comments: '', canUseAsTestimonial: false });
     };
     

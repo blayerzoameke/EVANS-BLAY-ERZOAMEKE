@@ -1,4 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
 
 interface SearchableDropdownProps {
   options: { name: string }[];
@@ -11,6 +13,7 @@ interface SearchableDropdownProps {
 }
 
 const SearchableDropdown: React.FC<SearchableDropdownProps> = ({ options, placeholder, value, onChange, id, name, disabled = false }) => {
+  const { t } = useLanguage();
   const [inputValue, setInputValue] = useState(value);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -49,7 +52,7 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({ options, placeh
   );
 
   const baseClasses = "block w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
-  const disabledClasses = "disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed";
+  const disabledClasses = "disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:cursor-not-allowed";
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -78,7 +81,7 @@ const SearchableDropdown: React.FC<SearchableDropdownProps> = ({ options, placeh
               </li>
             ))
           ) : (
-            <li className="px-3 py-2 text-gray-500">No results found for "{inputValue}"</li>
+            <li className="px-3 py-2 text-gray-500">{t('searchableDropdown.noResults' as any)}</li>
           )}
         </ul>
       )}

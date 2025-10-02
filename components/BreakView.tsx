@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import type { ActiveSession } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
@@ -70,7 +69,7 @@ const BreakView: React.FC<BreakViewProps> = ({ session, setSession }) => {
                              {formatTime(timeLeft)}
                          </div>
                          <button onClick={() => setSession(null)} className="text-xs text-gray-500 hover:underline">
-                             Skip Break
+                             {t('breakview.skip')}
                          </button>
                     </div>
                 </div>

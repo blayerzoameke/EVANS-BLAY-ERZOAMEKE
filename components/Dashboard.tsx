@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import UserDetailsForm from './UserDetailsForm.tsx';
@@ -221,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 }
 
             } catch (e: any) {
-                 setGenerationState({ isLoading: false, message: '', error: e.message || "An unexpected error occurred during image processing.", source: 'dashboard' });
+                 setGenerationState({ isLoading: false, message: '', error: e.message || t('toasts.error.imageProcessing'), source: 'dashboard' });
             }
         };
       } else {
@@ -231,7 +230,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         setGenerationState({ isLoading: false, message: '', error: null, source: null });
       }
     } catch (e: any) {
-      setGenerationState({ isLoading: false, message: '', error: e.message || "An unexpected error occurred.", source: 'dashboard' });
+      setGenerationState({ isLoading: false, message: '', error: e.message || t('toasts.error.unexpected'), source: 'dashboard' });
     }
   };
   
@@ -364,7 +363,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                  <input {...getInputProps()} />
                  {imagePreview ? (
                      <>
-                       <img src={imagePreview} alt="Timetable preview" className="max-h-52 mx-auto rounded-lg shadow-md" />
+                       <img src={imagePreview} alt={t('dashboard.alt.timetablePreview' as any)} className="max-h-52 mx-auto rounded-lg shadow-md" />
                        <button onClick={(e) => { e.stopPropagation(); clearImage(); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg leading-none">&times;</button>
                      </>
                  ) : (
