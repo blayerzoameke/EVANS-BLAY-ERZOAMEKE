@@ -1,10 +1,10 @@
 
+
 import React from 'react';
 import { MenuIcon } from './icons/MenuIcon.tsx';
 import { LogoIcon } from './icons/LogoIcon.tsx';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { UserDetails, Toast } from '../types.ts';
-import type { View } from '../App.tsx';
+import { UserDetails, Toast, View } from '../types.ts';
 import { ShareIcon } from './icons/ShareIcon.tsx';
 
 interface HeaderProps {

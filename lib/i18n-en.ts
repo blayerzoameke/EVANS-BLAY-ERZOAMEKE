@@ -1,4 +1,3 @@
-// FIX: Create lib/i18n-en.ts to provide English translations.
 export const translations = {
     "common.save": "Save",
     "common.cancel": "Cancel",
@@ -44,6 +43,7 @@ export const translations = {
     "sidebar.about": "About",
     "sidebar.manage": "Manage",
     "sidebar.preferences": "Preferences",
+    "sidebar.app": "App",
     "sidebar.support": "Support",
 
     "userDetails.name": "Full Name",
@@ -156,6 +156,7 @@ export const translations = {
     "toasts.copied": "Copied to clipboard!",
     "toasts.copyError": "Failed to copy.",
     "toasts.timetableUpdated": "Timetable updated successfully!",
+    "toasts.quizContentTruncated": "The combined study material was too large and has been truncated to generate the quiz.",
     "toasts.fileSizeTooLarge": "File \"{fileName}\" is too large (> {size}MB).",
     "toasts.filesAdded": "{count} valid file(s) added.",
     "toasts.imageSizeError5": "Image must be less than 5MB.",
@@ -164,10 +165,8 @@ export const translations = {
     "toasts.sessionComplete": "Study session complete! Great job on {subject}!",
     "toasts.sessionResumed": "Study session resumed.",
     "toasts.sessionPaused": "Study session paused.",
-    "toasts.quizContentTruncated": "The combined study material was too large and has been truncated to generate the quiz.",
     "toasts.fileProcessingError": "Failed to process file.",
-    // FIX: Add missing translation key to resolve TypeScript error.
-    "toasts.error.fileProcessingErrorNamed": "Failed to process \"{fileName}\". It might be corrupted.",
+    "toasts.fileProcessingErrorNamed": "Failed to process \"{fileName}\". It might be corrupted.",
     "toasts.noFreeSlot": "Could not find a free slot. Adding as extra.",
     "toasts.error.solveProblem": "An error occurred while solving the problem.",
     "toasts.error.unexpected": "An unexpected error occurred.",

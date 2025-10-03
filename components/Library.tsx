@@ -1,4 +1,3 @@
-// FIX: Implement Library component to resolve module error.
 import React, { useState } from 'react';
 import { libraryResources } from '../data/libraryResources.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';

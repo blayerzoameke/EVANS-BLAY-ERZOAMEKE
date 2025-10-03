@@ -1,5 +1,3 @@
-// FIX: Create lib/i18n-ja.ts as a placeholder.
-// TODO: Add Japanese translations
 export const translations = {
     "common.save": "保存",
     "common.cancel": "キャンセル",
@@ -43,6 +41,7 @@ export const translations = {
     "sidebar.about": "概要",
     "sidebar.manage": "管理",
     "sidebar.preferences": "環境設定",
+    "sidebar.app": "アプリ",
     "sidebar.support": "サポート",
     "userDetails.name": "フルネーム",
     "userDetails.level": "学歴",
@@ -573,7 +572,7 @@ export const translations = {
     "conflict.shift": "ずらす",
     "conflict.shift.desc": "**{plannedSubject}**のセッションを維持し、**{uploadedSubject}**の新しいセッションのために次に利用可能な空き時間を見つけます。",
     "conflict.addExtra": "追加として加える",
-    "conflict.addExtra.desc": "**{plannedSubject}**のセッションを維持し、**{uploadedSubject}**の新しいセッションをその直後に追加します。",
+    "conflict.addExtra.desc": "**{plannedSubject}**のセッションを維持し、その直後に**{uploadedSubject}**の新しいセッションを追加します。",
     "cropModal.title": "プロフィール写真を切り抜く",
     "cropModal.apply": "適用",
     "cameraModal.title": "カメラで問題をキャプチャ",

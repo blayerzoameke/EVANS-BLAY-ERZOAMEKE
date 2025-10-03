@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ActiveSession, Toast, TrackedSession } from '../types.ts';
-import type { View } from '../App.tsx';
+import type { View } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { PlayIcon } from './icons/PlayIcon.tsx';
 import { PauseIcon } from './icons/PauseIcon.tsx';

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { View } from '../App.tsx';
+import type { View } from '../types.ts';
 import { LogoIcon } from './icons/LogoIcon.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
@@ -14,7 +14,6 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => {
   const { t } = useLanguage();
   
-  // @ts-ignore
   type NavItem = { id: View; nameKey: keyof typeof import('../lib/i18n.ts').translations['en'] };
 
   const manageNavItems: NavItem[] = [
@@ -28,9 +27,12 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
   ];
 
   const preferencesNavItems: NavItem[] = [
-    { id: 'notification', nameKey: 'sidebar.notification'},
     { id: 'language', nameKey: 'sidebar.language'},
     { id: 'theme', nameKey: 'sidebar.theme'},
+    { id: 'notification', nameKey: 'sidebar.notification'},
+  ];
+  
+  const appNavItems: NavItem[] = [
     { id: 'library', nameKey: 'sidebar.library' },
     { id: 'settings', nameKey: 'sidebar.settings' },
   ];
@@ -71,7 +73,6 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
     );
   };
   
-  // @ts-ignore
   const NavGroup: React.FC<{titleKey: keyof typeof import('../lib/i18n.ts').translations['en'], items: NavItem[]}> = ({ titleKey, items }) => (
     <div>
         <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t(titleKey as any)}</h3>
@@ -95,6 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
         <nav className="flex-1 px-4 py-4 space-y-6 overflow-y-auto">
             <NavGroup titleKey="sidebar.manage" items={manageNavItems} />
             <NavGroup titleKey="sidebar.preferences" items={preferencesNavItems} />
+            <NavGroup titleKey="sidebar.app" items={appNavItems} />
             <NavGroup titleKey="sidebar.support" items={supportNavItems} />
         </nav>
       </div>

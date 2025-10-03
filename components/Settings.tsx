@@ -1,12 +1,9 @@
-
-// FIX: Implement Settings component to resolve module error.
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { ExportIcon } from './icons/ExportIcon';
 import { ImportIcon } from './icons/ImportIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import Switch from './Switch.tsx';
-// FIX: Added .ts extension to import path.
 import type { NotificationSettings } from '../types.ts';
 import ConfirmationModal from './ConfirmationModal.tsx';
 

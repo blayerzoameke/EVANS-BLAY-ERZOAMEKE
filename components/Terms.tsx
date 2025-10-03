@@ -1,5 +1,3 @@
-
-// FIX: Implement Terms component to resolve module error.
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 

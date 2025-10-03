@@ -1,6 +1,4 @@
-
-
-// FIX: Corrected import from GoogleGenerativeAI to GoogleGenAI as per Gemini API guidelines.
+// Corrected import from GoogleGenerativeAI to GoogleGenAI as per Gemini API guidelines.
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import type {
   UserDetails,
@@ -233,7 +231,6 @@ export const generatePlanFromImage = async (
                           type: { type: Type.STRING },
                           isLocked: { type: Type.BOOLEAN, nullable: true },
                           code: { type: Type.STRING, nullable: true },
-                          // FIX: Corrected schema type from "string" to Type.STRING.
                           link: { type: Type.STRING, nullable: true }
                       },
                       required: ['activity', 'startTime', 'endTime', 'type']

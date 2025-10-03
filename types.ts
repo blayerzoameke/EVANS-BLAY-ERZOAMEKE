@@ -1,5 +1,25 @@
 
 
+export type View =
+  | 'dashboard'
+  | 'profile'
+  | 'mytimetables'
+  | 'progression'
+  | 'notes'
+  | 'uploadslides'
+  | 'examprep'
+  | 'language'
+  | 'theme'
+  | 'notification'
+  | 'settings'
+  | 'report'
+  | 'feedback'
+  | 'help'
+  | 'about'
+  | 'library'
+  | 'terms'
+  | 'tutorial';
+
 export type Theme = 'light' | 'dark' | 'system';
 
 export enum DayOfWeek {

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -26,29 +27,9 @@ import Library from './components/Library.tsx';
 import Terms from './components/Terms.tsx';
 import Tutorial from './components/Tutorial.tsx';
 
-import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft, PlanSlot } from './types.ts';
+import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft, PlanSlot, View } from './types.ts';
 import { EducationalLevel, QuizType } from './types.ts';
 import { useLanguage } from './contexts/LanguageContext.tsx';
-
-export type View =
-  | 'dashboard'
-  | 'profile'
-  | 'mytimetables'
-  | 'progression'
-  | 'notes'
-  | 'uploadslides'
-  | 'examprep'
-  | 'language'
-  | 'theme'
-  | 'notification'
-  | 'settings'
-  | 'report'
-  | 'feedback'
-  | 'help'
-  | 'about'
-  | 'library'
-  | 'terms'
-  | 'tutorial';
 
 const App: React.FC = () => {
   const { t } = useLanguage();

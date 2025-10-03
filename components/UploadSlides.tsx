@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import katex from 'katex';
-import type { SmartPlan, ActiveSession, Toast, LearningHubState, UploadedFile, ImagePart, Note, PlanSlot, ConflictInfo, ChatTurn } from '../types.ts';
+import type { SmartPlan, ActiveSession, Toast, LearningHubState, UploadedFile, ImagePart, Note, PlanSlot, ConflictInfo, ChatTurn, View } from '../types.ts';
 import { ActivityType, DayOfWeek } from '../types.ts';
-import type { View } from '../App.tsx';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { getDocumentContext, isStudyMaterial, summarizeDocument, explainDocument, extractTextFromDocument, chatWithDocumentStream } from '../services/geminiService.ts';
 import { UploadIcon } from './icons/UploadIcon.tsx';
@@ -148,7 +147,6 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
                 }
 
                 const lines = block.split('\n');
-                // FIX: Changed type from JSX.Element[] to React.ReactNode[] to resolve "Cannot find namespace 'JSX'" error.
                 const elements: React.ReactNode[] = [];
                 let listItems: string[] = [];
                 let inList = false;

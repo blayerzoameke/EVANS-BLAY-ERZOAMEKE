@@ -1,4 +1,3 @@
-// FIX: Create lib/i18n-es.ts as a placeholder.
 // TODO: Add Spanish translations
 export const translations = {
     "common.save": "Guardar",
@@ -43,6 +42,7 @@ export const translations = {
     "sidebar.about": "Acerca de",
     "sidebar.manage": "Gestionar",
     "sidebar.preferences": "Preferencias",
+    "sidebar.app": "Aplicación",
     "sidebar.support": "Soporte",
     "userDetails.name": "Nombre Completo",
     "userDetails.level": "Nivel Educativo",
