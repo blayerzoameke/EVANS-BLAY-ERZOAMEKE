@@ -65,6 +65,41 @@ interface SmartPlanViewProps {
     onStudySlotClick?: (slot: PlanSlot, day: DayOfWeek) => void;
 }
 
+const timeToMinutes = (time: string): number => {
+    if (!time) return 0;
+    try {
+        const timeLower = time.toLowerCase().replace(/\s/g, '');
+        const isPM = timeLower.includes('pm');
+        const isAM = timeLower.includes('am');
+
+        const timeOnly = timeLower.replace('am', '').replace('pm', '');
+        
+        let [hourStr, minuteStr] = timeOnly.split(':');
+        
+        if (!minuteStr) minuteStr = '0';
+
+        let hours = parseInt(hourStr, 10);
+        const minutes = parseInt(minuteStr, 10);
+
+        if (isNaN(hours) || isNaN(minutes)) {
+            console.warn(`Could not parse time: ${time}`);
+            return 0;
+        }
+        
+        if (isPM && hours !== 12) {
+            hours += 12;
+        }
+        if (isAM && hours === 12) {
+            hours = 0;
+        }
+
+        return hours * 60 + minutes;
+    } catch (e) {
+        console.error("Failed to parse time string:", time, e);
+        return 0;
+    }
+};
+
 const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick }) => {
   const { t } = useLanguage();
   const [now, setNow] = useState(new Date());
@@ -95,12 +130,13 @@ const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick })
 
   const DayCard: React.FC<{ day: DayOfWeek; slots: PlanSlot[]; isWeekend?: boolean }> = ({ day, slots, isWeekend = false }) => {
     const currentDay = getCurrentDay(now);
+    const sortedSlots = [...slots].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
     return (
         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 h-full transition-all duration-300 hover:shadow-2xl">
           <h3 className={`text-2xl font-bold text-center mb-6 bg-gradient-to-r ${isWeekend ? 'from-green-500 to-teal-500' : 'from-primary to-purple-600'} bg-clip-text text-transparent`}>{day}</h3>
-          {slots.length > 0 ? (
-            slots.map((slot, index) => {
+          {sortedSlots.length > 0 ? (
+            sortedSlots.map((slot, index) => {
               const isClickable = slot.type === ActivityType.STUDY && day === currentDay && !!onStudySlotClick;
               const tooltip = isClickable ? t('smartplan.clickToStudy') : undefined;
               

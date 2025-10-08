@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import type { ActiveSession, Toast, LearningHubState, UploadedFile } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from './contexts/LanguageContext.tsx';
 import { ExitIcon } from './icons/ExitIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import { PauseIcon } from './icons/PauseIcon';

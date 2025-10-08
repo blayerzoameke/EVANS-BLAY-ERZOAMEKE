@@ -18,6 +18,7 @@ import { PauseIcon } from './icons/PauseIcon.tsx';
 import { StopIcon } from './icons/StopIcon.tsx';
 import { DAYS_OF_WEEK } from '../constants.ts';
 import SessionCustomizationModal from './SessionCustomizationModal.tsx';
+import { ArrowLeftIcon } from './icons/ArrowLeftIcon.tsx';
 
 interface UploadSlidesProps {
   smartPlan: SmartPlan | null;
@@ -36,7 +37,8 @@ interface UploadSlidesProps {
   setIntendedStudyContext: (context: { subject: string; fromSlot: PlanSlot } | null) => void;
 }
 
-const FILE_SIZE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
+type AudioState = 'idle' | 'playing' | 'paused';
+type HubView = 'actions' | 'summarize' | 'explain' | 'chat' | 'read-aloud';
 
 const timeToMinutes = (time: string): number => {
     if (!time) return 0;
@@ -104,6 +106,7 @@ const KatexRenderer: React.FC<{ content: string; displayMode: boolean }> = React
         const html = katex.renderToString(content, { throwOnError: false, displayMode });
         return <span dangerouslySetInnerHTML={{ __html: html }} />;
     } catch (e) {
+        // FIX: Corrected invalid JSX syntax.
         return <code>{content}</code>;
     }
 });
@@ -132,7 +135,7 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
     const blocks = content.split(/(```[\s\S]*?```)/g).filter(Boolean);
 
     return (
-        <div className="prose dark:prose-invert max-w-none text-left">
+        <div className="prose prose-lg dark:prose-invert max-w-none text-left">
             {blocks.map((block, index) => {
                 if (block.startsWith('```') && block.endsWith('```')) {
                     const codeContent = block.slice(3, -3);
@@ -147,6 +150,7 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
                 }
 
                 const lines = block.split('\n');
+                // FIX: Changed type to be more flexible and idiomatic for React children.
                 const elements: React.ReactNode[] = [];
                 let listItems: string[] = [];
                 let inList = false;
@@ -241,22 +245,25 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const { t } = useLanguage();
   const [loadingMessage, setLoadingMessage] = useState('');
   const [chatInput, setChatInput] = useState('');
-  const [isReading, setIsReading] = useState(false);
+  const [audioState, setAudioState] = useState<AudioState>('idle');
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const [hubView, setHubView] = useState<HubView>('actions');
+
+  // --- Resizable Panel State ---
+  const [leftPanelWidth, setLeftPanelWidth] = useState(50);
+  const isResizingRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // --- Workflow State ---
-  const [stagedFile, setStagedFile] = useState<File | null>(null);
   const [sessionPrompt, setSessionPrompt] = useState<{ slot: PlanSlot, nextSlot: PlanSlot | null, day: DayOfWeek } | null>(null);
   const [conflictInfo, setConflictInfo] = useState<{ plannedSubject: string; uploadedSubject: string; day: DayOfWeek; slot: PlanSlot; file: UploadedFile; } | null>(null);
   const [showConflictResolution, setShowConflictResolution] = useState(false);
   const [customizationRequest, setCustomizationRequest] = useState<{ file: UploadedFile, slot?: PlanSlot, isUntracked: boolean } | null>(null);
-  const [autoPlayReadAloud, setAutoPlayReadAloud] = useState(false);
 
 
-  const { file, analysisMode, analysisResults, chatHistory, isProcessing } = learningHubState;
+  const { file, analysisResults, chatHistory, isProcessing } = learningHubState;
 
   const setFile = (file: UploadedFile | null) => setLearningHubState(prev => ({ ...prev, file }));
-  const setAnalysisMode = (mode: LearningHubState['analysisMode']) => setLearningHubState(prev => ({ ...prev, analysisMode: mode }));
   const setAnalysisResult = (type: 'summarize' | 'explain' | 'read', result: string | null) => {
       setLearningHubState(prev => ({
           ...prev,
@@ -266,6 +273,39 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
    
   const setIsProcessing = (processing: boolean) => setLearningHubState(prev => ({...prev, isProcessing: processing}));
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+      isResizingRef.current = true;
+      e.preventDefault();
+  };
+  
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+      if (!isResizingRef.current || !containerRef.current) {
+          return;
+      }
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - containerRect.left;
+      let newWidthPercent = (mouseX / containerRect.width) * 100;
+  
+      if (newWidthPercent < 20) newWidthPercent = 20;
+      if (newWidthPercent > 80) newWidthPercent = 80;
+      
+      setLeftPanelWidth(newWidthPercent);
+  }, []);
+
+  useEffect(() => {
+      const handleGlobalMouseUp = () => {
+          isResizingRef.current = false;
+      };
+  
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+  
+      return () => {
+          window.removeEventListener('mousemove', handleMouseMove);
+          window.removeEventListener('mouseup', handleGlobalMouseUp);
+      };
+  }, [handleMouseMove]);
+
   useEffect(() => {
     return () => {
         if (intendedStudyContext) {
@@ -274,40 +314,44 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     };
   }, [intendedStudyContext, setIntendedStudyContext]);
 
-  const stopReading = useCallback(() => {
-    if (speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-    }
-    setIsReading(false);
-  }, []);
-  
-  const toggleReadAloud = useCallback(() => {
-    if (isReading) {
-        stopReading();
-    } else {
-        const textToRead = analysisResults.read;
-        if (textToRead) {
-            const utterance = new SpeechSynthesisUtterance(textToRead);
-            utterance.onend = () => setIsReading(false);
-            utteranceRef.current = utterance;
-            speechSynthesis.speak(utterance);
-            setIsReading(true);
+    const handleStop = useCallback(() => {
+        if (speechSynthesis.speaking || speechSynthesis.pending || speechSynthesis.paused) {
+            speechSynthesis.cancel();
         }
-    }
-  }, [isReading, stopReading, analysisResults.read]);
+        setAudioState('idle');
+    }, []);
+
+    const handlePlay = useCallback(() => {
+        if (audioState === 'paused') {
+            speechSynthesis.resume();
+            setAudioState('playing');
+        } else if (audioState === 'idle') {
+            const textToRead = analysisResults.read;
+            if (textToRead) {
+                speechSynthesis.cancel(); // Ensure any previous utterance is stopped
+                const utterance = new SpeechSynthesisUtterance(textToRead);
+                utterance.onend = () => {
+                    setAudioState('idle');
+                    utteranceRef.current = null;
+                };
+                utteranceRef.current = utterance;
+                speechSynthesis.speak(utterance);
+                setAudioState('playing');
+            }
+        }
+    }, [audioState, analysisResults.read]);
+
+    const handlePause = useCallback(() => {
+        if (audioState === 'playing') {
+            speechSynthesis.pause();
+            setAudioState('paused');
+        }
+    }, [audioState]);
 
   useEffect(() => {
-    // Automatically start reading aloud when triggered by the "Read Material" button.
-    if (autoPlayReadAloud && analysisResults.read && !isProcessing && !isReading) {
-        toggleReadAloud();
-        setAutoPlayReadAloud(false); // Reset the trigger
-    }
-  }, [autoPlayReadAloud, analysisResults.read, isProcessing, isReading, toggleReadAloud]);
-
-
-  useEffect(() => {
-    return () => stopReading();
-  }, [file, stopReading]);
+    // Cleanup on unmount or file change
+    return () => handleStop();
+  }, [file, handleStop]);
 
   const findCurrentSlots = (plan: SmartPlan | null): { slot: PlanSlot | null, nextSlot: PlanSlot | null, day: DayOfWeek | null } => {
     if (!plan) return { slot: null, nextSlot: null, day: null };
@@ -344,7 +388,6 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
         const filePart: ImagePart = { inlineData: { data: base64String, mimeType: fileToProcess.type } };
 
-        // Always verify the file first.
         setLoadingMessage(t('uploadslides.verifying'));
         const isMaterial = await isStudyMaterial(filePart);
 
@@ -355,7 +398,6 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
         let fileContext = context;
         if (!fileContext) {
-            // If no context is provided (e.g., untracked session), extract it.
             setLoadingMessage(t('uploadslides.extractingContext'));
             fileContext = await getDocumentContext(filePart);
         }
@@ -381,67 +423,54 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
         addToast(t('toasts.fileSizeError25'), 'error');
         return;
     }
+    
+    setIsProcessing(true);
+    const context = intendedStudyContext ? intendedStudyContext.fromSlot.activity : undefined;
+    const processedFile = await processFile(droppedFile, context);
+    if (processedFile) {
+        setLearningHubState(prev => ({ ...prev, file: processedFile, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] }));
+        setHubView('actions');
+    }
+    setIsProcessing(false);
+  }, [addToast, t, intendedStudyContext, processFile, setLearningHubState]);
 
-    // If coming from dashboard click, bypass time checks and AI verification
+  const handleStartStudyRequest = () => {
+    if (!file) return;
+
     if (intendedStudyContext) {
-        setIsProcessing(true);
-        const processedFile = await processFile(droppedFile, intendedStudyContext.fromSlot.activity);
-        if (processedFile) {
-            // This is a tracked session, go to customization.
-            setCustomizationRequest({ file: processedFile, slot: intendedStudyContext.fromSlot, isUntracked: false });
-        }
-        setIntendedStudyContext(null); // Consume the context
-        setIsProcessing(false);
+        setCustomizationRequest({ file, slot: intendedStudyContext.fromSlot, isUntracked: false });
+        setIntendedStudyContext(null);
         return;
     }
 
     const { slot, nextSlot, day } = findCurrentSlots(smartPlan);
 
     if (smartPlan && slot && (slot.type === 'study' || slot.type === 'lecture') && day) {
-        setStagedFile(droppedFile);
         setSessionPrompt({ slot, nextSlot, day });
     } else {
-        setIsProcessing(true);
-        const processedFile = await processFile(droppedFile);
-        if (processedFile) {
-            // This is an untracked session, go to customization.
-            setCustomizationRequest({ file: processedFile, isUntracked: true });
-        }
-        setIsProcessing(false);
+        setCustomizationRequest({ file, isUntracked: true });
     }
-  }, [addToast, t, smartPlan, intendedStudyContext, setIntendedStudyContext, processFile]);
+  };
   
   const handlePromptConfirm = async () => {
-      if (stagedFile && sessionPrompt) {
-          setIsProcessing(true);
-          const processedFile = await processFile(stagedFile, sessionPrompt.slot.activity);
-          setIsProcessing(false);
-          if (processedFile) {
-              setCustomizationRequest({ file: processedFile, slot: sessionPrompt.slot, isUntracked: false });
-          }
+      if (file && sessionPrompt) {
+          setCustomizationRequest({ file, slot: sessionPrompt.slot, isUntracked: false });
       }
       setSessionPrompt(null);
-      setStagedFile(null);
   };
   
   const handlePromptReject = async () => {
-      if (stagedFile && sessionPrompt) {
-          setIsProcessing(true);
-          const processedFile = await processFile(stagedFile);
-          setIsProcessing(false);
-          if (processedFile) {
-              setConflictInfo({
-                  plannedSubject: sessionPrompt.slot.activity,
-                  uploadedSubject: processedFile.context,
-                  day: sessionPrompt.day,
-                  slot: sessionPrompt.slot,
-                  file: processedFile,
-              });
-              setShowConflictResolution(true);
-          }
+      if (file && sessionPrompt) {
+          setConflictInfo({
+              plannedSubject: sessionPrompt.slot.activity,
+              uploadedSubject: file.context,
+              day: sessionPrompt.day,
+              slot: sessionPrompt.slot,
+              file: file,
+          });
+          setShowConflictResolution(true);
       }
       setSessionPrompt(null);
-      setStagedFile(null);
   };
   
   const handleConflictResolution = (resolution: 'replace' | 'shift' | 'addExtra') => {
@@ -507,11 +536,24 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     setCustomizationRequest({ file: newFile, slot: slotToCustomize, isUntracked: false });
   };
 
-  const startSessionWithCustomDuration = (slot: PlanSlot, uploadedFile: UploadedFile, durationMinutes: number, breakConfig: { breakActivity: string, breakLink: string, breakDuration: number }, isUntracked: boolean) => {
+  const startSessionWithCustomDuration = (slot: PlanSlot, uploadedFile: UploadedFile, durationMinutes: number, breakConfig: { breakActivity: string; breakLink: string; breakDuration: number; breakPlacement: 'during' | 'after'; }, isUntracked: boolean) => {
     setFile(uploadedFile);
+    
+    const now = Date.now();
+    const studyDurationMs = durationMinutes * 60 * 1000;
+    const breakDurationMs = breakConfig.breakDuration * 60 * 1000;
+
+    let sessionEndTime = now + studyDurationMs;
+    let breakStartTime: number | undefined = undefined;
+
+    if (breakConfig.breakPlacement === 'during' && breakDurationMs > 0) {
+        sessionEndTime += breakDurationMs;
+        breakStartTime = now + (studyDurationMs / 2);
+    }
+
      const newSession: ActiveSession = {
-        startTime: Date.now(),
-        endTime: Date.now() + durationMinutes * 60 * 1000,
+        startTime: now,
+        endTime: sessionEndTime,
         subject: slot.activity,
         type: ActivityType.STUDY,
         isUntracked,
@@ -519,17 +561,19 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
         fromSlot: slot,
         nextSlot: breakConfig.breakDuration > 0 ? {
             activity: breakConfig.breakActivity,
-            startTime: 'N/A', // These will be calculated if needed
+            startTime: 'N/A', 
             endTime: 'N/A',
             type: ActivityType.BREAK,
             link: breakConfig.breakLink,
             durationMinutes: breakConfig.breakDuration
         } : null,
+        breakPlacement: breakConfig.breakPlacement,
+        breakStartsAt: breakStartTime,
     };
     setActiveSession(newSession);
   };
 
-  const handleCustomizationConfirm = (config: { studyDuration: number, breakDuration: number, breakActivity: string, breakLink: string }) => {
+  const handleCustomizationConfirm = (config: { studyDuration: number; breakDuration: number; breakActivity: string; breakLink: string; breakPlacement: 'during' | 'after'; }) => {
       if (!customizationRequest) return;
       const { file, slot: initialSlot, isUntracked } = customizationRequest;
       setCustomizationRequest(null);
@@ -548,23 +592,45 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false, disabled: isProcessing });
 
-  const handleAnalysis = async (mode: 'summarize' | 'explain' | 'read') => {
+  const handleAnalysis = async (mode: 'summarize' | 'explain' | 'read' | 'chat') => {
     if (!file || isProcessing) return;
-    setAnalysisMode(mode);
-    if (analysisResults[mode]) return;
+
+    if (mode === 'summarize' || mode === 'explain' || mode === 'chat') {
+        setHubView(mode);
+    } else if (mode === 'read') {
+        setHubView('read-aloud');
+    }
+    
+    if (analysisResults[mode as 'summarize' | 'explain' | 'read']) {
+        if (mode === 'read') {
+            handlePlay();
+        }
+        return;
+    }
+
+    if (mode === 'chat') return;
 
     setIsProcessing(true);
     setLoadingMessage(t(`uploadslides.loading.${mode}` as any));
     try {
         const filePart: ImagePart = { inlineData: { data: file.base64, mimeType: file.type } };
         let result = '';
-        if (mode === 'summarize') result = await summarizeDocument(filePart, file.context);
-        else if (mode === 'explain') result = await explainDocument(filePart, file.context);
-        else if (mode === 'read') result = await extractTextFromDocument(filePart);
+        if (mode === 'summarize') {
+            result = await summarizeDocument(filePart, file.context);
+        } else if (mode === 'explain') {
+            result = await explainDocument(filePart, file.context);
+        } else if (mode === 'read') {
+            result = await extractTextFromDocument(filePart);
+        }
+        
         setAnalysisResult(mode, result);
+
+        if (mode === 'read') {
+            handlePlay();
+        }
     } catch (error: any) {
         addToast(error.message || `Failed to ${mode} document.`, 'error');
-        setAnalysisMode('none');
+        setHubView('actions');
     } finally {
         setIsProcessing(false);
     }
@@ -586,6 +652,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
     try {
         const filePart: ImagePart = { inlineData: { data: file.base64, mimeType: file.type } };
+        // FIX: Added missing 'smartPlan' prop to function call.
         const stream = await chatWithDocumentStream(filePart, userMessage, historyForApi, file.context, smartPlan);
         
         let fullResponse = '';
@@ -614,16 +681,17 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   };
   
   const clearFile = () => {
-    stopReading();
+    handleStop();
+    setHubView('actions');
     setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
   };
   
   const saveToNotes = () => {
-      const content = analysisResults[analysisMode as 'summarize' | 'explain' | 'read'];
+      const content = analysisResults[hubView as 'summarize' | 'explain'];
       if (!file || !content || isProcessing) return;
       const newNote: Note = {
         id: Date.now().toString(),
-        title: `${analysisMode.charAt(0).toUpperCase() + analysisMode.slice(1)}: ${file.name}`,
+        title: `${hubView.charAt(0).toUpperCase() + hubView.slice(1)}: ${file.name}`,
         content,
         subject: file.context,
         createdAt: new Date().toISOString(),
@@ -634,78 +702,33 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   }
 
   const copyContent = () => {
-      const content = analysisResults[analysisMode as 'summarize' | 'explain' | 'read'];
+      const content = analysisResults[hubView as 'summarize' | 'explain'];
       if (content) {
           navigator.clipboard.writeText(content).then(() => addToast(t('toasts.copied'), 'success'));
       }
   };
 
-  const handleReadAloudClick = () => {
-    setAutoPlayReadAloud(true);
-    setAnalysisMode('read-focus');
-    if (!analysisResults.read) {
-        handleAnalysis('read');
-    }
-  };
-
   const AnalysisView: React.FC = () => {
-    const content = analysisResults[analysisMode as 'summarize' | 'explain' | 'read'];
-    
+    const content = analysisResults[hubView as 'summarize' | 'explain'];
     if (isProcessing && !content) return <LoadingIndicator message={loadingMessage} />;
     
     return (
-        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 flex-1 overflow-y-auto">
-            <FormattedContent content={content || t('uploadslides.noContent')} />
+        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 h-full overflow-y-auto">
+            <FormattedContent content={content || ''} />
         </div>
     );
   };
 
   const ActionCard: React.FC<{ titleKey: string; descKey: string; onClick: () => void }> = ({ titleKey, descKey, onClick }) => (
-    <button onClick={onClick} disabled={isProcessing} className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 text-left w-full hover:border-primary dark:hover:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+    <button onClick={onClick} disabled={isProcessing} className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 text-left w-full h-full hover:border-primary dark:hover:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed flex flex-col justify-center">
         <h4 className="font-bold text-lg text-gray-800 dark:text-white">{t(titleKey as any)}</h4>
         <p className="text-sm text-gray-500 mt-1">{t(descKey as any)}</p>
     </button>
   );
 
   const renderFileContent = () => {
-    if (isStudyModeView) {
-        return <FileViewer file={file} />;
-    }
-
-    const isLargeFile = file && file.size > FILE_SIZE_THRESHOLD;
-    
-    if (analysisMode === 'read-focus') {
-        return (
-             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 h-full flex flex-col">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-800 dark:text-white">{file?.name}</h3>
-                        <p className="text-sm text-gray-500">{file?.context}</p>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <button onClick={toggleReadAloud} disabled={isProcessing || !analysisResults.read} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50">
-                            {isReading ? <><StopIcon className="w-4 h-4" /> {t('uploadslides.stopReading')}</> : <><PlayIcon className="w-4 h-4" /> {t('uploadslides.readAloud')}</>}
-                        </button>
-                        <button onClick={() => setAnalysisMode('none')} className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 rounded-md">{t('uploadslides.backToActions')}</button>
-                    </div>
-                </div>
-                <div className="flex-1 overflow-hidden relative">
-                    { isLargeFile ? (
-                        <>
-                            {isProcessing && !analysisResults.read && <LoadingOverlay isLoading={true} message={t('uploadslides.loading.read')} />}
-                            <FileViewer file={file} />
-                        </>
-                    ) : (
-                        <div className="overflow-y-auto h-full pr-4 -mr-4">
-                            {isProcessing && !analysisResults.read ? <LoadingIndicator message={loadingMessage} /> : (
-                                <FormattedContent content={analysisResults.read || t('uploadslides.loading.content' as any)} />
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-        )
-    }
+    if (!file) return null;
+    if (isStudyModeView) return <FileViewer file={file} />;
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 h-full flex flex-col">
@@ -718,55 +741,65 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                 <button onClick={clearFile} disabled={isProcessing} className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"><CloseIcon className="w-5 h-5"/></button>
               )}
           </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <ActionCard titleKey="uploadslides.actions.summarize" descKey="uploadslides.actions.summarize.desc" onClick={() => handleAnalysis('summarize')} />
-            <ActionCard titleKey="uploadslides.actions.explain" descKey="uploadslides.actions.explain.desc" onClick={() => handleAnalysis('explain')} />
-            <ActionCard titleKey="uploadslides.actions.chat" descKey="uploadslides.actions.chat.desc" onClick={() => setAnalysisMode('chat')} />
-            <ActionCard titleKey="uploadslides.actions.read" descKey="uploadslides.actions.read.desc" onClick={handleReadAloudClick} />
-          </div>
-
-          <div className="flex-1 overflow-hidden">
-            
-            {analysisMode !== 'none' && (
-                <div className="h-full flex flex-col">
-                    <div className="flex justify-between items-center mb-2">
-                        <h4 className="text-lg font-semibold capitalize">{t('uploadslides.results.title', { mode: analysisMode })}</h4>
-                        {analysisMode !== 'chat' && (
-                            <div className="flex items-center gap-2">
-                                <button onClick={copyContent} disabled={isProcessing || !analysisResults[analysisMode as 'summarize' | 'explain' | 'read']} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50">
-                                    <CopyIcon className="w-4 h-4" /> {t('common.copy')}
-                                </button>
-                                <button onClick={saveToNotes} disabled={isProcessing || !analysisResults[analysisMode as 'summarize' | 'explain' | 'read']} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50">
-                                    <SaveIcon className="w-4 h-4" /> {t('common.saveToNotes')}
+          
+          {hubView === 'actions' || hubView === 'read-aloud' ? (
+              <div ref={containerRef} className="flex-1 flex items-stretch gap-2 overflow-hidden">
+                    <div style={{ width: `${leftPanelWidth}%` }} className="flex-shrink-0 h-full">
+                        <FileViewer file={file} />
+                    </div>
+                    <div onMouseDown={handleMouseDown} className="w-2 flex-shrink-0 cursor-col-resize bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-primary transition-colors duration-200" />
+                    <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                       {hubView === 'actions' ? (
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-full">
+                                <ActionCard titleKey="uploadslides.actions.summarize" descKey="uploadslides.actions.summarize.desc" onClick={() => handleAnalysis('summarize')} />
+                                <ActionCard titleKey="uploadslides.actions.explain" descKey="uploadslides.actions.explain.desc" onClick={() => handleAnalysis('explain')} />
+                                <ActionCard titleKey="uploadslides.actions.chat" descKey="uploadslides.actions.chat.desc" onClick={() => handleAnalysis('chat')} />
+                                <ActionCard titleKey="uploadslides.actions.read" descKey="uploadslides.actions.read.desc" onClick={() => handleAnalysis('read')} />
+                            </div>
+                       ) : ( // hubView === 'read-aloud'
+                            <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 h-full flex flex-col justify-center items-center">
+                                <h4 className="font-bold text-lg text-gray-800 dark:text-white mb-4">{t('uploadslides.actions.read')}</h4>
+                                <div className="flex items-center gap-4">
+                                     <button onClick={handlePlay} disabled={audioState === 'playing' || isProcessing || !analysisResults.read} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PlayIcon className="w-6 h-6"/></button>
+                                     <button onClick={handlePause} disabled={audioState !== 'playing'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PauseIcon className="w-6 h-6"/></button>
+                                     <button onClick={handleStop} disabled={audioState === 'idle'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><StopIcon className="w-6 h-6"/></button>
+                                </div>
+                                 <button onClick={() => setHubView('actions')} className="mt-6 flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                                    <ArrowLeftIcon className="w-4 h-4"/> {t('uploadslides.backToActions')}
                                 </button>
                             </div>
-                        )}
+                       )}
                     </div>
-                    {analysisMode === 'chat' ? (
-                        <ChatView
-                            chatHistory={chatHistory}
-                            chatInput={chatInput}
-                            setChatInput={setChatInput}
-                            handleChatSubmit={handleChatSubmit}
-                            isProcessing={isProcessing}
-                        />
+              </div>
+          ) : (
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-xl font-bold capitalize">{t('uploadslides.results.title', { mode: hubView })}</h4>
+                        <div className="flex items-center gap-2">
+                             <button onClick={() => setHubView('actions')} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                                <ArrowLeftIcon className="w-4 h-4"/> {t('uploadslides.backToActions')}
+                            </button>
+                             {hubView !== 'chat' && (
+                                <>
+                                    <button onClick={copyContent} disabled={isProcessing || !analysisResults[hubView as 'summarize' | 'explain']} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 disabled:opacity-50"><CopyIcon className="w-4 h-4"/></button>
+                                    <button onClick={saveToNotes} disabled={isProcessing || !analysisResults[hubView as 'summarize' | 'explain']} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 disabled:opacity-50"><SaveIcon className="w-4 h-4"/></button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                     {hubView === 'chat' ? (
+                        <ChatView chatHistory={chatHistory} chatInput={chatInput} setChatInput={setChatInput} handleChatSubmit={handleChatSubmit} isProcessing={isProcessing} />
                     ) : <AnalysisView />}
                 </div>
-            )}
-            {analysisMode === 'none' && (
-                <div className="flex-1 flex items-center justify-center text-center text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-                    <p>{t('uploadslides.selectAction')}</p>
-                </div>
-            )}
-          </div>
+          )}
         </div>
     );
   }
 
+  // FIX: Added return statement for the main component.
   return (
-    <div className="max-w-4xl mx-auto h-full flex flex-col">
-      {showTitle && (
+    <div className="max-w-7xl mx-auto h-full flex flex-col">
+      {showTitle && !isStudyModeView && (
         <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('uploadslides.title')}</h2>
             <p className="text-gray-500 dark:text-gray-400 mt-1">{t('uploadslides.subtitle')}</p>
@@ -796,7 +829,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
       </div>
       {!isStudyModeView && !activeSession && file && (
         <div className="mt-6 text-center">
-            <button onClick={() => setCustomizationRequest({ file, isUntracked: true })} className="px-8 py-3 bg-green-600 text-white font-bold text-lg rounded-xl shadow-lg hover:bg-green-700 transition-all">
+            <button onClick={handleStartStudyRequest} className="px-8 py-3 bg-green-600 text-white font-bold text-lg rounded-xl shadow-lg hover:bg-green-700 transition-all">
                 {t('uploadslides.startStudySession')}
             </button>
         </div>

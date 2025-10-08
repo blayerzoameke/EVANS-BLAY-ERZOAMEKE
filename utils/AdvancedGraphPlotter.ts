@@ -20,7 +20,7 @@ export class AdvancedGraphPlotter {
     private angleMode: 'radians' | 'degrees' = 'radians';
 
     // Parse user interval string with support for radians/degrees and sample points
-    public parseInterval(intervalStr: string): { xMin: number; xMax: number; angleMode: 'radians' | 'degrees', samples?: number } | null {
+    public parseInterval(intervalStr: string): { xMin?: number; xMax?: number; angleMode: 'radians' | 'degrees', samples?: number } | null {
         if (!intervalStr) return null;
 
         const lowerStr = intervalStr.toLowerCase();
@@ -52,15 +52,26 @@ export class AdvancedGraphPlotter {
         });
 
         const numbers = cleaned.match(/-?\d+\.?\d*/g);
+        
+        const result: { xMin?: number, xMax?: number, angleMode: 'radians' | 'degrees', samples?: number } = { angleMode };
+        let hasContent = false;
+
         if (numbers && numbers.length >= 2) {
             const min = parseFloat(numbers[0]);
             const max = parseFloat(numbers[1]);
             if (!isNaN(min) && !isNaN(max) && min < max) {
-                return { xMin: min, xMax: max, angleMode, samples };
+                result.xMin = min;
+                result.xMax = max;
+                hasContent = true;
             }
         }
 
-        return null;
+        if (samples !== undefined) {
+            result.samples = samples;
+            hasContent = true;
+        }
+
+        return hasContent ? result : null;
     }
 
     private parseExpression(expr: string): string {
@@ -74,9 +85,9 @@ export class AdvancedGraphPlotter {
 
         // FIX: Add parentheses to disambiguate operator precedence for unary minus with exponentiation.
         // This regex handles cases like `-x**2` or `-(x+1)**2` by converting them to `-(x**2)` and `-((x+1)**2)`.
-        cleaned = cleaned.replace(/-((?:\w+|\([^)]*\))\*\*(?:\w+|\([^)]*\)))/g, '-($1)');
+        cleaned = cleaned.replace(/-((?:\w+|\([^)]+\))\*\*(?:\w+|\([^)]+\)))/g, '-($1)');
         // This regex handles cases like `x**-2` by converting it to `x**(-2)`.
-        cleaned = cleaned.replace(/\*\*((?:-|\+)(?:\w+|\([^)]*\)))/g, '**($1)');
+        cleaned = cleaned.replace(/\*\*((?:-|\+)(?:\w+|\([^)]+\)))/g, '**($1)');
 
         // Implicit multiplication:
         // number before letter or opening paren: 2x -> 2*x, 3(x+1) -> 3*(x+1)

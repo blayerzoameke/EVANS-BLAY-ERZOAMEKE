@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
-import type { SmartPlan, PlanSlot, Toast } from '../types.ts';
+import type { SmartPlan, PlanSlot, Toast, DayPlan } from '../types.ts';
 import { DayOfWeek, ActivityType } from '../types.ts';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import { PlusIcon } from './icons/PlusIcon.tsx';
@@ -9,6 +9,7 @@ import { LockIcon } from './icons/LockIcon.tsx';
 import TimeInput from './TimeInput.tsx';
 import { DAYS_OF_WEEK } from '../constants.ts';
 import ConfirmationModal from './ConfirmationModal.tsx';
+import { ChevronDownIcon } from './icons/ChevronDownIcon.tsx';
 
 interface EditTimetableModalProps {
     isOpen: boolean;
@@ -18,15 +19,64 @@ interface EditTimetableModalProps {
     addToast: (message: string, type: Toast['type']) => void;
 }
 
+// Define a local type that includes the transient tempId for stable keys
+type EditablePlanSlot = PlanSlot & { tempId: string };
+type EditableDayPlan = Omit<DayPlan, 'slots'> & { slots: EditablePlanSlot[] };
+type EditableSmartPlan = EditableDayPlan[];
+
+
+const timeToMinutes = (time: string): number => {
+    if (!time) return 0;
+    try {
+        const timeLower = time.toLowerCase().replace(/\s/g, '');
+        const isPM = timeLower.includes('pm');
+        const isAM = timeLower.includes('am');
+
+        const timeOnly = timeLower.replace('am', '').replace('pm', '');
+        
+        let [hourStr, minuteStr] = timeOnly.split(':');
+        
+        if (!minuteStr) minuteStr = '0';
+
+        let hours = parseInt(hourStr, 10);
+        const minutes = parseInt(minuteStr, 10);
+
+        if (isNaN(hours) || isNaN(minutes)) {
+            console.warn(`Could not parse time: ${time}`);
+            return 0;
+        }
+        
+        if (isPM && hours !== 12) {
+            hours += 12;
+        }
+        if (isAM && hours === 12) {
+            hours = 0;
+        }
+
+        return hours * 60 + minutes;
+    } catch (e) {
+        console.error("Failed to parse time string:", time, e);
+        return 0;
+    }
+};
+
 const EditTimetableModal: React.FC<EditTimetableModalProps> = ({ isOpen, onClose, plan, setPlan, addToast }) => {
     const { t } = useLanguage();
-    const [editedPlan, setEditedPlan] = useState<SmartPlan>([]);
-    const [slotToDelete, setSlotToDelete] = useState<{ day: DayOfWeek, index: number } | null>(null);
+    const [editedPlan, setEditedPlan] = useState<EditableSmartPlan>([]);
+    const [slotToDelete, setSlotToDelete] = useState<{ day: DayOfWeek, tempId: string } | null>(null);
 
     useEffect(() => {
         if (isOpen) {
-            // Deep copy of the plan to avoid direct mutation
-            setEditedPlan(JSON.parse(JSON.stringify(plan)));
+            // Deep copy, add temporary unique IDs for keys, and sort each day's slots
+            const newPlan = JSON.parse(JSON.stringify(plan));
+            newPlan.forEach((dayPlan: DayPlan) => {
+                dayPlan.slots.forEach((slot: any, index: number) => {
+                    // Add a unique ID for stable rendering
+                    slot.tempId = `${dayPlan.day}-${index}-${Math.random()}`;
+                });
+                dayPlan.slots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+            });
+            setEditedPlan(newPlan);
         }
     }, [isOpen, plan]);
 
@@ -34,56 +84,95 @@ const EditTimetableModal: React.FC<EditTimetableModalProps> = ({ isOpen, onClose
         return null;
     }
 
-    const handleSlotChange = (day: DayOfWeek, slotIndex: number, field: keyof PlanSlot, value: any) => {
-        const newPlan = [...editedPlan];
-        const dayPlan = newPlan.find(p => p.day === day);
-        if (dayPlan && dayPlan.slots[slotIndex]) {
-            (dayPlan.slots[slotIndex] as any)[field] = value;
-            setEditedPlan(newPlan);
-        }
+    const handleSlotChange = (day: DayOfWeek, tempId: string, field: keyof PlanSlot, value: any) => {
+        setEditedPlan(currentPlan => {
+            const newPlan = currentPlan.map(dayPlan => {
+                if (dayPlan.day === day) {
+                    let newSlots = dayPlan.slots.map(slot => 
+                        slot.tempId === tempId ? { ...slot, [field]: value } : slot
+                    );
+
+                    // Only re-sort the slots if the start time has changed.
+                    if (field === 'startTime') {
+                        newSlots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+                    }
+                    
+                    return { ...dayPlan, slots: newSlots };
+                }
+                return dayPlan;
+            });
+            return newPlan;
+        });
     };
     
     const addSlot = (day: DayOfWeek) => {
-        const newPlan = [...editedPlan];
-        const dayPlan = newPlan.find(p => p.day === day);
-        const newSlot: PlanSlot = {
-            activity: t('editTimetable.newActivity'),
-            startTime: '12:00 PM',
-            endTime: '01:00 PM',
-            type: ActivityType.STUDY,
-            isLocked: false, // User-added slots are never locked
-        };
-        if (dayPlan) {
-            dayPlan.slots.push(newSlot);
-            dayPlan.slots.sort((a, b) => a.startTime.localeCompare(b.startTime, undefined, { numeric: true }));
-        } else {
-             const newDayPlan = { day, slots: [newSlot] };
-             newPlan.push(newDayPlan);
-             // You might want to sort the days as well if they are not guaranteed to be in order
-        }
-        setEditedPlan(newPlan);
+        setEditedPlan(currentPlan => {
+            const newSlot: EditablePlanSlot = {
+                activity: t('editTimetable.newActivity'),
+                startTime: '12:00 PM',
+                endTime: '01:00 PM',
+                type: ActivityType.STUDY,
+                isLocked: false,
+                tempId: `new-${Date.now()}` // Unique ID for the new slot
+            };
+
+            const dayExists = currentPlan.some(p => p.day === day);
+            let newPlan: EditableSmartPlan;
+
+            if (dayExists) {
+                newPlan = currentPlan.map(dayPlan => {
+                    if (dayPlan.day === day) {
+                        const updatedSlots = [...dayPlan.slots, newSlot]
+                            .sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+                        return { ...dayPlan, slots: updatedSlots };
+                    }
+                    return dayPlan;
+                });
+            } else {
+                const newDayPlan = { day, slots: [newSlot] };
+                newPlan = [...currentPlan, newDayPlan]
+                    .sort((a, b) => DAYS_OF_WEEK.indexOf(a.day) - DAYS_OF_WEEK.indexOf(b.day));
+            }
+            return newPlan;
+        });
     };
 
     const confirmRemoveSlot = () => {
         if (!slotToDelete) return;
-        const { day, index } = slotToDelete;
-        const newPlan = [...editedPlan];
-        const dayPlan = newPlan.find(p => p.day === day);
-        if (dayPlan) {
-            dayPlan.slots.splice(index, 1);
-        }
-        setEditedPlan(newPlan);
+        const { day, tempId } = slotToDelete;
+        
+        setEditedPlan(currentPlan => 
+            currentPlan.map(dayPlan => {
+                if (dayPlan.day === day) {
+                    return { ...dayPlan, slots: dayPlan.slots.filter(s => s.tempId !== tempId) };
+                }
+                return dayPlan;
+            })
+        );
+        
         setSlotToDelete(null);
     };
 
     const handleSaveChanges = () => {
-        // Here you could add validation for overlapping times if needed
-        setPlan(editedPlan);
+        const finalPlan: SmartPlan = editedPlan.map(dayPlan => ({
+            day: dayPlan.day,
+            slots: dayPlan.slots.map(({ tempId, ...slot }) => slot)
+        }));
+        setPlan(finalPlan);
         addToast(t('toasts.timetableUpdated'), 'success');
         onClose();
     };
 
     const inputClasses = "block w-full px-2 py-1 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-md shadow-inner sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed";
+    const selectBaseClasses = "block w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded-md shadow-inner sm:text-sm disabled:opacity-60 disabled:cursor-not-allowed appearance-none";
+    
+    const activityTypeClasses: Record<ActivityType, string> = {
+        [ActivityType.LECTURE]: 'bg-lecture text-white',
+        [ActivityType.STUDY]: 'bg-study text-white',
+        [ActivityType.AGENDA]: 'bg-agenda text-white',
+        [ActivityType.BREAK]: 'bg-break text-white',
+        [ActivityType.FREE]: 'bg-free text-white',
+    };
 
     return (
         <>
@@ -106,21 +195,24 @@ const EditTimetableModal: React.FC<EditTimetableModalProps> = ({ isOpen, onClose
                                 <div key={day}>
                                     <h3 className="text-lg font-semibold mb-2">{day}</h3>
                                     <div className="space-y-2">
-                                        {dayPlan?.slots.map((slot, index) => (
-                                            <div key={index} className={`grid grid-cols-[2fr,1fr,1fr,1fr,auto] gap-2 items-center p-2 rounded-md ${slot.isLocked ? 'bg-gray-100 dark:bg-gray-800/50' : 'bg-gray-50 dark:bg-gray-800'}`}>
-                                                <input type="text" value={slot.activity} onChange={e => handleSlotChange(day, index, 'activity', e.target.value)} className={inputClasses} disabled={slot.isLocked} />
-                                                <TimeInput value={slot.startTime} onChange={val => handleSlotChange(day, index, 'startTime', val)} disabled={slot.isLocked} />
-                                                <TimeInput value={slot.endTime} onChange={val => handleSlotChange(day, index, 'endTime', val)} disabled={slot.isLocked} />
-                                                <select value={slot.type} onChange={e => handleSlotChange(day, index, 'type', e.target.value as ActivityType)} className={inputClasses} disabled={slot.isLocked}>
-                                                    {Object.values(ActivityType).map(type => <option key={type} value={type}>{type}</option>)}
-                                                </select>
+                                        {dayPlan?.slots.map((slot) => (
+                                            <div key={slot.tempId} className={`grid grid-cols-[2fr,1fr,1fr,1fr,auto] gap-2 items-center p-2 rounded-md ${slot.isLocked ? 'bg-gray-100 dark:bg-gray-800/50' : 'bg-gray-50 dark:bg-gray-800'}`}>
+                                                <input type="text" value={slot.activity} onChange={e => handleSlotChange(day, slot.tempId, 'activity', e.target.value)} className={inputClasses} disabled={slot.isLocked} />
+                                                <TimeInput value={slot.startTime} onChange={val => handleSlotChange(day, slot.tempId, 'startTime', val)} />
+                                                <TimeInput value={slot.endTime} onChange={val => handleSlotChange(day, slot.tempId, 'endTime', val)} />
+                                                <div className="relative">
+                                                    <select value={slot.type} onChange={e => handleSlotChange(day, slot.tempId, 'type', e.target.value as ActivityType)} className={`${selectBaseClasses} ${activityTypeClasses[slot.type]} pr-8`} disabled={slot.isLocked}>
+                                                        {Object.values(ActivityType).map(type => <option key={type} value={type} className="bg-white dark:bg-gray-800 text-black dark:text-white">{type}</option>)}
+                                                    </select>
+                                                    <ChevronDownIcon className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-white pointer-events-none" />
+                                                </div>
                                                 <div className="flex items-center justify-center w-10 h-10">
                                                     {slot.isLocked ? (
                                                         <span title={t('editTimetable.lockedTooltip')}>
                                                             <LockIcon className="w-5 h-5 text-gray-400" />
                                                         </span>
                                                     ) : (
-                                                        <button onClick={(e) => { e.stopPropagation(); setSlotToDelete({ day, index }); }} title={t('common.delete')}>
+                                                        <button onClick={() => setSlotToDelete({ day, tempId: slot.tempId })} title={t('common.delete')}>
                                                             <TrashIcon className="w-5 h-5 text-red-500 hover:text-red-700" />
                                                         </button>
                                                     )}

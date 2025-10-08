@@ -1,7 +1,5 @@
-
-
-import React, { useState, useEffect, useRef } from 'react';
-import type { ActiveSession, UploadedFile, Toast, TrackedSession, LearningHubState, View } from '../types.ts';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import type { ActiveSession, UploadedFile, Toast, TrackedSession } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { ExitIcon } from './icons/ExitIcon.tsx';
 import { PlayIcon } from './icons/PlayIcon.tsx';
@@ -12,6 +10,7 @@ import ConfirmationModal from './ConfirmationModal.tsx';
 import FileViewer from './FileViewer.tsx';
 import { ActivityType } from '../types.ts';
 import SessionCompleteModal from './SessionCompleteModal.tsx';
+import { CoffeeIcon } from './icons/CoffeeIcon.tsx';
 
 interface FocusedStudyViewProps {
     session: ActiveSession;
@@ -19,61 +18,22 @@ interface FocusedStudyViewProps {
     learningHubFile: UploadedFile | null;
     onExit: () => void;
     addToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
-    onStartBreak: (breakSession: ActiveSession) => void;
     trackedData: TrackedSession[];
     setTrackedData: (data: TrackedSession[]) => void;
 }
 
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
-};
-
-
-const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession, learningHubFile, onExit, addToast, onStartBreak, trackedData, setTrackedData }) => {
+const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession, learningHubFile, onExit, addToast, trackedData, setTrackedData }) => {
     const { t } = useLanguage();
     const [showExitConfirm, setShowExitConfirm] = useState(false);
-    const totalDurationSeconds = session.durationMinutes ? session.durationMinutes * 60 : (session.endTime - session.startTime) / 1000;
     
-    const [timeRemaining, setTimeRemaining] = useState(Math.max(0, Math.round((session.endTime - Date.now()) / 1000)));
+    const [timeRemaining, setTimeRemaining] = useState(0);
     const [isStudyPaused, setIsStudyPaused] = useState(false);
     const [isBreakTime, setIsBreakTime] = useState(false);
     const [breakTimeRemaining, setBreakTimeRemaining] = useState(0);
     const [studyProgress, setStudyProgress] = useState(0);
-    const [showBreakActivity, setShowBreakActivity] = useState(false);
-    const [breakVideoUrl, setBreakVideoUrl] = useState('');
     const [sessionComplete, setSessionComplete] = useState(false);
     const [pauseTime, setPauseTime] = useState(0);
+    const [currentBreakDuration, setCurrentBreakDuration] = useState(5);
     
     const timerRef = useRef<number | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -83,6 +43,8 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
         playNotificationSound();
     }, []);
 
+    const totalStudySeconds = useMemo(() => (session.durationMinutes || 0) * 60, [session.durationMinutes]);
+
     useEffect(() => {
         if (timerRef.current) {
             clearInterval(timerRef.current);
@@ -91,6 +53,8 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
         if (isStudyPaused) return;
 
         timerRef.current = setInterval(() => {
+            const now = Date.now();
+            
             if (isBreakTime) {
                 setBreakTimeRemaining(prev => {
                     if (prev <= 1) {
@@ -100,16 +64,41 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                     return prev - 1;
                 });
             } else { // Is Study Time
-                const newTimeRemaining = Math.max(0, Math.round((session.endTime - Date.now()) / 1000));
-                setTimeRemaining(newTimeRemaining);
-                
-                const elapsed = totalDurationSeconds - newTimeRemaining;
-                setStudyProgress((elapsed / totalDurationSeconds) * 100);
+                if (session.breakPlacement === 'during' && session.breakStartsAt && now >= session.breakStartsAt) {
+                    startScheduledBreak();
+                    return;
+                }
 
-                if (newTimeRemaining <= 0) {
+                const timeUntilEnd = Math.max(0, Math.round((session.endTime - now) / 1000));
+                
+                let studyTimeRemaining = timeUntilEnd;
+                if (session.breakPlacement === 'during' && session.nextSlot?.durationMinutes) {
+                    if (now < (session.breakStartsAt || Infinity)) {
+                        studyTimeRemaining -= session.nextSlot.durationMinutes * 60;
+                    }
+                }
+                setTimeRemaining(Math.max(0, studyTimeRemaining));
+
+                if (totalStudySeconds > 0) {
+                    const studyTimeElapsed = totalStudySeconds - studyTimeRemaining;
+                    setStudyProgress(Math.min(100, (studyTimeElapsed / totalStudySeconds) * 100));
+                } else {
+                    const totalSessionDuration = (session.endTime - session.startTime) / 1000;
+                    if(totalSessionDuration > 0) {
+                        const timeElapsed = totalSessionDuration - timeUntilEnd;
+                        setStudyProgress(Math.min(100, (timeElapsed/totalSessionDuration) * 100));
+                    } else {
+                        setStudyProgress(timeUntilEnd <= 0 ? 100 : 0);
+                    }
+                }
+
+                if (timeUntilEnd <= 0) {
                     handleSessionComplete();
-                } else if (elapsed > 0 && Math.round(elapsed) % (25 * 60) === 0 && !isBreakTime) {
-                    startPomodoroBreak();
+                } else if (!session.nextSlot && totalStudySeconds > 0) {
+                    const studyTimeElapsed = totalStudySeconds - studyTimeRemaining;
+                    if (studyTimeElapsed > 0 && Math.round(studyTimeElapsed) % (25 * 60) === 0 && !isBreakTime) {
+                        startPomodoroBreak();
+                    }
                 }
             }
         }, 1000) as unknown as number;
@@ -119,7 +108,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                 clearInterval(timerRef.current);
             }
         };
-    }, [isStudyPaused, isBreakTime, totalDurationSeconds, session.endTime]);
+    }, [isStudyPaused, isBreakTime, session, totalStudySeconds]);
 
     const playNotificationSound = () => {
         if (audioRef.current) {
@@ -130,18 +119,29 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
 
     const startPomodoroBreak = () => {
         setIsBreakTime(true);
-        setBreakTimeRemaining(5 * 60); // 5 minute break
-        setShowBreakActivity(true);
+        setCurrentBreakDuration(5);
+        setBreakTimeRemaining(5 * 60);
         playNotificationSound();
-        addToast(t('toasts.breakStarted'), 'info');
+        addToast(t('toasts.breakStarted', { duration: 5 }), 'info');
+    };
+    
+    const startScheduledBreak = () => {
+        if (!session.nextSlot || !session.nextSlot.durationMinutes) return;
+        setIsBreakTime(true);
+        setCurrentBreakDuration(session.nextSlot.durationMinutes);
+        setBreakTimeRemaining(session.nextSlot.durationMinutes * 60);
+        playNotificationSound();
+        addToast(t('toasts.breakStarted', { duration: session.nextSlot.durationMinutes }), 'info');
+        setSession({ ...session, breakStartsAt: undefined });
     };
 
-    const endBreak = () => {
+    const endBreak = (skipped = false) => {
         setIsBreakTime(false);
         setBreakTimeRemaining(0);
-        setShowBreakActivity(false);
-        playNotificationSound();
-        addToast(t('toasts.breakOver'), 'success');
+        if (!skipped) {
+            playNotificationSound();
+            addToast(t('toasts.breakOver'), 'success');
+        }
     };
 
     const handleSessionComplete = () => {
@@ -165,12 +165,16 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
 
     const togglePause = () => {
         setIsStudyPaused(prev => {
-            if (!prev) { // Pausing
+            if (!prev) { 
                 if(timerRef.current) clearInterval(timerRef.current);
                 setPauseTime(Date.now());
-            } else { // Resuming
+            } else { 
                 const pausedDuration = Date.now() - pauseTime;
-                setSession({ ...session, endTime: session.endTime + pausedDuration });
+                setSession({ 
+                    ...session, 
+                    endTime: session.endTime + pausedDuration,
+                    breakStartsAt: session.breakStartsAt ? session.breakStartsAt + pausedDuration : undefined
+                });
             }
             return !prev;
         });
@@ -184,26 +188,19 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
     };
 
     const handleStartBreakFromModal = () => {
-        if (session.nextSlot?.type === 'break') {
-            const nextBreakSlot = session.nextSlot;
-            const breakDurationMs = nextBreakSlot.durationMinutes
-                ? nextBreakSlot.durationMinutes * 60 * 1000
-                : (timeToMinutes(nextBreakSlot.endTime) - timeToMinutes(nextBreakSlot.startTime)) * 60 * 1000;
-            
-            if (breakDurationMs > 0) {
-                const newBreakSession: ActiveSession = {
-                    startTime: Date.now(),
-                    endTime: Date.now() + breakDurationMs,
-                    subject: nextBreakSlot.activity,
-                    type: ActivityType.BREAK,
-                    fromSlot: nextBreakSlot,
-                    nextSlot: null,
-                };
-                onStartBreak(newBreakSession);
-            } else {
-                addToast("Could not start break: invalid duration.", "error");
-            }
-        }
+        const breakDurationMs = (session.nextSlot?.durationMinutes || 0) * 60 * 1000;
+        if (breakDurationMs <= 0) return;
+        
+        const newBreakSession: ActiveSession = {
+            startTime: Date.now(),
+            endTime: Date.now() + breakDurationMs,
+            subject: session.nextSlot?.activity || 'Break',
+            type: ActivityType.BREAK,
+            fromSlot: session.nextSlot!,
+            nextSlot: null,
+        };
+        onExit();
+        setSession(newBreakSession);
     };
 
 
@@ -211,7 +208,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
         return <SessionCompleteModal 
             isOpen={sessionComplete}
             onNavigate={() => onExit()}
-            onStartBreak={session.nextSlot?.type === 'break' ? handleStartBreakFromModal : undefined}
+            onStartBreak={session.breakPlacement === 'after' && session.nextSlot?.type === 'break' ? handleStartBreakFromModal : undefined}
             session={session}
             wasTracked={!session.isUntracked}
         />
@@ -251,7 +248,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                                         {formatTime(timeRemaining)}
                                     </div>
                                     <div className="text-sm text-gray-500">
-                                        {studyProgress.toFixed(0)}{t('focusedStudy.complete')}
+                                        {(studyProgress || 0).toFixed(0)}{t('focusedStudy.complete')}
                                     </div>
                                 </div>
                             )}
@@ -269,33 +266,17 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                     </div>
 
                     <div className="w-full bg-gray-200 dark:bg-gray-700 h-2">
-                        <div className="bg-primary h-2 transition-all duration-300" style={{ width: `${studyProgress}%` }} />
+                        <div className="bg-primary h-2 transition-all duration-300" style={{ width: `${studyProgress || 0}%` }} />
                     </div>
                 </header>
 
-                {showBreakActivity && (
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
-                            <div className="text-center mb-6">
-                                <div className="text-6xl mb-4">☕</div>
-                                <h3 className="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-2">{t('focusedStudy.breakTime')}</h3>
-                                <p className="text-gray-600 dark:text-gray-400 mb-4">Take a 5-minute break to recharge</p>
-                                <div className="text-3xl font-bold text-orange-500">{formatTime(breakTimeRemaining)}</div>
-                            </div>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-2">{t('focusedStudy.break.watch')}</label>
-                                    <input type="url" value={breakVideoUrl} onChange={(e) => setBreakVideoUrl(e.target.value)} placeholder={t('focusedStudy.break.placeholder')} className="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 text-sm">
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center"><div className="font-medium text-blue-600 dark:text-blue-400">{t('focusedStudy.break.stretch')}</div></div>
-                                    <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center"><div className="font-medium text-green-600 dark:text-green-400">{t('focusedStudy.break.hydrate')}</div></div>
-                                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center"><div className="font-medium text-purple-600 dark:text-purple-400">{t('focusedStudy.break.air')}</div></div>
-                                    <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-center"><div className="font-medium text-orange-600 dark:text-orange-400">{t('focusedStudy.break.snack')}</div></div>
-                                </div>
-                                <button onClick={endBreak} className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all">{t('focusedStudy.resumeStudying')}</button>
-                            </div>
-                        </div>
+                {isBreakTime && (
+                    <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white">
+                        <CoffeeIcon className="w-24 h-24 text-gray-300" />
+                        <h3 className="text-5xl font-bold text-orange-400 mt-4 mb-2">{t('breakview.title')}</h3>
+                        <p className="text-xl text-gray-300 mb-6">{t('focusedStudy.break.recharge', { duration: currentBreakDuration })}</p>
+                        <div className="text-6xl font-bold text-orange-400 mb-8">{formatTime(breakTimeRemaining)}</div>
+                        <button onClick={() => endBreak(true)} className="px-6 py-2 bg-gray-600/50 rounded-full hover:bg-gray-500/50 transition-colors">{t('breakview.skip')}</button>
                     </div>
                 )}
 

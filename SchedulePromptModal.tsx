@@ -1,7 +1,8 @@
+
 import React from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from './contexts/LanguageContext.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
-import type { PlanSlot } from '../types.ts';
+import type { PlanSlot } from './types.ts';
 
 interface SchedulePromptModalProps {
     isOpen: boolean;
@@ -14,22 +15,38 @@ interface SchedulePromptModalProps {
     };
 }
 
+// FIX: Replaced buggy timeToMinutes with a more robust version
 const timeToMinutes = (time: string): number => {
-    if (!time || !time.includes(':')) return 0;
+    if (!time) return 0;
     try {
-        const timeParts = time.split(' ');
-        const [hourStr, minuteStr] = timeParts[0].split(':');
+        const timeLower = time.toLowerCase().replace(/\s/g, '');
+        const isPM = timeLower.includes('pm');
+        const isAM = timeLower.includes('am');
+
+        const timeOnly = timeLower.replace('am', '').replace('pm', '');
+        
+        let [hourStr, minuteStr] = timeOnly.split(':');
+        
+        if (!minuteStr) minuteStr = '0';
+
         let hours = parseInt(hourStr, 10);
         const minutes = parseInt(minuteStr, 10);
 
-        if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'PM' && hours !== 12) {
+        if (isNaN(hours) || isNaN(minutes)) {
+            console.warn(`Could not parse time: ${time}`);
+            return 0;
+        }
+        
+        if (isPM && hours !== 12) {
             hours += 12;
         }
-        if (timeParts.length > 1 && timeParts[1].toUpperCase() === 'AM' && hours === 12) {
-            hours = 0; // Midnight case
+        if (isAM && hours === 12) {
+            hours = 0;
         }
+
         return hours * 60 + minutes;
-    } catch {
+    } catch (e) {
+        console.error("Failed to parse time string:", time, e);
         return 0;
     }
 };
@@ -46,9 +63,14 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
         : `${duration} ${t('common.minutes')}`;
 
     const isNextBreak = nextSlot?.type === 'break';
-    const breakText = isNextBreak ? ` There is a break scheduled from ${nextSlot.startTime} to ${nextSlot.endTime}.` : '';
-
-    const message = `You are scheduled to study ${slot.activity} from ${slot.startTime} to ${slot.endTime} (Duration: ${durationText}).${breakText}`;
+    
+    // FIX: Use i18n function instead of hardcoded strings
+    const message = t('schedulePrompt.message', {
+        course: slot.activity,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        duration: durationText
+    }) + (isNextBreak ? t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime }) : '');
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -69,13 +91,13 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
                         onClick={onConfirm}
                         className="flex-1 py-2 px-4 rounded-md text-md font-semibold transition-colors bg-blue-700 text-white hover:bg-blue-800"
                     >
-                        Yes, it is {slot.activity}
+                        {t('schedulePrompt.confirmButton', { course: slot.activity })}
                     </button>
                     <button
                         onClick={onReject}
                         className="flex-1 py-2 px-4 rounded-md text-md font-semibold transition-colors bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500"
                     >
-                        No, it is a different course
+                        {t('schedulePrompt.rejectButton')}
                     </button>
                 </div>
             </div>

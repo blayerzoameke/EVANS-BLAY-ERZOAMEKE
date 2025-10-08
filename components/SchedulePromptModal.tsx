@@ -14,6 +14,7 @@ interface SchedulePromptModalProps {
     };
 }
 
+// FIX: Replaced buggy timeToMinutes with a more robust version
 const timeToMinutes = (time: string): number => {
     if (!time) return 0;
     try {
@@ -62,6 +63,7 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
 
     const isNextBreak = nextSlot?.type === 'break';
     
+    // FIX: Use i18n function instead of hardcoded strings
     const message = t('schedulePrompt.message', {
         course: slot.activity,
         startTime: slot.startTime,

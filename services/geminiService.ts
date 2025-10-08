@@ -1,4 +1,4 @@
-// Corrected import from GoogleGenerativeAI to GoogleGenAI as per Gemini API guidelines.
+
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import type {
   UserDetails,
@@ -14,7 +14,6 @@ import type {
 } from "../types.ts";
 import { DayOfWeek as DayOfWeekEnum } from "../types.ts";
 
-// Always use new GoogleGenAI({apiKey: process.env.API_KEY});
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const textModel = "gemini-2.5-flash";
@@ -41,7 +40,6 @@ const safetySettings = [
 const generateContent = async (prompt: string | (string | ImagePart)[], responseSchema?: any, options?: { fast?: boolean }) => {
   try {
     const config: any = {
-        safetySettings,
         temperature: 0.5,
     };
     if (responseSchema) {
@@ -59,26 +57,26 @@ const generateContent = async (prompt: string | (string | ImagePart)[], response
             if (typeof p === 'string') {
                 return { text: p };
             }
-            return p; // It's already an ImagePart, which is a valid Part.
+            return p;
         });
-        // For a single-turn multimodal prompt, the `contents` field expects a single `Content` object.
         contents = { parts };
     } else {
-        // For a simple text prompt, a string is acceptable.
         contents = prompt;
     }
 
+    // FIX: `safetySettings` must be a part of the `config` object.
     const result = await ai.models.generateContent({
         model: textModel,
         contents,
-        config,
+        config: {
+            ...config,
+            safetySettings,
+        },
     });
     
     const text = result.text;
     
     if (responseSchema) {
-      // The response text can sometimes be wrapped in markdown or have extra text.
-      // This is a more robust way to extract the JSON string.
       let jsonStr = text.trim();
       if (jsonStr.startsWith("```json")) {
         jsonStr = jsonStr.substring(7, jsonStr.length - 3).trim();
@@ -123,8 +121,6 @@ const generateContent = async (prompt: string | (string | ImagePart)[], response
     throw new Error("Failed to get a response from the AI model. It might be a network issue or an internal error.");
   }
 };
-
-// Function implementations
 
 export const generateSmartPlan = async (
   userDetails: UserDetails,
@@ -186,7 +182,7 @@ export const generateSmartPlan = async (
       }
   };
 
-  return generateContent(prompt, schema);
+  return generateContent(prompt, schema, { fast: true });
 };
 
 export const generatePlanFromImage = async (
@@ -241,7 +237,7 @@ export const generatePlanFromImage = async (
       }
   };
 
-  return generateContent([prompt, imagePart], schema);
+  return generateContent([prompt, imagePart], schema, { fast: true });
 };
 
 export const isImageTimetable = async (imagePart: ImagePart): Promise<boolean> => {
@@ -299,23 +295,22 @@ export const chatWithDocumentStream = async (
     
     systemInstruction += " If the answer is not in the document or the provided schedule, say so.";
     
-    // The 'history' parameter should contain all complete, previous turns.
     const chatHistory = history.flatMap(turn => [{ role: 'user', parts: [{ text: turn.user }] }, { role: 'model', parts: [{ text: turn.blay }] }]);
 
-    // The document (filePart) should only be sent with the latest user message.
     const contents = [
         ...chatHistory,
         { role: 'user', parts: [filePart, { text: userMessage }] }
     ];
 
+    // FIX: `safetySettings` must be a part of the `config` object.
     const result = await ai.models.generateContentStream({
         model: textModel,
         contents: contents as any,
         config: {
             systemInstruction,
-            safetySettings,
             temperature: 0.7,
-        }
+            safetySettings,
+        },
     });
 
     return result;
@@ -388,15 +383,15 @@ Output Format requirements: ${outputFormat}.
     if (outputFormat === 'graph') {
         promptText += `\nYour task is to solve the problem and provide the necessary information to plot a graph of the solution.
     1. Provide a step-by-step explanation for the solution.
-    2. Identify the mathematical function that needs to be plotted.
+    2. Identify the mathematical function that needs to be plotted. IMPORTANT: The function must be an explicit function of y in terms of x (e.g., y = x**2, not x = y^2). If the equation is implicit (like a circle x^2 + y^2 = 25), you MUST solve for y and provide the comma-separated functions for each part (e.g., "sqrt(25 - x**2), -sqrt(25 - x**2)").
     3. The user has provided graph settings: ${graphInterval || 'auto'}. Use this to inform your response if relevant.
 
     Your output MUST be a valid JSON object with the following structure:
     - "explanation": A string containing the step-by-step solution.
-    - "graphFunction": A string containing only the mathematical expression to be plotted (e.g., "x**2 * sin(x)"). Use standard mathematical notation.
+    - "graphFunction": A string containing only the mathematical expression(s) to be plotted (e.g., "x**2 * sin(x)" or "sqrt(25 - x**2), -sqrt(25 - x**2)"). Use standard JavaScript mathematical notation.
     - "suggestedTitle": An optional string for the graph's title.
     
-    CRITICAL: The JSON object should be the only thing in your response. Do not wrap it in markdown. Do not add any text before or after the JSON.`;
+    CRITICAL: Your entire response must be ONLY the JSON object, with no other text, markdown, or explanations. Ensure all string values within the JSON are properly escaped. All newlines within the 'explanation' string must be escaped as \\n.`;
 
         promptParts.push(promptText);
 

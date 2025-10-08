@@ -1,3 +1,4 @@
+
 import { translations as enTranslations } from './i18n-en.ts';
 import { translations as esTranslations } from './i18n-es.ts';
 import { translations as frTranslations } from './i18n-fr.ts';
@@ -16,7 +17,8 @@ export const translations = {
 
 export type Language = keyof typeof translations;
 // This ensures that any key used must exist in the English translation object.
-export type TranslationKey = keyof typeof translations['en'];
+// FIX: Changed to reference enTranslations directly to avoid potential circular type inference issues.
+export type TranslationKey = keyof typeof enTranslations;
 
 export const supportedLanguages: { code: Language; name: string }[] = [
     { code: 'en', name: 'English' },

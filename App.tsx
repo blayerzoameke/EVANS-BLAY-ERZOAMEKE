@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar.tsx';
 import Header from './components/Header.tsx';
@@ -10,9 +8,6 @@ import Progression from './components/Progression.tsx';
 import Notes from './components/Notes.tsx';
 import Onboarding from './components/Onboarding.tsx';
 import ToastContainer from './components/ToastContainer.tsx';
-import LanguageSettings from './components/Language.tsx';
-import ThemeSettings from './components/Theme.tsx';
-import NotificationSettingsComponent from './components/NotificationSettings.tsx';
 import Settings from './components/Settings.tsx';
 import Reports from './components/Reports.tsx';
 import Feedback from './components/Feedback.tsx';
@@ -20,15 +15,15 @@ import Help from './components/Help.tsx';
 import About from './components/About.tsx';
 import UploadSlides from './components/UploadSlides.tsx';
 import ExamPrep from './components/ExamPrep.tsx';
-import StudyTracker from './components/StudyTracker.tsx';
 import BreakView from './components/BreakView.tsx';
 import FocusedStudyView from './components/FocusedStudyView.tsx';
 import Library from './components/Library.tsx';
 import Terms from './components/Terms.tsx';
 import Tutorial from './components/Tutorial.tsx';
+import Preferences from './components/Preferences.tsx';
 
 import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft, PlanSlot, View } from './types.ts';
-import { EducationalLevel, QuizType } from './types.ts';
+import { QuizType } from './types.ts';
 import { useLanguage } from './contexts/LanguageContext.tsx';
 
 const App: React.FC = () => {
@@ -161,11 +156,7 @@ const App: React.FC = () => {
   };
   
   const learningHubFile = learningHubState.file;
-  const isStudyMode = activeSession?.type === 'study' && learningHubFile;
-
-  const handleStartBreak = (breakSession: ActiveSession) => {
-      setActiveSession(breakSession);
-  };
+  const isStudyMode = activeSession?.type === 'study';
 
   const renderView = () => {
     switch (view) {
@@ -187,6 +178,7 @@ const App: React.FC = () => {
                   setDashboardInputs={setDashboardInputs}
                   setView={setView}
                   setIntendedStudyContext={setIntendedStudyContext}
+                  setLearningHubState={setLearningHubState}
                />;
       case 'profile':
         return <Profile 
@@ -235,12 +227,8 @@ const App: React.FC = () => {
                     examPrepState={examPrepState}
                     setExamPrepState={setExamPrepState}
                 />;
-      case 'language':
-        return <LanguageSettings />;
-      case 'theme':
-        return <ThemeSettings />;
-      case 'notification':
-        return <NotificationSettingsComponent settings={notificationSettings} setSettings={setNotificationSettings} />;
+      case 'preferences':
+        return <Preferences notificationSettings={notificationSettings} setNotificationSettings={setNotificationSettings} />;
       case 'settings':
         return <Settings notificationSettings={notificationSettings} setNotificationSettings={setNotificationSettings} />;
       case 'report':
@@ -278,11 +266,16 @@ const App: React.FC = () => {
                 session={activeSession!} 
                 learningHubFile={learningHubFile} 
                 onExit={() => { 
-                    setActiveSession(null); 
-                    setLearningHubState(prev => ({...prev, file: null}));
+                    const wasUntracked = activeSession?.isUntracked;
+                    setActiveSession(null);
+                    if (!wasUntracked) {
+                        // For tracked sessions, clear the file and return to dashboard
+                        setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
+                        setView('dashboard');
+                    }
+                    // For untracked sessions, just end the session and stay in the learning hub with the file loaded
                 }} 
                 addToast={addToast}
-                onStartBreak={handleStartBreak}
                 trackedData={trackedData}
                 setTrackedData={setTrackedData}
                 setSession={setActiveSession}
@@ -297,7 +290,6 @@ const App: React.FC = () => {
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           {renderView()}
-          {!isStudyMode && activeSession?.type === 'study' && !activeSession.isUntracked && <StudyTracker session={activeSession} setSession={setActiveSession} addToast={addToast} trackedData={trackedData} setTrackedData={setTrackedData} setView={setView} />}
         </main>
       </div>
        {activeSession?.type === 'break' && <BreakView session={activeSession} setSession={setActiveSession} />}

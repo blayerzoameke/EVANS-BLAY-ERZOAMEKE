@@ -60,7 +60,7 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
   const addStudyGoal = () => setStudyGoals(p => [...p, { id: Date.now().toString(), subject: '', hours: 3 }]);
   const addAgendaItem = () => setAgendaItems(p => [...p, { id: Date.now().toString(), title: '', day: DayOfWeek.Monday, startTime: '12:00 PM', endTime: '01:00 PM' }]);
 
-  const inputClasses = "block w-full h-10 px-4 py-2 bg-gray-50 dark:bg-gray-700/50 border-2 border-gray-200 dark:border-gray-600 rounded-lg shadow-inner placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-800";
+  const inputClasses = "block w-full h-10 px-4 py-2 bg-gray-700 dark:bg-gray-700/50 border-2 border-gray-500 dark:border-gray-600 rounded-lg shadow-inner text-white dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm disabled:bg-gray-600 dark:disabled:bg-gray-800";
   const selectClasses = `${inputClasses} pr-8`;
   const primaryButtonClasses = "flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold text-primary-text bg-primary rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-dark disabled:opacity-50 transition-all transform hover:-translate-y-0.5";
   

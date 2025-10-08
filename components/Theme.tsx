@@ -66,16 +66,9 @@ const ThemeSettings: React.FC = () => {
     ];
 
     return (
-        <div className="max-w-4xl mx-auto space-y-10">
-            <div className="text-center">
-                <h2 className="text-4xl font-bold text-gray-800 dark:text-white mb-3">
-                    {t('theme.title')}
-                </h2>
-                <p className="text-gray-600 dark:text-gray-300 text-lg">{t('theme.subtitle')}</p>
-            </div>
-
-            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-gray-200/50 dark:border-gray-700/50">
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">{t('theme.displayMode')}</h3>
+        <div className="space-y-10">
+            <div>
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">{t('theme.displayMode')}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {options.map(({ value, labelKey, descKey, gradient, icon }) => (
                         <button
@@ -109,9 +102,9 @@ const ThemeSettings: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-gray-200/50 dark:border-gray-700/50">
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">{t('theme.colorThemes')}</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-8">{t('theme.colorThemes.desc')}</p>
+            <div>
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">{t('theme.colorThemes')}</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">{t('theme.colorThemes.desc')}</p>
                 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     {colorThemes.map(({ value, nameKey, previewClass }) => (
@@ -129,46 +122,6 @@ const ThemeSettings: React.FC = () => {
                         </button>
                     ))}
                 </div>
-            </div>
-
-            <div className="bg-primary rounded-2xl shadow-xl p-8 text-white">
-                <h3 className="text-2xl font-bold mb-6 drop-shadow-lg">{t('theme.preview.title')}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                        <div className="bg-lecture p-4 rounded-xl shadow-lg">
-                            <h4 className="font-bold text-white mb-2">{t('theme.preview.lecture')}</h4>
-                            <p className="text-white/80 text-sm">Mathematics - 08:00 AM</p>
-                            <span className="inline-block px-2 py-1 bg-white/20 rounded-full text-xs mt-2">{t('theme.preview.lecture.type')}</span>
-                        </div>
-                        <div className="bg-study p-4 rounded-xl shadow-lg">
-                            <h4 className="font-bold text-white mb-2">{t('theme.preview.study')}</h4>
-                            <p className="text-white/80 text-sm">Physics - 10:00 AM</p>
-                            <span className="inline-block px-2 py-1 bg-white/20 rounded-full text-xs mt-2">{t('theme.preview.study.type')}</span>
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                        <div className="bg-break p-4 rounded-xl shadow-lg">
-                            <h4 className="font-bold text-white mb-2">{t('theme.preview.break')}</h4>
-                            <p className="text-white/80 text-sm">Coffee Break - 15 mins</p>
-                            <span className="inline-block px-2 py-1 bg-white/20 rounded-full text-xs mt-2">{t('theme.preview.break.type')}</span>
-                        </div>
-                        <div className="bg-agenda p-4 rounded-xl shadow-lg">
-                            <h4 className="font-bold text-white mb-2">{t('theme.preview.agenda')}</h4>
-                            <p className="text-white/80 text-sm">Breakfast - 07:30 AM</p>
-                            <span className="inline-block px-2 py-1 bg-white/20 rounded-full text-xs mt-2">{t('theme.preview.agenda.type')}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="text-center">
-                <button 
-                    onClick={() => { setTheme('system'); setColorTheme('blue'); }}
-                    className="px-8 py-3 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105"
-                >
-                    {t('theme.reset')}
-                </button>
             </div>
         </div>
     );

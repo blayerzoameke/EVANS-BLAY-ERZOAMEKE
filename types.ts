@@ -1,4 +1,14 @@
 
+// FIX: Export DayOfWeek enum and remove circular import from constants.ts
+export enum DayOfWeek {
+  Monday = 'Monday',
+  Tuesday = 'Tuesday',
+  Wednesday = 'Wednesday',
+  Thursday = 'Thursday',
+  Friday = 'Friday',
+  Saturday = 'Saturday',
+  Sunday = 'Sunday',
+}
 
 export type View =
   | 'dashboard'
@@ -8,9 +18,7 @@ export type View =
   | 'notes'
   | 'uploadslides'
   | 'examprep'
-  | 'language'
-  | 'theme'
-  | 'notification'
+  | 'preferences'
   | 'settings'
   | 'report'
   | 'feedback'
@@ -21,16 +29,6 @@ export type View =
   | 'tutorial';
 
 export type Theme = 'light' | 'dark' | 'system';
-
-export enum DayOfWeek {
-  Monday = 'Monday',
-  Tuesday = 'Tuesday',
-  Wednesday = 'Wednesday',
-  Thursday = 'Thursday',
-  Friday = 'Friday',
-  Saturday = 'Saturday',
-  Sunday = 'Sunday',
-}
 
 export enum EducationalLevel {
   HIGH_SCHOOL = 'High School',
@@ -137,6 +135,8 @@ export interface ActiveSession {
   nextSlot: PlanSlot | null;
   isUntracked?: boolean;
   durationMinutes?: number;
+  breakPlacement?: 'during' | 'after';
+  breakStartsAt?: number;
 }
 
 export interface Note {
@@ -215,7 +215,7 @@ export interface NotificationSettings {
     status: 'unconfigured' | 'configured';
     enabled: boolean;
     reminders: boolean;
-    reminderTime: 5 | 10 | 15;
+    reminderTime: number;
     sessionStart: boolean;
     breakStartEnd: boolean;
 }

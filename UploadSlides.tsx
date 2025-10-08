@@ -1,11 +1,12 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import katex from 'katex';
 // FIX: Corrected import for View type and other types.
-import type { SmartPlan, ActiveSession, Toast, LearningHubState, UploadedFile, ImagePart, Note, PlanSlot, ConflictInfo, ChatTurn, View } from '../types.ts';
-import { ActivityType, DayOfWeek } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { getDocumentContext, isStudyMaterial, summarizeDocument, explainDocument, extractTextFromDocument, chatWithDocumentStream } from '../services/geminiService.ts';
+import type { SmartPlan, ActiveSession, Toast, LearningHubState, UploadedFile, ImagePart, Note, PlanSlot, ConflictInfo, ChatTurn, View } from './types.ts';
+import { ActivityType, DayOfWeek } from './types.ts';
+import { useLanguage } from './contexts/LanguageContext.tsx';
+import { getDocumentContext, isStudyMaterial, summarizeDocument, explainDocument, extractTextFromDocument, chatWithDocumentStream } from './services/geminiService.ts';
 import { UploadIcon } from './icons/UploadIcon.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import AdvancedStudySetupModal from './AdvancedStudySetupModal.tsx';
@@ -17,7 +18,7 @@ import { CopyIcon } from './icons/CopyIcon.tsx';
 import { PlayIcon } from './icons/PlayIcon.tsx';
 import { PauseIcon } from './icons/PauseIcon.tsx';
 import { StopIcon } from './icons/StopIcon.tsx';
-import { DAYS_OF_WEEK } from '../constants.ts';
+import { DAYS_OF_WEEK } from './constants.ts';
 import SessionCustomizationModal from './SessionCustomizationModal.tsx';
 
 interface UploadSlidesProps {
@@ -468,7 +469,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     else if (resolution === 'shift') {
         let shifted = false;
         for(let dayIdx = dayPlanIndex; dayIdx < newPlan.length; dayIdx++) {
-            const slots = newPlan[dayIdx].slots;
+            const slots = newPlan[dayPlanIndex].slots;
             for(let slotIdx = 0; slotIdx < slots.length; slotIdx++){
                 const slot = slots[slotIdx];
                 if(slot.type === ActivityType.FREE){

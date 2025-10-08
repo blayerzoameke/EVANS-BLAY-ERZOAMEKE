@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
@@ -6,7 +5,7 @@ import { CloseIcon } from './icons/CloseIcon.tsx';
 interface SessionCustomizationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (config: { studyDuration: number; breakDuration: number; breakActivity: string; breakLink: string }) => void;
+    onConfirm: (config: { studyDuration: number; breakDuration: number; breakActivity: string; breakLink: string; breakPlacement: 'during' | 'after' }) => void;
     defaultDuration?: number;
 }
 
@@ -24,6 +23,7 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
     
     const [breakDuration, setBreakDuration] = useState(10);
     const [breakDurationSelection, setBreakDurationSelection] = useState('10');
+    const [breakPlacement, setBreakPlacement] = useState<'during' | 'after'>('after');
 
     const [breakActivityType, setBreakActivityType] = useState('youtube');
     const [customBreakActivity, setCustomBreakActivity] = useState('');
@@ -41,7 +41,8 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
             studyDuration,
             breakDuration,
             breakActivity: finalBreakActivity,
-            breakLink
+            breakLink,
+            breakPlacement
         });
     };
 
@@ -102,6 +103,13 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
 
                     {breakDuration > 0 && (
                         <div className="space-y-4 pt-4 border-t dark:border-gray-700">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.breakPlacement.title')}</label>
+                                <div className="mt-2 grid grid-cols-2 gap-2 rounded-md bg-gray-100 dark:bg-gray-800 p-1">
+                                    <button onClick={() => setBreakPlacement('during')} className={`px-3 py-1.5 text-sm font-medium rounded ${breakPlacement === 'during' ? 'bg-white dark:bg-gray-700 shadow' : ''}`}>{t('sessionCustomization.breakPlacement.during')}</button>
+                                    <button onClick={() => setBreakPlacement('after')} className={`px-3 py-1.5 text-sm font-medium rounded ${breakPlacement === 'after' ? 'bg-white dark:bg-gray-700 shadow' : ''}`}>{t('sessionCustomization.breakPlacement.after')}</button>
+                                </div>
+                            </div>
                              <div>
                                 <label htmlFor="break-activity" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.breakActivity')}</label>
                                 <select id="break-activity" value={breakActivityType} onChange={e => setBreakActivityType(e.target.value)} className={`${inputClasses} mt-1`}>
@@ -111,7 +119,7 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
                             {breakActivityType === 'custom' && (
                                 <input type="text" value={customBreakActivity} onChange={e => setCustomBreakActivity(e.target.value)} placeholder={t('sessionCustomization.breakActivityPlaceholder')} className={`${inputClasses} mt-1`} />
                             )}
-                            {['youtube', 'tiktok'].includes(breakActivityType) && (
+                            {['youtube', 'tiktok', 'music'].includes(breakActivityType) && (
                                 <div>
                                     <label htmlFor="break-link" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.breakLink')}</label>
                                     <input type="url" id="break-link" value={breakLink} onChange={e => setBreakLink(e.target.value)} placeholder={t('sessionCustomization.breakLinkPlaceholder')} className={`${inputClasses} mt-1`} />

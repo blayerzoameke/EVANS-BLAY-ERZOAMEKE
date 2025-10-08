@@ -27,9 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
   ];
 
   const preferencesNavItems: NavItem[] = [
-    { id: 'language', nameKey: 'sidebar.language'},
-    { id: 'theme', nameKey: 'sidebar.theme'},
-    { id: 'notification', nameKey: 'sidebar.notification'},
+    { id: 'preferences', nameKey: 'sidebar.preferences'},
   ];
   
   const appNavItems: NavItem[] = [
@@ -68,14 +66,14 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
             : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
         }`}
       >
-        {t(item.nameKey as any)}
+        {t(item.nameKey)}
       </a>
     );
   };
   
   const NavGroup: React.FC<{titleKey: keyof typeof import('../lib/i18n.ts').translations['en'], items: NavItem[]}> = ({ titleKey, items }) => (
     <div>
-        <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t(titleKey as any)}</h3>
+        <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t(titleKey)}</h3>
         <div className="space-y-1">
             {items.map(item => <NavLink key={item.id} item={item} currentView={view} onClick={handleNavClick} />)}
         </div>
