@@ -1,6 +1,5 @@
 
 import React from 'react';
-// FIX: Added .ts extension to import path.
 import type { Toast as ToastType } from '../types.ts';
 import Toast from './Toast.tsx';
 

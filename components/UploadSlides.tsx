@@ -19,6 +19,9 @@ import { StopIcon } from './icons/StopIcon.tsx';
 import { DAYS_OF_WEEK } from '../constants.ts';
 import SessionCustomizationModal from './SessionCustomizationModal.tsx';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon.tsx';
+import { timeToMinutes } from '../lib/utils.ts';
+import { CheckIcon } from './icons/CheckIcon.tsx';
+import { PencilIcon } from './icons/PencilIcon.tsx';
 
 interface UploadSlidesProps {
   smartPlan: SmartPlan | null;
@@ -39,41 +42,6 @@ interface UploadSlidesProps {
 
 type AudioState = 'idle' | 'playing' | 'paused';
 type HubView = 'actions' | 'summarize' | 'explain' | 'chat' | 'read-aloud';
-
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
-};
 
 const minutesToTime = (totalMinutes: number): string => {
     const hours24 = Math.floor(totalMinutes / 60) % 24;
@@ -101,12 +69,30 @@ const LoadingOverlay: React.FC<{ isLoading: boolean; message: string }> = ({ isL
     );
 };
 
+const CopyButton: React.FC<{ textToCopy: string; className?: string }> = ({ textToCopy, className }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopy = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        });
+    };
+
+    return (
+        <button onClick={handleCopy} className={`p-1.5 rounded-md transition-colors ${className}`}>
+            {isCopied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
+        </button>
+    );
+};
+
+
 const KatexRenderer: React.FC<{ content: string; displayMode: boolean }> = React.memo(({ content, displayMode }) => {
     try {
         const html = katex.renderToString(content, { throwOnError: false, displayMode });
         return <span dangerouslySetInnerHTML={{ __html: html }} />;
     } catch (e) {
-        // FIX: Corrected invalid JSX syntax.
         return <code>{content}</code>;
     }
 });
@@ -142,15 +128,17 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
                     const lang = codeContent.match(/^[a-zA-Z]+\n/)?.[0].trim() || '';
                     const code = codeContent.replace(/^[a-zA-Z]+\n/, '');
                     return (
-                        <div key={index} className="bg-gray-100 dark:bg-gray-900 rounded-md my-4">
-                             {lang && <div className="text-xs text-gray-500 px-4 pt-2 capitalize">{lang}</div>}
-                             <pre><code className="block whitespace-pre-wrap p-4 text-sm">{code}</code></pre>
+                        <div key={index} className="relative bg-black/70 text-gray-100 rounded-xl my-4 border border-gray-700 shadow-lg">
+                            <div className="flex justify-between items-center px-4 py-2 bg-gray-800/50 border-b border-gray-700 rounded-t-xl">
+                                <span className="text-xs font-mono text-gray-400 capitalize">{lang || 'code'}</span>
+                                <CopyButton textToCopy={code} className="bg-gray-700/50 text-gray-300 hover:bg-gray-600/70 hover:text-white" />
+                            </div>
+                            <pre className="p-4 overflow-x-auto"><code className="text-sm font-mono whitespace-pre-wrap">{code}</code></pre>
                         </div>
                     );
                 }
 
                 const lines = block.split('\n');
-                // FIX: Changed type to be more flexible and idiomatic for React children.
                 const elements: React.ReactNode[] = [];
                 let listItems: string[] = [];
                 let inList = false;
@@ -206,9 +194,17 @@ interface ChatViewProps {
     setChatInput: (value: string) => void;
     handleChatSubmit: (e: React.FormEvent) => void;
     isProcessing: boolean;
+    editingMessage: { index: number; text: string } | null;
+    setEditingMessage: React.Dispatch<React.SetStateAction<{ index: number; text: string } | null>>;
+    handleEditMessage: (index: number) => void;
+    handleCancelEdit: () => void;
+    handleSaveEdit: (index: number) => void;
 }
 
-const ChatView: React.FC<ChatViewProps> = ({ chatHistory, chatInput, setChatInput, handleChatSubmit, isProcessing }) => {
+const ChatView: React.FC<ChatViewProps> = ({ 
+    chatHistory, chatInput, setChatInput, handleChatSubmit, isProcessing,
+    editingMessage, setEditingMessage, handleEditMessage, handleCancelEdit, handleSaveEdit 
+}) => {
     const { t } = useLanguage();
     const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -216,15 +212,92 @@ const ChatView: React.FC<ChatViewProps> = ({ chatHistory, chatInput, setChatInpu
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatHistory]);
 
+    const CopyButtonWithTooltip: React.FC<{ textToCopy: string; className?: string }> = ({ textToCopy, className }) => {
+        const [isCopied, setIsCopied] = useState(false);
+
+        const handleCopy = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                setIsCopied(true);
+                setTimeout(() => setIsCopied(false), 2000);
+            });
+        };
+
+        return (
+            <div className="relative group/tooltip">
+                <button onClick={handleCopy} className={`p-1.5 rounded-md transition-colors ${className}`}>
+                    {isCopied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 text-xs font-semibold text-white bg-gray-900/80 dark:bg-black/80 rounded-md shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                    {isCopied ? t('toasts.copied') : t('common.copy')}
+                </div>
+            </div>
+        );
+    };
+    
+    const buttonClass = "p-1.5 bg-gray-100 dark:bg-gray-600/80 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500/80 backdrop-blur-sm shadow";
+
     return (
         <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50 rounded-xl">
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
-                {chatHistory.map((turn, i) => (
-                    <div key={i} className="space-y-2 clear-both">
-                        <div className="flex justify-end"><div className="bg-primary text-primary-text p-3 rounded-xl inline-block max-w-[80%]">{turn.user}</div></div>
-                        <div className="flex justify-start"><div className="bg-gray-200 dark:bg-gray-700 p-3 rounded-xl inline-block max-w-[80%] text-left"><FormattedContent content={turn.blay} /></div></div>
-                    </div>
-                ))}
+                {chatHistory.map((turn, i) => {
+                    if (editingMessage && editingMessage.index === i) {
+                        return (
+                            <div key={`${i}-editing`} className="my-2 p-3 bg-blue-50 dark:bg-gray-700/50 rounded-lg">
+                                <textarea
+                                    value={editingMessage.text}
+                                    onChange={(e) => setEditingMessage({ index: i, text: e.target.value })}
+                                    className="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500"
+                                    rows={Math.max(3, editingMessage.text.split('\n').length)}
+                                    autoFocus
+                                />
+                                <div className="flex justify-end gap-2 mt-2">
+                                    <button onClick={handleCancelEdit} className="px-4 py-1.5 text-sm bg-gray-200 dark:bg-gray-600 rounded-md">
+                                        {t('common.cancel')}
+                                    </button>
+                                    <button onClick={() => handleSaveEdit(i)} className="px-4 py-1.5 text-sm bg-primary text-primary-text rounded-md">
+                                        {t('common.save')}
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div key={i} className="space-y-2 clear-both">
+                            {/* User message */}
+                            <div className="flex justify-end">
+                                <div className="group relative">
+                                    <div className="bg-primary text-primary-text p-3 rounded-xl inline-block max-w-[80%]">
+                                        {turn.user}
+                                    </div>
+                                    <div className="absolute top-1/2 -translate-y-1/2 left-0 -translate-x-full flex items-center gap-1 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="relative group/tooltip">
+                                            <button onClick={() => handleEditMessage(i)} className={buttonClass}>
+                                                <PencilIcon className="w-4 h-4" />
+                                            </button>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 text-xs font-semibold text-white bg-gray-900/80 dark:bg-black/80 rounded-md shadow-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                                                {t('common.edit')}
+                                            </div>
+                                        </div>
+                                        <CopyButtonWithTooltip textToCopy={turn.user} className={buttonClass} />
+                                    </div>
+                                </div>
+                            </div>
+                             {/* Blay's message */}
+                            <div className="flex justify-start">
+                                 <div className="group relative">
+                                    <div className="bg-gray-200 dark:bg-gray-700 p-3 rounded-xl inline-block max-w-[80%] text-left">
+                                        <FormattedContent content={turn.blay} />
+                                    </div>
+                                    <div className="absolute top-1/2 -translate-y-1/2 right-0 translate-x-full flex items-center gap-1 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <CopyButtonWithTooltip textToCopy={turn.blay} className={buttonClass} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
                 <div ref={chatEndRef} />
             </div>
             <form onSubmit={handleChatSubmit} className="p-4 border-t dark:border-gray-700 flex gap-2">
@@ -249,16 +322,15 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [hubView, setHubView] = useState<HubView>('actions');
 
-  // --- Resizable Panel State ---
   const [leftPanelWidth, setLeftPanelWidth] = useState(50);
   const isResizingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // --- Workflow State ---
   const [sessionPrompt, setSessionPrompt] = useState<{ slot: PlanSlot, nextSlot: PlanSlot | null, day: DayOfWeek } | null>(null);
   const [conflictInfo, setConflictInfo] = useState<{ plannedSubject: string; uploadedSubject: string; day: DayOfWeek; slot: PlanSlot; file: UploadedFile; } | null>(null);
   const [showConflictResolution, setShowConflictResolution] = useState(false);
   const [customizationRequest, setCustomizationRequest] = useState<{ file: UploadedFile, slot?: PlanSlot, isUntracked: boolean } | null>(null);
+  const [editingMessage, setEditingMessage] = useState<{ index: number; text: string } | null>(null);
 
 
   const { file, analysisResults, chatHistory, isProcessing } = learningHubState;
@@ -328,7 +400,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
         } else if (audioState === 'idle') {
             const textToRead = analysisResults.read;
             if (textToRead) {
-                speechSynthesis.cancel(); // Ensure any previous utterance is stopped
+                speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(textToRead);
                 utterance.onend = () => {
                     setAudioState('idle');
@@ -349,7 +421,6 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     }, [audioState]);
 
   useEffect(() => {
-    // Cleanup on unmount or file change
     return () => handleStop();
   }, [file, handleStop]);
 
@@ -420,7 +491,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     if (!droppedFile) return;
 
     if (droppedFile.size > 25 * 1024 * 1024) {
-        addToast(t('toasts.fileSizeError25'), 'error');
+        addToast(t('toasts.fileSizeTooLarge', { fileName: droppedFile.name, size: 25 }), 'error');
         return;
     }
     
@@ -652,7 +723,6 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
     try {
         const filePart: ImagePart = { inlineData: { data: file.base64, mimeType: file.type } };
-        // FIX: Added missing 'smartPlan' prop to function call.
         const stream = await chatWithDocumentStream(filePart, userMessage, historyForApi, file.context, smartPlan);
         
         let fullResponse = '';
@@ -678,6 +748,55 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     } finally {
         setIsProcessing(false);
     }
+  };
+
+  const handleEditMessage = (index: number) => {
+    setEditingMessage({ index, text: chatHistory[index].user });
+  };
+
+  const handleCancelEdit = () => {
+      setEditingMessage(null);
+  };
+
+  const handleSaveEdit = async (index: number) => {
+      if (!editingMessage || !file) return;
+
+      const userMessage = editingMessage.text;
+      const historyForApi = chatHistory.slice(0, index);
+
+      const updatedHistory = [...historyForApi, { user: userMessage, blay: t('uploadslides.blayIsTyping') }];
+      setLearningHubState(prev => ({ ...prev, chatHistory: updatedHistory }));
+      
+      setEditingMessage(null);
+      setIsProcessing(true);
+
+      try {
+          const filePart: ImagePart = { inlineData: { data: file.base64, mimeType: file.type } };
+          const stream = await chatWithDocumentStream(filePart, userMessage, historyForApi, file.context, smartPlan);
+          
+          let fullResponse = '';
+          for await (const chunk of stream) {
+              fullResponse += chunk.text;
+              setLearningHubState(prev => {
+                  const newHistory = [...prev.chatHistory];
+                  if (newHistory.length > 0) {
+                      newHistory[newHistory.length - 1] = { ...newHistory[newHistory.length - 1], blay: fullResponse };
+                  }
+                  return { ...prev, chatHistory: newHistory };
+              });
+          }
+      } catch (error) {
+          addToast(t('toasts.chatError'), 'error');
+          setLearningHubState(prev => {
+              const newHistory = [...prev.chatHistory];
+              if (newHistory.length > 0) {
+                   newHistory[newHistory.length - 1] = { ...newHistory[newHistory.length - 1], blay: t('toasts.chatError') };
+              }
+              return { ...prev, chatHistory: newHistory };
+          });
+      } finally {
+          setIsProcessing(false);
+      }
   };
   
   const clearFile = () => {
@@ -759,11 +878,18 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                        ) : ( // hubView === 'read-aloud'
                             <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 h-full flex flex-col justify-center items-center">
                                 <h4 className="font-bold text-lg text-gray-800 dark:text-white mb-4">{t('uploadslides.actions.read')}</h4>
-                                <div className="flex items-center gap-4">
-                                     <button onClick={handlePlay} disabled={audioState === 'playing' || isProcessing || !analysisResults.read} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PlayIcon className="w-6 h-6"/></button>
-                                     <button onClick={handlePause} disabled={audioState !== 'playing'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PauseIcon className="w-6 h-6"/></button>
-                                     <button onClick={handleStop} disabled={audioState === 'idle'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><StopIcon className="w-6 h-6"/></button>
-                                </div>
+                                {isProcessing && !analysisResults.read ? (
+                                    <div className="text-center my-4">
+                                        <div className="animate-spin w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full mx-auto mb-3"></div>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">{loadingMessage || t('uploadslides.loading.read')}</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-4">
+                                         <button onClick={handlePlay} disabled={audioState === 'playing' || isProcessing || !analysisResults.read} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PlayIcon className="w-6 h-6"/></button>
+                                         <button onClick={handlePause} disabled={audioState !== 'playing'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PauseIcon className="w-6 h-6"/></button>
+                                         <button onClick={handleStop} disabled={audioState === 'idle'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><StopIcon className="w-6 h-6"/></button>
+                                    </div>
+                                )}
                                  <button onClick={() => setHubView('actions')} className="mt-6 flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
                                     <ArrowLeftIcon className="w-4 h-4"/> {t('uploadslides.backToActions')}
                                 </button>
@@ -788,7 +914,18 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                         </div>
                     </div>
                      {hubView === 'chat' ? (
-                        <ChatView chatHistory={chatHistory} chatInput={chatInput} setChatInput={setChatInput} handleChatSubmit={handleChatSubmit} isProcessing={isProcessing} />
+                        <ChatView 
+                            chatHistory={chatHistory} 
+                            chatInput={chatInput} 
+                            setChatInput={setChatInput} 
+                            handleChatSubmit={handleChatSubmit} 
+                            isProcessing={isProcessing}
+                            editingMessage={editingMessage}
+                            setEditingMessage={setEditingMessage}
+                            handleEditMessage={handleEditMessage}
+                            handleCancelEdit={handleCancelEdit}
+                            handleSaveEdit={handleSaveEdit}
+                        />
                     ) : <AnalysisView />}
                 </div>
           )}
@@ -796,9 +933,12 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     );
   }
 
-  // FIX: Added return statement for the main component.
+  const wrapperClass = isStudyModeView 
+    ? "h-full flex flex-col" 
+    : "max-w-7xl mx-auto h-full flex flex-col";
+
   return (
-    <div className="max-w-7xl mx-auto h-full flex flex-col">
+    <div className={wrapperClass}>
       {showTitle && !isStudyModeView && (
         <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('uploadslides.title')}</h2>
@@ -827,7 +967,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             </div>
         )}
       </div>
-      {!isStudyModeView && !activeSession && file && (
+      {!isStudyModeView && !activeSession && file && hubView === 'actions' && (
         <div className="mt-6 text-center">
             <button onClick={handleStartStudyRequest} className="px-8 py-3 bg-green-600 text-white font-bold text-lg rounded-xl shadow-lg hover:bg-green-700 transition-all">
                 {t('uploadslides.startStudySession')}

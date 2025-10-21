@@ -37,46 +37,47 @@ const FileViewer: React.FC<FileViewerProps> = ({ file }) => {
     const isImage = file.type.startsWith('image/');
     const isPptx = file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-    const renderable = isPdf || isImage;
+    const showZoomControls = isImage;
 
     return (
         <div className="w-full h-full bg-gray-200 dark:bg-gray-900 rounded-lg overflow-hidden relative">
-            <div className="w-full h-full overflow-auto">
-                {isPdf ? (
-                    <iframe
-                        src={fileUrl}
-                        title={file.name}
-                        className="border-none transition-transform duration-200 origin-top-left"
-                        style={{ transform: `scale(${zoom})`, width: `${100 / zoom}%`, height: `${100 / zoom}%` }}
-                    />
-                ) : isImage ? (
-                    <div className="w-full h-full flex justify-center items-center p-4">
-                        <img
-                            src={fileUrl}
-                            alt={file.name}
-                            className="max-w-none transition-transform duration-200"
-                            style={{ transform: `scale(${zoom})` }}
-                        />
-                    </div>
-                ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center text-gray-700 dark:text-gray-300 p-8">
-                         {isPptx ? <PowerPointIcon className="w-24 h-24 text-orange-500 mb-4" /> : <PdfIcon className="w-24 h-24 text-red-500 mb-4" />}
-                        <h3 className="text-xl font-bold mb-2">{t('fileviewer.previewNotAvailable' as any)}</h3>
-                        <p className="text-gray-500 dark:text-gray-400 mb-4">
-                            {t('fileviewer.unsupportedType' as any, { type: file.type })}
-                        </p>
-                        <a 
-                            href={fileUrl} 
-                            download={file.name}
-                            className="px-4 py-2 bg-primary text-primary-text rounded-md hover:bg-primary-dark"
-                        >
-                            {t('fileviewer.downloadFile' as any, { name: file.name })}
-                        </a>
-                    </div>
-                )}
-            </div>
-
-            {renderable && (
+            {isPdf ? (
+                <iframe
+                    src={fileUrl}
+                    title={file.name}
+                    className="w-full h-full border-none"
+                />
+            ) : (
+                <div className="w-full h-full overflow-auto">
+                    {isImage ? (
+                        <div className="w-full h-full flex justify-center items-center p-4">
+                            <img
+                                src={fileUrl}
+                                alt={file.name}
+                                className="max-w-none transition-transform duration-200"
+                                style={{ transform: `scale(${zoom})` }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-center text-gray-700 dark:text-gray-300 p-8">
+                             {isPptx ? <PowerPointIcon className="w-24 h-24 text-orange-500 mb-4" /> : <PdfIcon className="w-24 h-24 text-red-500 mb-4" />}
+                            <h3 className="text-xl font-bold mb-2">{t('fileviewer.previewNotAvailable' as any)}</h3>
+                            <p className="text-gray-500 dark:text-gray-400 mb-4">
+                                {t('fileviewer.unsupportedType' as any, { type: file.type })}
+                            </p>
+                            <a 
+                                href={fileUrl} 
+                                download={file.name}
+                                className="px-4 py-2 bg-primary text-primary-text rounded-md hover:bg-primary-dark"
+                            >
+                                {t('fileviewer.downloadFile' as any, { name: file.name })}
+                            </a>
+                        </div>
+                    )}
+                </div>
+            )}
+            
+            {showZoomControls && (
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full shadow-lg p-1.5 flex items-center gap-2 text-sm font-medium">
                     <button onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} className="w-8 h-8 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center font-bold text-lg">-</button>
                     <input 

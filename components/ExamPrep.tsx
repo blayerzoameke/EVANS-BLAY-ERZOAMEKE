@@ -48,6 +48,23 @@ const LoadingOverlay: React.FC<{ isLoading: boolean; message: string }> = ({ isL
     );
 };
 
+const CopyButton: React.FC<{ textToCopy: string }> = ({ textToCopy }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        });
+    };
+
+    return (
+        <button onClick={handleCopy} className="p-1.5 bg-gray-700/50 text-gray-300 rounded-md hover:bg-gray-600/70 hover:text-white transition-colors">
+            {isCopied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
+        </button>
+    );
+};
+
 const KatexRenderer: React.FC<{ content: string; displayMode: boolean }> = React.memo(({ content, displayMode }) => {
     try {
         const html = katex.renderToString(content, { throwOnError: false, displayMode });
@@ -181,7 +198,7 @@ const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTM
 
 const FormattedContent: React.FC<{ content: string }> = React.memo(({ content }) => {
     const renderInlineElements = (line: string) => {
-        const inlineRegex = /(\$\$[\s\S]*?\$\$)|(\$.*?\$)|(\*\*.*?\*\*)/g;
+        const inlineRegex = /(\$\$[\s\S]*?\$\$)|(\$.*?\$)|(\*\*.*?\*\*)|(`.*?`)/g;
         const parts = line.split(inlineRegex).filter(Boolean);
         return parts.map((part, index) => {
             if (part.startsWith('$$') && part.endsWith('$$')) {
@@ -193,52 +210,81 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
             if (part.startsWith('**') && part.endsWith('**')) {
                 return <strong key={index}>{part.slice(2, -2)}</strong>;
             }
+            if (part.startsWith('`') && part.endsWith('`')) {
+                return <code key={index} className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-sm font-mono">{part.slice(1, -1)}</code>;
+            }
             return part;
         });
     };
 
-    const lines = content.split('\n');
-    const elements: React.ReactNode[] = [];
-    let listItems: string[] = [];
+    const blocks = content.split(/(```[\s\S]*?```)/g).filter(Boolean);
 
-    const flushList = () => {
-        if (listItems.length > 0) {
-            elements.push(
-                <ul key={`ul-${elements.length}`} className="list-disc pl-6 my-2 space-y-1">
-                    {listItems.map((item, i) => (
-                        <li key={i}>{renderInlineElements(item)}</li>
-                    ))}
-                </ul>
-            );
-            listItems = [];
-        }
-    };
+    return (
+        <div className="prose dark:prose-invert max-w-none text-left">
+            {blocks.map((block, index) => {
+                if (block.startsWith('```') && block.endsWith('```')) {
+                    const codeContent = block.slice(3, -3);
+                    const lang = codeContent.match(/^[a-zA-Z]+\n/)?.[0].trim() || '';
+                    const code = codeContent.replace(/^[a-zA-Z]+\n/, '');
+                    return (
+                        <div key={index} className="relative bg-black/70 text-gray-100 rounded-xl my-4 border border-gray-700 shadow-lg">
+                            <div className="flex justify-between items-center px-4 py-2 bg-gray-800/50 border-b border-gray-700 rounded-t-xl">
+                                <span className="text-xs font-mono text-gray-400 capitalize">{lang || 'code'}</span>
+                                <CopyButton textToCopy={code} />
+                            </div>
+                            <pre className="p-4 overflow-x-auto"><code className="text-sm font-mono whitespace-pre-wrap">{code}</code></pre>
+                        </div>
+                    );
+                }
 
-    lines.forEach((line) => {
-        if (line.match(/^###\s/)) {
-            flushList();
-            elements.push(<h4 key={elements.length} className="font-bold text-lg mt-4 mb-2">{renderInlineElements(line.replace(/^###\s/, ''))}</h4>);
-        } else if (line.match(/^##\s/)) {
-            flushList();
-            elements.push(<h3 key={elements.length} className="font-bold text-xl mt-5 mb-2">{renderInlineElements(line.replace(/^##\s/, ''))}</h3>);
-        } else if (line.match(/^#\s/)) {
-            flushList();
-            elements.push(<h2 key={elements.length} className="font-bold text-2xl mt-6 mb-3">{renderInlineElements(line.replace(/^#\s/, ''))}</h2>);
-        } else if (line.match(/^\s*---\s*$/)) {
-            flushList();
-            elements.push(<hr key={elements.length} className="my-4" />);
-        } else if (line.match(/^\s*(\*|-)\s/)) {
-            listItems.push(line.replace(/^\s*(\*|-)\s/, ''));
-        } else if (line.trim() !== '') {
-            flushList();
-            elements.push(<p key={elements.length} className="my-2">{renderInlineElements(line)}</p>);
-        } else {
-            flushList();
-        }
-    });
+                const lines = block.split('\n');
+                const elements: React.ReactNode[] = [];
+                let listItems: string[] = [];
+                let inList = false;
 
-    flushList();
-    return <>{elements}</>;
+                const flushList = () => {
+                    if (listItems.length > 0) {
+                        elements.push(
+                            <ul key={`ul-${elements.length}`} className="list-disc pl-6 my-2 space-y-1">
+                                {listItems.map((item, i) => (
+                                    <li key={i}>{renderInlineElements(item)}</li>
+                                ))}
+                            </ul>
+                        );
+                        listItems = [];
+                    }
+                    inList = false;
+                };
+
+                lines.forEach((line) => {
+                    if (line.match(/^###\s/)) {
+                        flushList();
+                        elements.push(<h4 key={elements.length} className="font-bold text-lg mt-4 mb-2">{renderInlineElements(line.replace(/^###\s/, ''))}</h4>);
+                    } else if (line.match(/^##\s/)) {
+                        flushList();
+                        elements.push(<h3 key={elements.length} className="font-bold text-xl mt-5 mb-2">{renderInlineElements(line.replace(/^##\s/, ''))}</h3>);
+                    } else if (line.match(/^#\s/)) {
+                        flushList();
+                        elements.push(<h2 key={elements.length} className="font-bold text-2xl mt-6 mb-3">{renderInlineElements(line.replace(/^#\s/, ''))}</h2>);
+                    } else if (line.match(/^\s*---\s*$/)) {
+                        flushList();
+                        elements.push(<hr key={elements.length} className="my-4" />);
+                    } else if (line.match(/^\s*(\*|-)\s/)) {
+                        listItems.push(line.replace(/^\s*(\*|-)\s/, ''));
+                        inList = true;
+                    } else if (line.trim() !== '') {
+                        flushList();
+                        elements.push(<p key={elements.length} className="my-2">{renderInlineElements(line)}</p>);
+                    } else { // Empty line
+                        flushList();
+                    }
+                });
+
+                flushList();
+                return <React.Fragment key={index}>{elements}</React.Fragment>;
+            })}
+        </div>
+    );
 });
 
 const QuizRunner: React.FC<{
@@ -501,8 +547,8 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
     const onDrop = useCallback((acceptedFiles: File[]) => {
         if (mode === 'quiz') {
             const validFiles = acceptedFiles.filter(file => {
-                if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                    addToast(t('toasts.fileSizeTooLarge', {fileName: file.name, size: 5}), 'error');
+                if (file.size > 25 * 1024 * 1024) { // 25MB limit
+                    addToast(t('toasts.fileSizeTooLarge', {fileName: file.name, size: 25}), 'error');
                     return false;
                 }
                 return true;
@@ -514,8 +560,8 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         } else { // solver mode
             const file = acceptedFiles[0];
             if (file && file.type.startsWith('image/')) {
-                if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                    addToast(t('toasts.imageSizeError5'), 'error');
+                if (file.size > 25 * 1024 * 1024) { // 25MB limit
+                    addToast(t('toasts.fileSizeTooLarge', {fileName: file.name, size: 25}), 'error');
                     return;
                 }
                 const reader = new FileReader();
@@ -580,13 +626,12 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
             
             if (questions && questions.length > 0) {
                  setQuizState({ quiz: questions, currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
+                 setGenerationState({ isLoading: false, message: '', error: null, source: null });
             } else {
                  throw new Error(t('examprep.error.noQuestions'));
             }
         } catch (error: any) {
             setGenerationState({ isLoading: false, message: '', error: error.message || t('examprep.error.generic'), source: 'quiz' });
-        } finally {
-             setGenerationState({ isLoading: false, message: '', error: null, source: null });
         }
     };
 
@@ -722,11 +767,9 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 updateState('solution', result);
                 setGraphConfig(null);
             }
-
+            setGenerationState({ isLoading: false, message: '', error: null, source: null });
         } catch (error: any) {
             setGenerationState({ isLoading: false, message: '', error: error.message || t('toasts.error.solveProblem'), source: 'solve' });
-        } finally {
-            setGenerationState({ isLoading: false, message: '', error: null, source: null });
         }
     };
 
@@ -761,7 +804,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                    <div className="space-y-6">
                         <div>
                             <label className="block text-sm font-semibold mb-2">{t('examprep.quiz.step1')}</label>
-                            <div {...getRootProps()} className={`p-6 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-300 ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600'} hover:border-solid hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20`}>
+                            <div {...getRootProps()} className={`p-6 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-300 ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600'} hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20`}>
                                 <input {...getInputProps()} />
                                 <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400">
                                     <UploadIcon className="w-8 h-8 mb-2" />
@@ -831,16 +874,16 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                                 <textarea value={questionText} onChange={e => updateState('questionText', e.target.value)} placeholder={t('examprep.solver.questionPlaceholder')} rows={4} className={`${inputClasses} h-auto`} />
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                                     <div {...getRootProps({ className: "p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center cursor-pointer border-gray-300 dark:border-gray-600 hover:border-solid hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300" })}>
+                                     <div {...getRootProps({ className: "p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center cursor-pointer border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300" })}>
                                         <input {...getInputProps()} />
                                         <UploadIcon className="w-8 h-8 mb-2 text-gray-500" />
                                         <span className="text-sm font-semibold">{t('examprep.solver.uploadImage')}</span>
                                     </div>
-                                    <button onClick={() => setIsCameraModalOpen(true)} className="p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center border-gray-300 dark:border-gray-600 hover:border-solid hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300">
+                                    <button onClick={() => setIsCameraModalOpen(true)} className="p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300">
                                         <CameraIcon className="w-8 h-8 mb-2 text-gray-500" />
                                         <span className="text-sm font-semibold">{t('examprep.solver.useCamera')}</span>
                                     </button>
-                                    <button onClick={handleMicClick} className="p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center border-gray-300 dark:border-gray-600 hover:border-solid hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300">
+                                    <button onClick={handleMicClick} className="p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300">
                                         <MicrophoneIcon className={`w-8 h-8 mb-2 transition-colors ${isListening ? 'text-red-500' : 'text-gray-500'}`} />
                                         <span className="text-sm font-semibold">{isListening ? t('examprep.solver.stopMic') : t('examprep.solver.useMic')}</span>
                                     </button>
@@ -879,6 +922,8 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                             {t('examprep.solver.solve')}
                         </button>
                     </div>
+
+                    {generationState.error && generationState.source === 'solve' && <p className="text-red-500 mt-4 text-center">{generationState.error}</p>}
 
                     {solution && (
                         <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg space-y-4">
@@ -923,11 +968,12 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                                 addToast(t('toasts.examprep.captureInvalid'), 'warning');
                                 updateState('questionImage', null);
                             }
-                        } catch (error) {
+                            setGenerationState({ isLoading: false, message: '', error: null, source: null });
+                        } catch (error: any) {
                             addToast(t('toasts.examprep.captureFailed'), 'error');
                             updateState('questionImage', null);
+                            setGenerationState({ isLoading: false, message: '', error: error.message, source: 'solve' });
                         } finally {
-                            setGenerationState({ isLoading: false, message: '', error: null, source: null });
                             updateState('isVerifying', false);
                         }
                     }}

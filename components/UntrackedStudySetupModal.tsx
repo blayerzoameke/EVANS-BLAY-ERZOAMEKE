@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { CloseIcon } from './icons/CloseIcon';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface UntrackedStudySetupModalProps {
     isOpen: boolean;
@@ -49,22 +49,22 @@ const UntrackedStudySetupModal: React.FC<UntrackedStudySetupModalProps> = ({ isO
                     <div>
                         <label htmlFor="break-duration" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('untrackedStudyModal.breakDuration')}</label>
                         <select id="break-duration" value={breakDuration} onChange={e => setBreakDuration(parseInt(e.target.value, 10))} className={`${inputClasses} mt-1`}>
-                            <option value={0}>{t('untrackedStudyModal.breakDuration.none')}</option>
-                            <option value={5}>{t('untrackedStudyModal.breakDuration.5')}</option>
-                            <option value={10}>{t('untrackedStudyModal.breakDuration.10')}</option>
-                            <option value={15}>{t('untrackedStudyModal.breakDuration.15')}</option>
+                            <option value={0}>{t('sessionCustomization.breakDuration.none')}</option>
+                            <option value={5}>{t('sessionCustomization.breakDuration.5')}</option>
+                            <option value={10}>{t('sessionCustomization.breakDuration.10')}</option>
+                            <option value={15}>{t('sessionCustomization.breakDuration.15')}</option>
                         </select>
                     </div>
 
                     {breakDuration > 0 && (
                         <div className="space-y-4 pt-4 border-t dark:border-gray-700">
                             <div>
-                                <label htmlFor="break-activity" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('untrackedStudyModal.breakActivity')}</label>
-                                <input type="text" id="break-activity" value={breakActivity} onChange={e => setBreakActivity(e.target.value)} placeholder={t('untrackedStudyModal.breakActivityPlaceholder')} className={`${inputClasses} mt-1`} />
+                                <label htmlFor="break-activity" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.breakActivity')}</label>
+                                <input type="text" id="break-activity" value={breakActivity} onChange={e => setBreakActivity(e.target.value)} placeholder={t('sessionCustomization.breakActivityPlaceholder')} className={`${inputClasses} mt-1`} />
                             </div>
                             <div>
-                                <label htmlFor="break-link" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('untrackedStudyModal.breakLink')}</label>
-                                <input type="url" id="break-link" value={breakLink} onChange={e => setBreakLink(e.target.value)} placeholder={t('untrackedStudyModal.breakLinkPlaceholder')} className={`${inputClasses} mt-1`} />
+                                <label htmlFor="break-link" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.breakLink')}</label>
+                                <input type="url" id="break-link" value={breakLink} onChange={e => setBreakLink(e.target.value)} placeholder={t('sessionCustomization.breakLinkPlaceholder')} className={`${inputClasses} mt-1`} />
                             </div>
                         </div>
                     )}

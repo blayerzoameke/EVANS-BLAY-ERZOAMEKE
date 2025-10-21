@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { PlanSlot } from '../types.ts';
 import { DayOfWeek } from '../types.ts';
@@ -32,7 +31,7 @@ const LogStudyModal: React.FC<LogStudyModalProps> = ({ isOpen, onClose, onStartS
                     </button>
                 </div>
                 
-                <div className="p-6 space-y-3">
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button
                         onClick={() => onStartSession(slot)}
                         className="w-full py-3 px-4 rounded-lg text-md font-semibold transition-colors bg-green-600 text-white hover:bg-green-700"
@@ -43,7 +42,7 @@ const LogStudyModal: React.FC<LogStudyModalProps> = ({ isOpen, onClose, onStartS
                         onClick={() => onUploadSlides(slot)}
                         className="w-full py-3 px-4 rounded-lg text-md font-semibold transition-colors bg-blue-600 text-white hover:bg-blue-700"
                     >
-                        {t('logStudyModal.uploadSlides')}
+                        {t('logStudyModal.uploadAndStudy')}
                     </button>
                 </div>
             </div>

@@ -21,10 +21,65 @@ import Library from './components/Library.tsx';
 import Terms from './components/Terms.tsx';
 import Tutorial from './components/Tutorial.tsx';
 import Preferences from './components/Preferences.tsx';
+import { CloseIcon } from './components/icons/CloseIcon.tsx';
+import NotificationManager from './components/NotificationManager.tsx';
 
 import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, FeedbackDraft, PlanSlot, View } from './types.ts';
-import { QuizType } from './types.ts';
+import { QuizType, ActivityType } from './types.ts';
 import { useLanguage } from './contexts/LanguageContext.tsx';
+import { timeToMinutes } from './lib/utils.ts';
+
+// Notification Prompt Component
+const NotificationPrompt: React.FC<{
+    settings: NotificationSettings;
+    setSettings: (settings: NotificationSettings) => void;
+}> = ({ setSettings }) => {
+    const { t } = useLanguage();
+
+    const handleFirstTimeEnable = () => {
+        if (typeof Notification === 'undefined') {
+            alert('This browser does not support desktop notification');
+            setSettings({ status: 'configured', enabled: false, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
+            return;
+        }
+
+        if (Notification.permission === 'denied') {
+            alert(t('notifications.firstTime.denied'));
+            setSettings({ status: 'configured', enabled: false, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
+            return;
+        }
+        
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                setSettings({ status: 'configured', enabled: true, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
+                new Notification(t('notifications.firstTime.enabled'), {
+                    body: t('notifications.firstTime.enabledBody')
+                });
+            } else {
+                setSettings({ status: 'configured', enabled: false, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
+            }
+        });
+    };
+    
+    const handleDismiss = () => {
+        setSettings({ status: 'configured', enabled: false, reminders: true, reminderTime: 10, sessionStart: true, breakStartEnd: true });
+    };
+
+    return (
+        <div className="bg-primary-dark text-white p-3 text-center z-50 shadow-md no-print animate-fade-in-down">
+            <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+                <p className="text-sm text-left">{t('notifications.firstTime.body')}</p>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={handleFirstTimeEnable} className="px-3 py-1.5 text-sm font-semibold bg-white text-primary rounded-md hover:bg-gray-100 whitespace-nowrap">{t('notifications.firstTime.turnOn')}</button>
+                    <button onClick={handleDismiss} className="text-sm font-medium hover:underline whitespace-nowrap">{t('notifications.firstTime.maybeLater')}</button>
+                    <button onClick={handleDismiss} className="p-1 rounded-full hover:bg-white/20" aria-label={t('common.close')}>
+                        <CloseIcon className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const App: React.FC = () => {
   const { t } = useLanguage();
@@ -43,6 +98,8 @@ const App: React.FC = () => {
   const [generationState, setGenerationState] = useState<GenerationState>({ isLoading: false, message: '', error: null, source: null });
   const [quizState, setQuizState] = useState<QuizState>({ quiz: [], currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
   const [intendedStudyContext, setIntendedStudyContext] = useState<{ subject: string; fromSlot: PlanSlot } | null>(null);
+  const [tutorialImages, setTutorialImages] = useState<Record<string, string>>({});
+  const [tutorialVideoUrl, setTutorialVideoUrl] = useState<string>('https://www.youtube.com/watch?v=tBxfJ36t9_A');
 
   // Persistent component states
   const [dashboardInputs, setDashboardInputs] = useState<DashboardInputState>({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false, isEditing: false });
@@ -78,7 +135,17 @@ const App: React.FC = () => {
         if (savedSmartPlan) setSmartPlan(JSON.parse(savedSmartPlan));
         
         const savedNotifSettings = localStorage.getItem('notificationSettings');
-        if (savedNotifSettings) setNotificationSettings(JSON.parse(savedNotifSettings));
+        if (savedNotifSettings) {
+            setNotificationSettings(JSON.parse(savedNotifSettings));
+        } else if (typeof Notification !== 'undefined' && Notification.permission !== 'default') {
+            // If no settings are saved, but browser permission is already granted or denied,
+            // we can consider it 'configured'.
+            setNotificationSettings(prev => ({
+                ...prev,
+                status: 'configured',
+                enabled: Notification.permission === 'granted'
+            }));
+        }
         
         const savedTrackedData = localStorage.getItem('trackedData');
         if (savedTrackedData) setTrackedData(JSON.parse(savedTrackedData));
@@ -96,6 +163,12 @@ const App: React.FC = () => {
                 });
             }
         }
+        
+        const savedTutorialImages = localStorage.getItem('tutorialImages');
+        if (savedTutorialImages) setTutorialImages(JSON.parse(savedTutorialImages));
+
+        const savedVideoUrl = localStorage.getItem('tutorialVideoUrl');
+        if (savedVideoUrl) setTutorialVideoUrl(savedVideoUrl);
 
       } catch (error) {
         console.error("Failed to load data from localStorage", error);
@@ -124,6 +197,8 @@ const App: React.FC = () => {
   useEffect(() => persistState('smartPlan', smartPlan), [smartPlan]);
   useEffect(() => persistState('notificationSettings', notificationSettings), [notificationSettings]);
   useEffect(() => persistState('trackedData', trackedData), [trackedData]);
+  useEffect(() => persistState('tutorialImages', tutorialImages), [tutorialImages]);
+  useEffect(() => persistState('tutorialVideoUrl', tutorialVideoUrl), [tutorialVideoUrl]);
 
   useEffect(() => {
     // Only save if there's an active quiz that is not yet completed
@@ -153,6 +228,66 @@ const App: React.FC = () => {
     setUserDetails(details);
     setHasCompletedOnboarding(true);
     setReportDraft(prev => ({...prev, contactEmail: details.email || ''}));
+  };
+
+  const handleBreakCompletion = (skipped: boolean) => {
+    const breakSession = activeSession;
+    if (!breakSession || breakSession.type !== 'break') {
+        setActiveSession(null);
+        setView('dashboard');
+        return;
+    }
+
+    // If a post-break view is specified, navigate there. This is for returning to Learning Hub.
+    if (breakSession.postBreakView) {
+        setActiveSession(null);
+        setView(breakSession.postBreakView);
+        // We don't clear learningHubState here, so the user returns to their document.
+        return;
+    }
+    
+    // Original logic for scheduled breaks from the timetable.
+    if (!smartPlan || !breakSession.day) {
+        setActiveSession(null);
+        setView('dashboard');
+        return;
+    }
+
+    const dayPlan = smartPlan.find(d => d.day === breakSession.day);
+    if (!dayPlan) {
+        setActiveSession(null);
+        setView('dashboard');
+        return;
+    }
+
+    const sortedSlots = [...dayPlan.slots].sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    const breakIndex = sortedSlots.findIndex(s => s.startTime === breakSession.fromSlot.startTime && s.activity === breakSession.fromSlot.activity);
+    
+    if (breakIndex !== -1 && breakIndex + 1 < sortedSlots.length) {
+        const nextSlot = sortedSlots[breakIndex + 1];
+
+        if (nextSlot.type === ActivityType.STUDY) {
+            const now = Date.now();
+            const duration = timeToMinutes(nextSlot.endTime) - timeToMinutes(nextSlot.startTime);
+            const nextNextSlot = breakIndex + 2 < sortedSlots.length ? sortedSlots[breakIndex + 2] : null;
+
+            const newSession: ActiveSession = {
+                startTime: now,
+                endTime: now + duration * 60 * 1000,
+                subject: nextSlot.activity,
+                type: ActivityType.STUDY,
+                fromSlot: nextSlot,
+                nextSlot: nextNextSlot,
+                durationMinutes: duration,
+                day: breakSession.day,
+            };
+            setActiveSession(newSession);
+            return;
+        }
+    }
+    
+    setActiveSession(null);
+    setView('dashboard');
   };
   
   const learningHubFile = learningHubState.file;
@@ -251,7 +386,13 @@ const App: React.FC = () => {
       case 'terms':
         return <Terms />;
       case 'tutorial':
-        return <Tutorial />;
+        return <Tutorial
+                    tutorialImages={tutorialImages}
+                    setTutorialImages={setTutorialImages}
+                    addToast={addToast}
+                    tutorialVideoUrl={tutorialVideoUrl}
+                    setTutorialVideoUrl={setTutorialVideoUrl}
+                />;
       default:
         return <div>{t('common.notFound')}</div>;
     }
@@ -264,35 +405,31 @@ const App: React.FC = () => {
   if (isStudyMode) {
      return <FocusedStudyView 
                 session={activeSession!} 
+                setSession={setActiveSession}
                 learningHubFile={learningHubFile} 
-                onExit={() => { 
-                    const wasUntracked = activeSession?.isUntracked;
-                    setActiveSession(null);
-                    if (!wasUntracked) {
-                        // For tracked sessions, clear the file and return to dashboard
-                        setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
-                        setView('dashboard');
-                    }
-                    // For untracked sessions, just end the session and stay in the learning hub with the file loaded
-                }} 
                 addToast={addToast}
                 trackedData={trackedData}
                 setTrackedData={setTrackedData}
-                setSession={setActiveSession}
+                setView={setView}
+                setLearningHubState={setLearningHubState}
             />;
   }
+  
+  const showNotifPrompt = notificationSettings.status === 'unconfigured' && typeof Notification !== 'undefined' && Notification.permission === 'default';
 
   return (
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <NotificationManager plan={smartPlan} settings={notificationSettings} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <Sidebar view={view} setView={setView} isOpen={sidebarOpen} setOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
+        {showNotifPrompt && <NotificationPrompt settings={notificationSettings} setSettings={setNotificationSettings} />}
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           {renderView()}
         </main>
       </div>
-       {activeSession?.type === 'break' && <BreakView session={activeSession} setSession={setActiveSession} />}
+       {activeSession?.type === 'break' && <BreakView session={activeSession} onEnd={handleBreakCompletion} />}
     </div>
   );
 };

@@ -41,6 +41,7 @@ const generateContent = async (prompt: string | (string | ImagePart)[], response
   try {
     const config: any = {
         temperature: 0.5,
+        safetySettings,
     };
     if (responseSchema) {
         config.responseMimeType = "application/json";
@@ -64,19 +65,18 @@ const generateContent = async (prompt: string | (string | ImagePart)[], response
         contents = prompt;
     }
 
-    // FIX: `safetySettings` must be a part of the `config` object.
     const result = await ai.models.generateContent({
         model: textModel,
         contents,
-        config: {
-            ...config,
-            safetySettings,
-        },
+        config: config,
     });
     
+    // FIX: Access the text content from the response correctly.
     const text = result.text;
     
     if (responseSchema) {
+      // FIX: Clean up the response text before parsing as JSON.
+      // This removes markdown code fences and extracts the JSON object/array.
       let jsonStr = text.trim();
       if (jsonStr.startsWith("```json")) {
         jsonStr = jsonStr.substring(7, jsonStr.length - 3).trim();
@@ -113,12 +113,23 @@ const generateContent = async (prompt: string | (string | ImagePart)[], response
       }
     }
     return text;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API call failed:", error);
-    if (error instanceof Error && error.message.includes("invalid format")) {
+    
+    const errorMessage = (error.message || error.toString()).toLowerCase();
+    
+    if (errorMessage.includes('403') || errorMessage.includes('permission_denied') || errorMessage.includes('does not have permission')) {
+        throw new Error("Gemini API call failed: The API key is invalid or lacks the necessary permissions. Please check your environment configuration.");
+    }
+    
+    if (errorMessage.includes("invalid format")) {
         throw error;
     }
-    throw new Error("Failed to get a response from the AI model. It might be a network issue or an internal error.");
+    if (errorMessage.includes("xhr error") || errorMessage.includes("network")) {
+        throw new Error("The request to the AI model failed due to a network issue. Please check your connection or try again. If uploading a file, it might be too large.");
+    }
+    
+    throw new Error("An unexpected error occurred while communicating with the AI model.");
   }
 };
 
@@ -182,7 +193,7 @@ export const generateSmartPlan = async (
       }
   };
 
-  return generateContent(prompt, schema, { fast: true });
+  return generateContent(prompt, schema);
 };
 
 export const generatePlanFromImage = async (
@@ -237,24 +248,24 @@ export const generatePlanFromImage = async (
       }
   };
 
-  return generateContent([prompt, imagePart], schema, { fast: true });
+  return generateContent([prompt, imagePart], schema);
 };
 
 export const isImageTimetable = async (imagePart: ImagePart): Promise<boolean> => {
   const prompt = "Does this image appear to be a school or university timetable? Respond with only 'true' or 'false'.";
-  const result = await generateContent([prompt, imagePart], undefined, { fast: true });
+  const result = await generateContent([prompt, imagePart]);
   return result.toLowerCase().includes('true');
 };
 
 
 export const getDocumentContext = async (filePart: ImagePart): Promise<string> => {
   const prompt = "Based on the content of this document/image, what is the primary subject or topic? Be concise, one or two words is best (e.g., 'Calculus', 'World History').";
-  return generateContent([prompt, filePart], undefined, { fast: true });
+  return generateContent([prompt, filePart]);
 };
 
 export const isStudyMaterial = async (filePart: ImagePart): Promise<boolean> => {
     const prompt = "Does this document/image contain educational content or study material? Answer with only 'true' or 'false'.";
-    const result = await generateContent([prompt, filePart], undefined, { fast: true });
+    const result = await generateContent([prompt, filePart]);
     return result.toLowerCase().includes('true');
 };
 
@@ -270,7 +281,7 @@ export const explainDocument = async (filePart: ImagePart, context: string): Pro
 
 export const extractTextFromDocument = async (filePart: ImagePart): Promise<string> => {
     const prompt = "Extract all text from this document/image. Preserve formatting as much as possible.";
-    return generateContent([prompt, filePart], undefined, { fast: true });
+    return generateContent([prompt, filePart]);
 };
 
 export const chatWithDocumentStream = async (
@@ -302,7 +313,6 @@ export const chatWithDocumentStream = async (
         { role: 'user', parts: [filePart, { text: userMessage }] }
     ];
 
-    // FIX: `safetySettings` must be a part of the `config` object.
     const result = await ai.models.generateContentStream({
         model: textModel,
         contents: contents as any,
@@ -424,6 +434,6 @@ Output Format requirements: ${outputFormat}.
 
 export const isImageAProblem = async (imagePart: ImagePart): Promise<boolean> => {
     const prompt = "Does this image contain an academic problem, equation, or question (e.g., math, physics, chemistry)? Answer with only 'true' or 'false'.";
-    const result = await generateContent([prompt, imagePart], undefined, { fast: true });
+    const result = await generateContent([prompt, imagePart]);
     return result.toLowerCase().includes('true');
 };

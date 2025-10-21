@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { MenuIcon } from './icons/MenuIcon.tsx';
 import { LogoIcon } from './icons/LogoIcon.tsx';
@@ -67,7 +66,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
         <button
           onClick={toggleSidebar}
           className="text-gray-500 dark:text-gray-400 focus:outline-none focus:text-gray-700 dark:focus:text-gray-200 lg:hidden"
-          aria-label={t('header.openSidebar' as any)}
+          aria-label={t('header.openSidebar')}
         >
           <MenuIcon className="w-6 h-6" />
         </button>
@@ -89,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
          <button onClick={() => setView('profile')} className="flex items-center gap-3 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
              <span className="font-semibold text-sm hidden md:block text-gray-700 dark:text-gray-200">{userDetails?.name}</span>
              {userDetails?.profilePicture ? (
-                 <img src={userDetails.profilePicture} alt={t('profile.alt' as any)} className="w-8 h-8 rounded-full object-cover" />
+                 <img src={userDetails.profilePicture} alt={t('profile.alt.profilePicture')} className="w-8 h-8 rounded-full object-cover" />
              ) : (
                  <div className="w-8 h-8 rounded-full bg-primary text-primary-text flex items-center justify-center font-bold text-sm">
                      {getInitials(userDetails?.name)}

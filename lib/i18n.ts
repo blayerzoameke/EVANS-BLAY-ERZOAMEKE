@@ -16,8 +16,6 @@ export const translations = {
 };
 
 export type Language = keyof typeof translations;
-// This ensures that any key used must exist in the English translation object.
-// FIX: Changed to reference enTranslations directly to avoid potential circular type inference issues.
 export type TranslationKey = keyof typeof enTranslations;
 
 export const supportedLanguages: { code: Language; name: string }[] = [

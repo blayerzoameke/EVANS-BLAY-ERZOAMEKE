@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import UserDetailsForm from './UserDetailsForm.tsx';
 import TimetableInput from './TimetableInput.tsx';
 import SmartPlanView from './SmartPlanView.tsx';
 import CourseCodeModal from './CourseCodeModal.tsx';
-import LogStudyModal from './LogStudyModal.tsx';
 import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService.ts';
 import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession, GenerationState, DashboardInputState, LearningHubState } from '../types.ts';
 import { EducationalLevel, ActivityType, DayOfWeek } from '../types.ts';
@@ -17,43 +16,10 @@ import { RefreshIcon } from './icons/RefreshIcon.tsx';
 import { LogIcon } from './icons/LogIcon.tsx';
 import { ClockIcon } from './icons/ClockIcon.tsx';
 import { PlayIcon } from './icons/PlayIcon.tsx';
+import LogStudyModal from './LogStudyModal.tsx';
+import { timeToMinutes } from '../lib/utils.ts';
 
 const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '', programmeOfStudy: '', institutionAbbreviation: '' };
-
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
-};
 
 const getDayOfWeek = (date: Date): DayOfWeek => {
     const dayIndex = date.getDay(); // Sunday - 0, Monday - 1, ...
@@ -115,11 +81,19 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [tempSmartPlan, setTempSmartPlan] = useState<SmartPlan | null>(null);
   const [courseCodes, setCourseCodes] = useState<string[]>([]);
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
-  const [selectedSlotForLog, setSelectedSlotForLog] = useState<{ slot: PlanSlot; day: DayOfWeek; nextSlot: PlanSlot | null } | null>(null);
   const { t } = useLanguage();
   const [currentActivity, setCurrentActivity] = useState<{ slot: PlanSlot, day: DayOfWeek, nextSlot: PlanSlot | null } | null>(null);
+  const dayRefs = useRef<Record<DayOfWeek, HTMLDivElement | null>>({} as any);
   
+  const [logStudyModalState, setLogStudyModalState] = useState<{ isOpen: boolean; slot: PlanSlot | null; day: DayOfWeek | null; nextSlot: PlanSlot | null }>({ isOpen: false, slot: null, day: null, nextSlot: null });
+
   const { lectures, studyGoals, agendaItems, generalGoals, imageFile, imagePreview, step, isEditing } = dashboardInputs;
+
+  const handleScrollToCurrentActivity = () => {
+    if (currentActivity?.day && dayRefs.current[currentActivity.day]) {
+      dayRefs.current[currentActivity.day]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
 
   useEffect(() => {
     const updateCurrentActivity = () => {
@@ -366,10 +340,12 @@ const Dashboard: React.FC<DashboardProps> = ({
           addToast(t('toasts.planSaved'), 'success');
       }
   };
-  
-  const handleOpenLogModal = (slot: PlanSlot, day: DayOfWeek) => {
+
+  const handleStartStudySession = (slot: PlanSlot, day: DayOfWeek) => {
+    setLogStudyModalState({ isOpen: false, slot: null, day: null, nextSlot: null });
+
     let nextSlot: PlanSlot | null = null;
-    if(smartPlan) {
+    if (smartPlan) {
         const dayPlan = smartPlan.find(d => d.day === day);
         if (dayPlan) {
             const sortedSlots = [...dayPlan.slots].sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
@@ -379,7 +355,43 @@ const Dashboard: React.FC<DashboardProps> = ({
             }
         }
     }
-    setSelectedSlotForLog({ slot, day, nextSlot });
+
+    setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
+    const now = Date.now();
+    const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
+    const newSession: ActiveSession = {
+        startTime: now,
+        endTime: now + duration * 60 * 1000,
+        subject: slot.activity,
+        type: ActivityType.STUDY,
+        fromSlot: slot,
+        nextSlot: nextSlot,
+        durationMinutes: duration,
+        day: day,
+    };
+    setActiveSession(newSession);
+    addToast(t('toasts.sessionStarted'), 'success');
+  };
+
+  const handleStudySlotClick = (slot: PlanSlot, day: DayOfWeek) => {
+    let nextSlot: PlanSlot | null = null;
+    if (smartPlan) {
+        const dayPlan = smartPlan.find(d => d.day === day);
+        if (dayPlan) {
+            const sortedSlots = [...dayPlan.slots].sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+            const currentIndex = sortedSlots.findIndex(s => s.startTime === slot.startTime && s.activity === slot.activity);
+            if (currentIndex !== -1 && currentIndex + 1 < sortedSlots.length) {
+                nextSlot = sortedSlots[currentIndex + 1];
+            }
+        }
+    }
+    setLogStudyModalState({ isOpen: true, slot, day, nextSlot });
+  };
+  
+  const handleUploadSlidesForSession = (slot: PlanSlot) => {
+    setIntendedStudyContext({ subject: slot.activity, fromSlot: slot });
+    setView('uploadslides');
+    setLogStudyModalState({ isOpen: false, slot: null, day: null, nextSlot: null });
   };
   
   const handleEditInputs = () => {
@@ -488,10 +500,16 @@ const Dashboard: React.FC<DashboardProps> = ({
 
           {smartPlan && (
             currentActivity ? (
-                <div className="bg-gradient-to-br from-primary to-sky-400 dark:from-primary-dark dark:to-sky-700 rounded-2xl shadow-xl p-6 md:p-8 mb-8 text-white">
+                <div
+                    onClick={handleScrollToCurrentActivity}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleScrollToCurrentActivity(); } }}
+                    role="button"
+                    tabIndex={0}
+                    className="bg-gradient-to-br from-primary to-sky-400 dark:from-primary-dark dark:to-sky-700 rounded-2xl shadow-xl p-6 md:p-8 mb-8 text-white transition-transform duration-300 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-primary cursor-pointer"
+                >
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="font-semibold text-primary-text/80">{ isNow(currentActivity.slot.startTime, currentActivity.slot.endTime) ? "Happening Now" : "Up Next"}</p>
+                            <p className="font-semibold text-primary-text/80">{ isNow(currentActivity.slot.startTime, currentActivity.slot.endTime) ? "Happening Now" : "Up Next"} &bull; {currentActivity.day}</p>
                             <h3 className="text-3xl font-bold mt-1">{currentActivity.slot.activity}</h3>
                             <div className="flex items-center gap-2 mt-2 text-primary-text/90">
                                 <ClockIcon className="w-5 h-5" />
@@ -500,7 +518,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                         {currentActivity.slot.type === 'study' && getDayOfWeek(new Date()) === currentActivity.day && (
                             <button 
-                                onClick={() => handleOpenLogModal(currentActivity.slot, currentActivity.day)}
+                                onClick={(e) => { e.stopPropagation(); handleStudySlotClick(currentActivity.slot, currentActivity.day); }}
                                 className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-xl font-semibold transition-all backdrop-blur-sm"
                             >
                                 <PlayIcon className="w-5 h-5"/> Start Session
@@ -516,7 +534,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             )
           )}
 
-          <SmartPlanView plan={smartPlan} onStudySlotClick={handleOpenLogModal} />
+          <SmartPlanView plan={smartPlan} onStudySlotClick={handleStudySlotClick} dayRefs={dayRefs} />
         </div>
       ) : (
         <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 md:p-10">
@@ -539,7 +557,13 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-bold mb-4">{t('dashboard.saveModal.title')}</h3>
-            <input type="text" value={planName} onChange={e => setPlanName(e.target.value)} placeholder={t('dashboard.planNamePlaceholder')} className="w-full p-2 border rounded-md dark:bg-gray-700" />
+            <input 
+                type="text" 
+                value={planName} 
+                onChange={e => setPlanName(e.target.value)} 
+                placeholder={t('dashboard.planNamePlaceholder')} 
+                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary"
+            />
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
               <button onClick={handleSavePlan} className="px-4 py-2 bg-primary text-primary-text rounded-md">{t('common.save')}</button>
@@ -556,38 +580,16 @@ const Dashboard: React.FC<DashboardProps> = ({
             codes={courseCodes}
         />
       )}
-      
-       {selectedSlotForLog && (
-        <LogStudyModal
-          isOpen={!!selectedSlotForLog}
-          onClose={() => setSelectedSlotForLog(null)}
-          onStartSession={(slot) => {
-              setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
-              const now = Date.now();
-              const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
-              const newSession: ActiveSession = {
-                  startTime: now,
-                  endTime: now + duration * 60 * 1000,
-                  subject: slot.activity,
-                  type: ActivityType.STUDY,
-                  fromSlot: slot,
-                  nextSlot: selectedSlotForLog.nextSlot,
-                  durationMinutes: duration,
-              };
-              setActiveSession(newSession);
-              setSelectedSlotForLog(null);
-              addToast(t('toasts.sessionStarted'), 'success');
-          }}
-          onUploadSlides={(slot) => {
-              setIntendedStudyContext({ subject: slot.activity, fromSlot: slot });
-              setView('uploadslides');
-              setSelectedSlotForLog(null);
-          }}
-          slot={selectedSlotForLog.slot}
-          day={selectedSlotForLog.day}
-          nextSlot={selectedSlotForLog.nextSlot}
-        />
-      )}
+
+      <LogStudyModal
+        isOpen={logStudyModalState.isOpen}
+        onClose={() => setLogStudyModalState({ isOpen: false, slot: null, day: null, nextSlot: null })}
+        onStartSession={(slot) => handleStartStudySession(slot, logStudyModalState.day!)}
+        onUploadSlides={handleUploadSlidesForSession}
+        slot={logStudyModalState.slot}
+        day={logStudyModalState.day}
+        nextSlot={logStudyModalState.nextSlot}
+      />
 
     </div>
   );

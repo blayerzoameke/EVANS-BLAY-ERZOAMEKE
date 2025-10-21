@@ -1,3 +1,4 @@
+
 // Advanced Graph Plotting System for All Function Types
 // Supports trigonometric, polynomial, exponential, logarithmic, rational functions
 // Handles both radians and degrees
@@ -81,14 +82,21 @@ export class AdvancedGraphPlotter {
             .replace(/\s+/g, '')
             .replace(/\^/g, '**')
             .replace(/π|pi/gi, 'PI')
-            .replace(/\b(e)\b/g, 'E'); // Match 'e' as a whole word
+            .replace(/\b(e)\b/g, 'E');
 
-        // FIX: Add parentheses to disambiguate operator precedence for unary minus with exponentiation.
-        // This regex handles cases like `-x**2` or `-(x+1)**2` by converting them to `-(x**2)` and `-((x+1)**2)`.
-        cleaned = cleaned.replace(/-((?:\w+|\([^)]+\))\*\*(?:\w+|\([^)]+\)))/g, '-($1)');
-        // This regex handles cases like `x**-2` by converting it to `x**(-2)`.
-        cleaned = cleaned.replace(/\*\*((?:-|\+)(?:\w+|\([^)]+\)))/g, '**($1)');
-
+        // Add parentheses to disambiguate operator precedence.
+        // Handles negative exponents, e.g., x**-2 -> x**(-2)
+        cleaned = cleaned.replace(/\*\*-/g, '**(-');
+        // Handles unary minus with exponentiation, e.g., -x**2 -> -(x**2)
+        cleaned = cleaned.replace(/-((\w|\([^)]+\))\*\*)/g, '-($1');
+        // Add closing parentheses for the unary minus and negative exponent fixes
+        let openParenCount = (cleaned.match(/\(/g) || []).length;
+        let closeParenCount = (cleaned.match(/\)/g) || []).length;
+        while(openParenCount > closeParenCount) {
+            cleaned += ')';
+            closeParenCount++;
+        }
+        
         // Implicit multiplication:
         // number before letter or opening paren: 2x -> 2*x, 3(x+1) -> 3*(x+1)
         cleaned = cleaned.replace(/(\d(?:\.\d+)?)(\b[a-zA-Z](?![a-zA-Z\d]))/g, '$1*$2');
@@ -107,7 +115,6 @@ export class AdvancedGraphPlotter {
             const evaluator = new Function('x', `
                 const { PI, E, sin, cos, tan, asin, acos, atan, log10, log, sqrt, abs, exp, floor, ceil, round } = Math;
                 
-                // Angle conversion for degrees mode
                 const sinDeg = (deg) => sin(deg * PI / 180);
                 const cosDeg = (deg) => cos(deg * PI / 180);
                 const tanDeg = (deg) => tan(deg * PI / 180);
@@ -170,7 +177,7 @@ export class AdvancedGraphPlotter {
         if (!evaluator) return [];
 
         const { xMin, xMax } = config;
-        const samples = config.samples || 100; // Default to more samples for a smooth curve
+        const samples = config.samples || 200;
 
         const points: ChartPoint[] = [];
         const step = (xMax - xMin) / (samples - 1);

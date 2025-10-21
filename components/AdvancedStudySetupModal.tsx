@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
-import { CloseIcon } from './icons/CloseIcon';
+import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { CloseIcon } from './icons/CloseIcon.tsx';
 import type { Note } from '../types.ts';
 
 interface AdvancedStudySetupModalProps {

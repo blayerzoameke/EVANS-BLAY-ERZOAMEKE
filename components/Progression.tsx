@@ -4,6 +4,7 @@ import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts'
 import { DAYS_OF_WEEK } from '../constants.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { useColorTheme } from '../contexts/ColorThemeContext.tsx';
+import { timeToMinutes } from '../lib/utils.ts';
 
 interface ProgressionProps {
   plan: SmartPlan | null;
@@ -55,41 +56,6 @@ const DonutChart: React.FC<{ data: { type: string; value: number; color: string 
             })}
         </svg>
     );
-};
-
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
 };
 
 const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {

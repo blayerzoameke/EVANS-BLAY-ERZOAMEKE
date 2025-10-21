@@ -97,6 +97,8 @@ export const translations = {
     "dashboard.error.noInput": "Please provide some input, either by uploading an image or entering details manually.",
     "dashboard.error.notATimetable": "The uploaded image does not appear to be a timetable. Please try another image.",
     "dashboard.alt.timetablePreview": "Timetable preview",
+    "dashboard.screenshots.title": "My Screenshots",
+    "dashboard.screenshots.add": "Add Screenshot",
 
     "timetableinput.lectures": "Lectures / Classes",
     "timetableinput.subject": "Subject / Course Name",
@@ -163,6 +165,7 @@ export const translations = {
     "toasts.fileSizeTooLarge": "File \"{fileName}\" is too large (> {size}MB).",
     "toasts.filesAdded": "{count} valid file(s) added.",
     "toasts.imageSizeError5": "Image must be less than 5MB.",
+    "toasts.imageSizeError2": "Image must be less than 2MB.",
     "toasts.breakStarted": "Break time! Take a {duration}-minute break.",
     "toasts.breakOver": "Break over! Continue studying.",
     "toasts.sessionComplete": "Study session complete! Great job on {subject}!",
@@ -362,6 +365,8 @@ export const translations = {
     "focusedStudy.break.snack": "Healthy Snack",
     "focusedStudy.resumeTitle": "Resume",
     "focusedStudy.pauseTitle": "Pause",
+    "focusedStudy.focusMode.title": "Focus Mode",
+    "focusedStudy.focusMode.quote": "The secret to getting ahead is getting started.",
     
     "sessionCustomization.title": "Customize Your Study Session",
     "sessionCustomization.duration": "Study Duration (minutes)",
@@ -406,6 +411,12 @@ export const translations = {
     "notifications.firstTime.enabled": "Notifications Enabled!",
     "notifications.firstTime.enabledBody": "You're all set to receive reminders.",
     "notifications.firstTime.notEnabled": "Notifications were not enabled.",
+    "notifications.sessionStart.title": "Starting Now: {subject}",
+    "notifications.sessionStart.body": "Your scheduled session from {startTime} to {endTime} is beginning.",
+    "notifications.reminder.title": "{subject} starts in {time} minutes!",
+    "notifications.reminder.body": "Get ready for your session at {startTime}.",
+    "notifications.breakStart.title": "Time for a break!",
+    "notifications.breakStart.body": "Enjoy your {activity} for {duration} minutes.",
 
     "settings.title": "Settings",
     "settings.subtitle": "Manage your application settings and data.",
@@ -539,6 +550,11 @@ export const translations = {
     "tutorial.step": "Step",
     "tutorial.video.title": "Video Walkthrough",
     "tutorial.video.placeholder": "Full video tutorial coming soon!",
+    "tutorial.video.edit": "Edit Video",
+    "tutorial.video.save": "Save Link",
+    "tutorial.video.cancel": "Cancel",
+    "tutorial.video.urlPlaceholder": "Paste full YouTube URL (e.g., https://www.youtube.com/watch?v=...)",
+    "tutorial.image.change": "Change",
     "tutorial.step1.title": "Complete Your Profile",
     "tutorial.step1.desc": "Start by filling out your user details in the onboarding screen. This helps personalize your experience.",
     "tutorial.step1.alt": "Screenshot of the onboarding profile form.",
@@ -680,37 +696,26 @@ export const translations = {
     "studytracker.resume": "Resume",
     "studytracker.pause": "Pause",
     "studytracker.stop": "Stop Session",
-    
-    "untrackedStudyModal.title": "Untracked Study Session Setup",
-    "untrackedStudyModal.duration": "Study Duration (minutes)",
-    "untrackedStudyModal.durationSuggestion": "Pomodoro technique suggests 25-50 minute intervals.",
-    "untrackedStudyModal.breakDuration": "Break Duration",
-    "untrackedStudyModal.breakDuration.none": "No break",
-    "untrackedStudyModal.breakDuration.5": "5 Minutes",
-    "untrackedStudyModal.breakDuration.10": "10 Minutes",
-    "untrackedStudyModal.breakDuration.15": "15 Minutes",
-    "untrackedStudyModal.breakActivity": "Break Activity (Optional)",
-    "untrackedStudyModal.breakActivityPlaceholder": "e.g., Watch a video, take a walk",
-    "untrackedStudyModal.breakLink": "Activity Link (Optional)",
-    "untrackedStudyModal.breakLinkPlaceholder": "e.g., YouTube video, Spotify playlist",
-    "untrackedStudyModal.start": "Start Session",
-    
-    "language.title": "Language Settings",
-    "language.subtitle": "Choose the language for the application.",
-    
-    "searchableDropdown.noResults": "No results found",
 
     "advancedStudy.title": "Advanced Study Setup",
     "advancedStudy.subject": "Study Subject",
-    "advancedStudy.subject.placeholder": "e.g., Quantum Physics Chapter 3",
+    "advancedStudy.subject.placeholder": "e.g. Quantum Physics Chapter 3",
     "advancedStudy.duration": "Study Duration (minutes)",
     "advancedStudy.start": "Start Focused Study Session",
     "advancedStudy.source": "Study Source",
     "advancedStudy.source.document": "Current Document",
     "advancedStudy.source.note": "From My Notes",
     "advancedStudy.selectNote": "Select a Note",
-
+    
+    "untrackedStudyModal.title": "Untracked Study Session Setup",
+    "untrackedStudyModal.duration": "Study Duration (minutes)",
+    "untrackedStudyModal.durationSuggestion": "Pomodoro technique suggests 25-50 minute intervals.",
+    "untrackedStudyModal.breakDuration": "Break Duration",
+    "untrackedStudyModal.breakDuration.none": "No break",
+    "untrackedStudyModal.start": "Start Session",
+    
     "timeInput.placeholder": "e.g., 09:00 AM",
-    "timeInput.noMatch": "No matching times"
-}
+    "timeInput.noMatch": "No matching times",
+
+    "searchableDropdown.noResults": "No results found"
 }

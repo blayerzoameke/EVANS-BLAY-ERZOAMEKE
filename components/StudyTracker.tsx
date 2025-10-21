@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ActiveSession, Toast, TrackedSession } from '../types.ts';
 import type { View } from '../types.ts';
@@ -21,7 +20,7 @@ interface StudyTrackerProps {
 
 const StudyTracker: React.FC<StudyTrackerProps> = ({ session, setSession, addToast, trackedData, setTrackedData, setView }) => {
   const { t } = useLanguage();
-  const [timeLeft, setTimeLeft] = useState(Math.round((session.endTime - Date.now()) / 1000));
+  const [timeLeft, setTimeLeft] = useState(Math.max(0, Math.round((session.endTime - Date.now()) / 1000)));
   const [isPaused, setIsPaused] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [pauseTime, setPauseTime] = useState(0);
@@ -147,6 +146,7 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ session, setSession, addToa
             type: 'break',
             fromSlot: session.nextSlot,
             nextSlot: null,
+            day: session.day,
         };
         setSession(newBreakSession);
     }

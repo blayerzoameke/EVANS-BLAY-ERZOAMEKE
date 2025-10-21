@@ -2,6 +2,22 @@ import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import type { PlanSlot } from '../types.ts';
+import { timeToMinutes } from '../lib/utils.ts';
+
+const FormattedText: React.FC<{ text: string }> = ({ text }) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g).filter(part => part);
+    
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={index}>{part.slice(2, -2)}</strong>;
+          }
+          return part;
+        })}
+      </>
+    );
+};
 
 interface SchedulePromptModalProps {
     isOpen: boolean;
@@ -13,42 +29,6 @@ interface SchedulePromptModalProps {
         nextSlot: PlanSlot | null;
     };
 }
-
-// FIX: Replaced buggy timeToMinutes with a more robust version
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
-};
 
 const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClose, onConfirm, onReject, sessionInfo }) => {
     const { t } = useLanguage();
@@ -63,13 +43,12 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
 
     const isNextBreak = nextSlot?.type === 'break';
     
-    // FIX: Use i18n function instead of hardcoded strings
     const message = t('schedulePrompt.message', {
         course: slot.activity,
         startTime: slot.startTime,
         endTime: slot.endTime,
         duration: durationText
-    }) + (isNextBreak ? t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime }) : '');
+    }) + (isNextBreak && nextSlot ? t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime }) : '');
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -82,7 +61,7 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
                 </div>
                 <div className="p-6 space-y-4">
                     <p className="text-gray-600 dark:text-gray-400">
-                        {message}
+                        <FormattedText text={message} />
                     </p>
                 </div>
                 <div className="p-4 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700 flex flex-col sm:flex-row gap-3">

@@ -3,6 +3,7 @@ import React from 'react';
 import { useLanguage } from './contexts/LanguageContext.tsx';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import type { PlanSlot } from './types.ts';
+import { timeToMinutes } from './lib/utils.ts';
 
 interface SchedulePromptModalProps {
     isOpen: boolean;
@@ -14,42 +15,6 @@ interface SchedulePromptModalProps {
         nextSlot: PlanSlot | null;
     };
 }
-
-// FIX: Replaced buggy timeToMinutes with a more robust version
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
-};
 
 const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClose, onConfirm, onReject, sessionInfo }) => {
     const { t } = useLanguage();
@@ -70,7 +35,7 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
         startTime: slot.startTime,
         endTime: slot.endTime,
         duration: durationText
-    }) + (isNextBreak ? t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime }) : '');
+    }) + (isNextBreak && nextSlot ? t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime }) : '');
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>

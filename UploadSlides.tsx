@@ -20,6 +20,7 @@ import { PauseIcon } from './icons/PauseIcon.tsx';
 import { StopIcon } from './icons/StopIcon.tsx';
 import { DAYS_OF_WEEK } from './constants.ts';
 import SessionCustomizationModal from './SessionCustomizationModal.tsx';
+import { timeToMinutes, getDayOfWeek } from './lib/utils.ts';
 
 interface UploadSlidesProps {
   smartPlan: SmartPlan | null;
@@ -39,41 +40,6 @@ interface UploadSlidesProps {
 }
 
 const FILE_SIZE_THRESHOLD = 5 * 1024 * 1024; // 5 MB
-
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
-};
 
 const minutesToTime = (totalMinutes: number): string => {
     const hours24 = Math.floor(totalMinutes / 60) % 24;
@@ -316,10 +282,9 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const findCurrentSlots = (plan: SmartPlan | null): { slot: PlanSlot | null, nextSlot: PlanSlot | null, day: DayOfWeek | null } => {
     if (!plan) return { slot: null, nextSlot: null, day: null };
     const now = new Date();
-    const dayIndex = now.getDay();
-    const currentDay = DAYS_OF_WEEK[dayIndex === 0 ? 6 : dayIndex - 1];
-    const dayPlan = plan.find(d => d.day === currentDay);
-    if (!dayPlan) return { slot: null, nextSlot: null, day: currentDay };
+    const day = getDayOfWeek(now);
+    const dayPlan = plan.find(d => d.day === day);
+    if (!dayPlan) return { slot: null, nextSlot: null, day: day };
     
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const currentSlotIndex = dayPlan.slots.findIndex(slot => 
@@ -328,13 +293,13 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     );
     
     if (currentSlotIndex === -1) {
-        return { slot: null, nextSlot: null, day: currentDay };
+        return { slot: null, nextSlot: null, day: day };
     }
 
     const slot = dayPlan.slots[currentSlotIndex];
     const nextSlot = currentSlotIndex + 1 < dayPlan.slots.length ? dayPlan.slots[currentSlotIndex + 1] : null;
 
-    return { slot, nextSlot, day: currentDay };
+    return { slot, nextSlot, day: day };
   };
 
   const processFile = useCallback(async (fileToProcess: File, context?: string): Promise<UploadedFile | null> => {

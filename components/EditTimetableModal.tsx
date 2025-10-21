@@ -10,6 +10,7 @@ import TimeInput from './TimeInput.tsx';
 import { DAYS_OF_WEEK } from '../constants.ts';
 import ConfirmationModal from './ConfirmationModal.tsx';
 import { ChevronDownIcon } from './icons/ChevronDownIcon.tsx';
+import { timeToMinutes } from '../lib/utils.ts';
 
 interface EditTimetableModalProps {
     isOpen: boolean;
@@ -24,41 +25,6 @@ type EditablePlanSlot = PlanSlot & { tempId: string };
 type EditableDayPlan = Omit<DayPlan, 'slots'> & { slots: EditablePlanSlot[] };
 type EditableSmartPlan = EditableDayPlan[];
 
-
-const timeToMinutes = (time: string): number => {
-    if (!time) return 0;
-    try {
-        const timeLower = time.toLowerCase().replace(/\s/g, '');
-        const isPM = timeLower.includes('pm');
-        const isAM = timeLower.includes('am');
-
-        const timeOnly = timeLower.replace('am', '').replace('pm', '');
-        
-        let [hourStr, minuteStr] = timeOnly.split(':');
-        
-        if (!minuteStr) minuteStr = '0';
-
-        let hours = parseInt(hourStr, 10);
-        const minutes = parseInt(minuteStr, 10);
-
-        if (isNaN(hours) || isNaN(minutes)) {
-            console.warn(`Could not parse time: ${time}`);
-            return 0;
-        }
-        
-        if (isPM && hours !== 12) {
-            hours += 12;
-        }
-        if (isAM && hours === 12) {
-            hours = 0;
-        }
-
-        return hours * 60 + minutes;
-    } catch (e) {
-        console.error("Failed to parse time string:", time, e);
-        return 0;
-    }
-};
 
 const EditTimetableModal: React.FC<EditTimetableModalProps> = ({ isOpen, onClose, plan, setPlan, addToast }) => {
     const { t } = useLanguage();

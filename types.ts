@@ -1,4 +1,5 @@
 
+
 // FIX: Export DayOfWeek enum and remove circular import from constants.ts
 export enum DayOfWeek {
   Monday = 'Monday',
@@ -137,6 +138,8 @@ export interface ActiveSession {
   durationMinutes?: number;
   breakPlacement?: 'during' | 'after';
   breakStartsAt?: number;
+  day?: DayOfWeek;
+  postBreakView?: View;
 }
 
 export interface Note {

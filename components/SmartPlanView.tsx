@@ -22,14 +22,23 @@ const getActivityColor = (type: ActivityType) => {
   }
 };
 
-const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: string }> = ({ slot, onClick, tooltip }) => {
+const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: string; isCurrent?: boolean }> = ({ slot, onClick, tooltip, isCurrent }) => {
     const isClickable = !!(slot.link || onClick);
 
-    const cardClasses = `relative group p-4 rounded-xl shadow-md mb-4 transition-all duration-300 transform hover:shadow-xl hover:scale-105 ${getActivityColor(slot.type)} ${isClickable ? 'cursor-pointer' : 'cursor-default'}`;
+    const cardClasses = `relative group p-4 rounded-xl shadow-md mb-4 transition-all duration-300 transform hover:shadow-xl hover:scale-105 ${getActivityColor(slot.type)} ${isClickable ? 'cursor-pointer' : 'cursor-default'} ${isCurrent ? 'ring-2 ring-primary dark:ring-primary-light' : ''}`;
     
     const content = (
         <div className={cardClasses}>
-            <p className="font-bold text-base mb-1">{slot.activity}</p>
+             {isCurrent && (
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 text-xs font-semibold bg-red-600 px-2 py-1 rounded-full text-white shadow-md">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                    </span>
+                    Live
+                </div>
+            )}
+            <p className="font-bold text-base mb-1 pr-12">{slot.activity}</p>
             {slot.code && <p className="text-sm font-mono mt-1 text-white/90 bg-black/20 px-2 py-1 rounded">{slot.code}</p>}
             <p className="text-sm text-white/90 mt-2 font-medium">{slot.startTime} - {slot.endTime}</p>
             <p className="text-sm capitalize mt-2 font-semibold text-white/95 bg-white/20 px-2 py-1 rounded-full inline-block">{slot.type}</p>
@@ -63,6 +72,7 @@ const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: s
 interface SmartPlanViewProps {
     plan: SmartPlan;
     onStudySlotClick?: (slot: PlanSlot, day: DayOfWeek) => void;
+    dayRefs?: React.MutableRefObject<Record<DayOfWeek, HTMLDivElement | null>>;
 }
 
 const timeToMinutes = (time: string): number => {
@@ -100,7 +110,7 @@ const timeToMinutes = (time: string): number => {
     }
 };
 
-const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick }) => {
+const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick, dayRefs }) => {
   const { t } = useLanguage();
   const [now, setNow] = useState(new Date());
 
@@ -131,14 +141,16 @@ const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick })
   const DayCard: React.FC<{ day: DayOfWeek; slots: PlanSlot[]; isWeekend?: boolean }> = ({ day, slots, isWeekend = false }) => {
     const currentDay = getCurrentDay(now);
     const sortedSlots = [...slots].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
     return (
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 h-full transition-all duration-300 hover:shadow-2xl">
+        <div ref={el => { if(dayRefs) dayRefs.current[day] = el }} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 h-full transition-all duration-300 hover:shadow-2xl">
           <h3 className={`text-2xl font-bold text-center mb-6 bg-gradient-to-r ${isWeekend ? 'from-green-500 to-teal-500' : 'from-primary to-purple-600'} bg-clip-text text-transparent`}>{day}</h3>
           {sortedSlots.length > 0 ? (
             sortedSlots.map((slot, index) => {
               const isClickable = slot.type === ActivityType.STUDY && day === currentDay && !!onStudySlotClick;
               const tooltip = isClickable ? t('smartplan.clickToStudy') : undefined;
+              const isCurrent = day === currentDay && nowMinutes >= timeToMinutes(slot.startTime) && nowMinutes < timeToMinutes(slot.endTime);
               
               return (
                   <PlanSlotCard 
@@ -146,6 +158,7 @@ const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick })
                       slot={slot} 
                       onClick={isClickable ? () => onStudySlotClick!(slot, day) : undefined} 
                       tooltip={tooltip}
+                      isCurrent={isCurrent}
                   />
               );
             })
