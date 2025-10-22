@@ -40,8 +40,9 @@ interface UploadSlidesProps {
   setIntendedStudyContext: (context: { subject: string; fromSlot: PlanSlot } | null) => void;
 }
 
-type AudioState = 'idle' | 'playing' | 'paused';
-type HubView = 'actions' | 'summarize' | 'explain' | 'chat' | 'read-aloud';
+type HubView = 'actions' | 'summarize' | 'explain' | 'chat' | 'read-focus';
+type ReadAloudState = 'idle' | 'loading' | 'interactive' | 'playing' | 'paused';
+
 
 const minutesToTime = (totalMinutes: number): string => {
     const hours24 = Math.floor(totalMinutes / 60) % 24;
@@ -93,6 +94,7 @@ const KatexRenderer: React.FC<{ content: string; displayMode: boolean }> = React
         const html = katex.renderToString(content, { throwOnError: false, displayMode });
         return <span dangerouslySetInnerHTML={{ __html: html }} />;
     } catch (e) {
+        // FIX: Corrected invalid JSX syntax for the code tag.
         return <code>{content}</code>;
     }
 });
@@ -139,6 +141,7 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
                 }
 
                 const lines = block.split('\n');
+                // FIX: Changed type from JSX.Element[] to React.ReactNode[] to be safer and more idiomatic.
                 const elements: React.ReactNode[] = [];
                 let listItems: string[] = [];
                 let inList = false;
@@ -309,6 +312,97 @@ const ChatView: React.FC<ChatViewProps> = ({
 };
 
 
+const HighlightedReadAloud: React.FC<{ text: string; highlightIndex: number; charLength: number; }> = ({ text, highlightIndex, charLength }) => {
+    const paragraphs = text.split('\n');
+    let charCounter = 0;
+    const currentWordRef = useRef<HTMLSpanElement>(null);
+
+    useEffect(() => {
+        currentWordRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, [highlightIndex]);
+
+    return (
+        <div className="prose prose-2xl dark:prose-invert max-w-4xl mx-auto text-left leading-relaxed py-8">
+            {paragraphs.map((paragraph, pIndex) => {
+                if (!paragraph.trim()) return <br key={pIndex} />;
+                
+                const pStart = charCounter;
+                const pEnd = pStart + paragraph.length;
+
+                charCounter = pEnd + 1; // Account for the newline character
+
+                // Paragraph has not been spoken yet or reading is idle
+                if (highlightIndex === -1 || (highlightIndex + charLength < pStart)) {
+                    return <p key={pIndex}>{paragraph}</p>;
+                }
+                
+                // Paragraph has been fully spoken
+                if (highlightIndex >= pEnd) {
+                    return <p key={pIndex}><span className="bg-primary/20 transition-colors duration-150">{paragraph}</span></p>;
+                }
+
+                // Paragraph is being spoken now
+                const spokenPartEnd = highlightIndex;
+                const currentWordEnd = highlightIndex + charLength;
+
+                const preText = paragraph.substring(0, Math.max(0, spokenPartEnd - pStart));
+                const wordText = paragraph.substring(Math.max(0, spokenPartEnd - pStart), Math.max(0, currentWordEnd - pStart));
+                const postText = paragraph.substring(Math.max(0, currentWordEnd - pStart));
+                
+                const isCurrentWordInThisParagraph = highlightIndex >= pStart && highlightIndex < pEnd;
+
+                return (
+                    <p key={pIndex}>
+                        <span className="bg-primary/20 transition-colors duration-150">{preText}</span>
+                        <span ref={isCurrentWordInThisParagraph ? currentWordRef : null} className="bg-primary/40 transition-colors duration-150 rounded px-1">{wordText}</span>
+                        <span>{postText}</span>
+                    </p>
+                );
+            })}
+        </div>
+    );
+};
+
+const ClickableReadAloudText: React.FC<{ text: string; onWordClick: (charIndex: number) => void; }> = ({ text, onWordClick }) => {
+    const paragraphs = text.split('\n');
+    let charCounter = 0;
+
+    return (
+        <div className="prose prose-2xl dark:prose-invert max-w-4xl mx-auto text-left leading-relaxed py-8">
+            {paragraphs.map((paragraph, pIndex) => {
+                const paragraphStartOffset = charCounter;
+                charCounter += paragraph.length + 1; // Account for newline
+
+                if (!paragraph.trim()) return <br key={pIndex} />;
+
+                const wordsAndSpaces = paragraph.split(/(\s+)/);
+                let localCharCounter = 0;
+
+                return (
+                    <p key={pIndex}>
+                        {wordsAndSpaces.map((segment, wIndex) => {
+                            const isWord = segment.trim().length > 0;
+                            const globalSegmentStart = paragraphStartOffset + localCharCounter;
+                            localCharCounter += segment.length;
+
+                            return (
+                                <span
+                                    key={wIndex}
+                                    onClick={isWord ? () => onWordClick(globalSegmentStart) : undefined}
+                                    className={isWord ? "cursor-pointer hover:bg-primary/20 rounded transition-colors" : ""}
+                                >
+                                    {segment}
+                                </span>
+                            );
+                        })}
+                    </p>
+                );
+            })}
+        </div>
+    );
+};
+
+
 const UploadSlides: React.FC<UploadSlidesProps> = ({
   smartPlan, setSmartPlan, activeSession, setActiveSession, setView, addToast,
   learningHubState, setLearningHubState, notes, setNotes,
@@ -318,65 +412,31 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const { t } = useLanguage();
   const [loadingMessage, setLoadingMessage] = useState('');
   const [chatInput, setChatInput] = useState('');
-  const [audioState, setAudioState] = useState<AudioState>('idle');
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [hubView, setHubView] = useState<HubView>('actions');
-
-  const [leftPanelWidth, setLeftPanelWidth] = useState(50);
-  const isResizingRef = useRef(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const speechStartIndexRef = useRef(0);
+  
+  const [readAloudState, setReadAloudState] = useState<ReadAloudState>('idle');
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const [highlightLength, setHighlightLength] = useState(0);
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const [controlsPosition, setControlsPosition] = useState({ x: 0, y: 0 });
 
   const [sessionPrompt, setSessionPrompt] = useState<{ slot: PlanSlot, nextSlot: PlanSlot | null, day: DayOfWeek } | null>(null);
   const [conflictInfo, setConflictInfo] = useState<{ plannedSubject: string; uploadedSubject: string; day: DayOfWeek; slot: PlanSlot; file: UploadedFile; } | null>(null);
   const [showConflictResolution, setShowConflictResolution] = useState(false);
   const [customizationRequest, setCustomizationRequest] = useState<{ file: UploadedFile, slot?: PlanSlot, isUntracked: boolean } | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ index: number; text: string } | null>(null);
-
-
+  
   const { file, analysisResults, chatHistory, isProcessing } = learningHubState;
 
   const setFile = (file: UploadedFile | null) => setLearningHubState(prev => ({ ...prev, file }));
-  const setAnalysisResult = (type: 'summarize' | 'explain' | 'read', result: string | null) => {
-      setLearningHubState(prev => ({
-          ...prev,
-          analysisResults: { ...prev.analysisResults, [type]: result }
-      }));
-  };
-   
   const setIsProcessing = (processing: boolean) => setLearningHubState(prev => ({...prev, isProcessing: processing}));
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-      isResizingRef.current = true;
-      e.preventDefault();
+  const setAnalysisResult = (type: 'summarize' | 'explain' | 'read', result: string | null) => {
+    setLearningHubState(prev => ({
+        ...prev,
+        analysisResults: { ...prev.analysisResults, [type]: result }
+    }));
   };
-  
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-      if (!isResizingRef.current || !containerRef.current) {
-          return;
-      }
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const mouseX = e.clientX - containerRect.left;
-      let newWidthPercent = (mouseX / containerRect.width) * 100;
-  
-      if (newWidthPercent < 20) newWidthPercent = 20;
-      if (newWidthPercent > 80) newWidthPercent = 80;
-      
-      setLeftPanelWidth(newWidthPercent);
-  }, []);
-
-  useEffect(() => {
-      const handleGlobalMouseUp = () => {
-          isResizingRef.current = false;
-      };
-  
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-  
-      return () => {
-          window.removeEventListener('mousemove', handleMouseMove);
-          window.removeEventListener('mouseup', handleGlobalMouseUp);
-      };
-  }, [handleMouseMove]);
 
   useEffect(() => {
     return () => {
@@ -386,39 +446,60 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     };
   }, [intendedStudyContext, setIntendedStudyContext]);
 
-    const handleStop = useCallback(() => {
-        if (speechSynthesis.speaking || speechSynthesis.pending || speechSynthesis.paused) {
-            speechSynthesis.cancel();
-        }
-        setAudioState('idle');
-    }, []);
+  const handlePlay = useCallback((startIndex = 0) => {
+    const textToRead = analysisResults.read;
+    if (textToRead) {
+        speechSynthesis.cancel();
+        speechStartIndexRef.current = startIndex;
+        const utterance = new SpeechSynthesisUtterance(textToRead.substring(startIndex));
 
-    const handlePlay = useCallback(() => {
-        if (audioState === 'paused') {
-            speechSynthesis.resume();
-            setAudioState('playing');
-        } else if (audioState === 'idle') {
-            const textToRead = analysisResults.read;
-            if (textToRead) {
-                speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(textToRead);
-                utterance.onend = () => {
-                    setAudioState('idle');
-                    utteranceRef.current = null;
-                };
-                utteranceRef.current = utterance;
-                speechSynthesis.speak(utterance);
-                setAudioState('playing');
+        utterance.onboundary = (event) => {
+            if (event.name === 'word') {
+                setHighlightIndex(speechStartIndexRef.current + event.charIndex);
+                setHighlightLength(event.charLength);
             }
-        }
-    }, [audioState, analysisResults.read]);
+        };
+        utterance.onend = () => {
+            setReadAloudState('interactive');
+            setHighlightIndex(-1);
+            setHighlightLength(0);
+        };
+        utterance.onstart = () => {
+             setHighlightIndex(speechStartIndexRef.current);
+             setHighlightLength(0);
+        };
+        
+        speechSynthesis.speak(utterance);
+        setReadAloudState('playing');
+    }
+  }, [analysisResults.read]);
+  
+  const handleResume = useCallback(() => {
+      speechSynthesis.resume();
+      setReadAloudState('playing');
+  }, []);
 
-    const handlePause = useCallback(() => {
-        if (audioState === 'playing') {
-            speechSynthesis.pause();
-            setAudioState('paused');
-        }
-    }, [audioState]);
+  const handlePause = useCallback(() => {
+      speechSynthesis.pause();
+      setReadAloudState('paused');
+  }, []);
+
+  const handleStop = useCallback(() => {
+      speechSynthesis.cancel();
+      setReadAloudState('interactive');
+      setHighlightIndex(-1);
+      setHighlightLength(0);
+  }, []);
+
+  const handleWordClick = (charIndex: number) => {
+    handlePlay(charIndex);
+  };
+
+  const handleDocDoubleClick = () => {
+      addToast("Reading from the beginning of the document.", "info");
+      handlePlay(0);
+  };
+
 
   useEffect(() => {
     return () => handleStop();
@@ -668,19 +749,12 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
     if (mode === 'summarize' || mode === 'explain' || mode === 'chat') {
         setHubView(mode);
-    } else if (mode === 'read') {
-        setHubView('read-aloud');
     }
     
-    if (analysisResults[mode as 'summarize' | 'explain' | 'read']) {
-        if (mode === 'read') {
-            handlePlay();
-        }
-        return;
-    }
+    if (analysisResults[mode as 'summarize' | 'explain' | 'read']) return;
 
     if (mode === 'chat') return;
-
+    
     setIsProcessing(true);
     setLoadingMessage(t(`uploadslides.loading.${mode}` as any));
     try {
@@ -696,13 +770,13 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
         
         setAnalysisResult(mode, result);
 
-        if (mode === 'read') {
-            handlePlay();
-        }
     } catch (error: any) {
         addToast(error.message || `Failed to ${mode} document.`, 'error');
         setHubView('actions');
     } finally {
+        if (mode === 'read' && hubView === 'read-focus') {
+            setReadAloudState('interactive');
+        }
         setIsProcessing(false);
     }
   };
@@ -827,6 +901,36 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
       }
   };
 
+  const copyReadAloudText = () => {
+    if (analysisResults.read) {
+        navigator.clipboard.writeText(analysisResults.read).then(() => addToast(t('toasts.copied'), 'success'));
+    }
+  };
+
+  const saveReadAloudTextToNotes = () => {
+      if (!file || !analysisResults.read || isProcessing) return;
+      const newNote: Note = {
+        id: Date.now().toString(),
+        title: `${t('uploadslides.actions.read')}: ${file.name}`,
+        content: analysisResults.read,
+        subject: file.context,
+        createdAt: new Date().toISOString(),
+        isFavourite: false,
+      };
+      setNotes([newNote, ...notes]);
+      addToast(t('toasts.savedToNotes'), 'success');
+  };
+
+  const handleReadAloudClick = () => {
+    setHubView('read-focus');
+    if (analysisResults.read) {
+        setReadAloudState('interactive');
+    } else {
+        setReadAloudState('loading');
+        handleAnalysis('read');
+    }
+  };
+
   const AnalysisView: React.FC = () => {
     const content = analysisResults[hubView as 'summarize' | 'explain'];
     if (isProcessing && !content) return <LoadingIndicator message={loadingMessage} />;
@@ -849,6 +953,92 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     if (!file) return null;
     if (isStudyModeView) return <FileViewer file={file} />;
 
+    if (hubView === 'read-focus') {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+            <div onDoubleClick={handleDocDoubleClick} className="h-full relative group">
+                <FileViewer file={file} />
+                {readAloudState === 'interactive' && (
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-2xl">
+                        <p className="text-white font-bold text-lg bg-black/50 px-4 py-2 rounded-lg">Double-tap to read from start</p>
+                    </div>
+                )}
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl h-full flex flex-col overflow-hidden relative">
+              <header className="p-4 border-b dark:border-gray-700 flex justify-between items-center flex-shrink-0">
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-white">{t('uploadslides.actions.read')}</h3>
+                  <div className="flex items-center gap-2">
+                      <button onClick={copyReadAloudText} disabled={isProcessing || !analysisResults.read} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 disabled:opacity-50" title={t('common.copy')}>
+                          <CopyIcon className="w-4 h-4"/>
+                      </button>
+                      <button onClick={saveReadAloudTextToNotes} disabled={isProcessing || !analysisResults.read} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 disabled:opacity-50" title={t('common.saveToNotes')}>
+                          <SaveIcon className="w-4 h-4"/>
+                      </button>
+                      <button onClick={() => { handleStop(); setHubView('actions'); }} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline pl-2">
+                          <ArrowLeftIcon className="w-4 h-4"/> {t('uploadslides.backToActions')}
+                      </button>
+                  </div>
+              </header>
+              <main
+                className="flex-1 overflow-y-auto px-6 relative"
+                onMouseEnter={(e) => {
+                    setControlsPosition({ x: e.clientX, y: e.clientY });
+                    setControlsVisible(true);
+                }}
+                onMouseLeave={() => {
+                    setControlsVisible(false);
+                }}
+              >
+                  {readAloudState === 'loading' && <LoadingIndicator message={loadingMessage || t('uploadslides.loading.read')} />}
+                  
+                  {readAloudState === 'interactive' && (
+                    <>
+                      <div className="sticky top-0 bg-white dark:bg-gray-800 py-3 z-10 text-center border-b dark:border-gray-700 mb-4">
+                        <p className="font-semibold text-primary">Click any word below to start reading from that point.</p>
+                      </div>
+                      <ClickableReadAloudText text={analysisResults.read || ''} onWordClick={handleWordClick} />
+                    </>
+                  )}
+
+                  {(readAloudState === 'playing' || readAloudState === 'paused') && (
+                      <HighlightedReadAloud 
+                          text={analysisResults.read || ''}
+                          highlightIndex={highlightIndex}
+                          charLength={highlightLength}
+                      />
+                  )}
+              </main>
+              {controlsVisible && (
+                    <div
+                        style={{ 
+                            position: 'fixed', 
+                            top: `${controlsPosition.y}px`, 
+                            left: `${controlsPosition.x}px`,
+                            transform: 'translate(-50%, -120%)' // Position above and centered on cursor
+                        }}
+                        className="z-50 flex items-center gap-3 p-2 bg-gray-900/80 dark:bg-black/80 backdrop-blur-sm rounded-full shadow-2xl transition-opacity"
+                        onMouseEnter={() => setControlsVisible(true)}
+                        onMouseLeave={() => setControlsVisible(false)}
+                    >
+                        {readAloudState === 'playing' ? (
+                            <button onClick={handlePause} className="p-2 text-white rounded-full hover:bg-white/20" title={t('uploadslides.pauseReading')}>
+                                <PauseIcon className="w-6 h-6"/>
+                            </button>
+                        ) : (
+                            <button onClick={() => readAloudState === 'paused' ? handleResume() : handlePlay(0)} className="p-2 text-white rounded-full hover:bg-white/20" title={t('uploadslides.readAloud')}>
+                                <PlayIcon className="w-6 h-6"/>
+                            </button>
+                        )}
+                        <button onClick={handleStop} className="p-2 text-white rounded-full hover:bg-white/20" title={t('uploadslides.stopReading')}>
+                            <StopIcon className="w-6 h-6"/>
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+      );
+    }
+
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 h-full flex flex-col">
           <div className="flex justify-between items-start mb-6">
@@ -861,51 +1051,27 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
               )}
           </div>
           
-          {hubView === 'actions' || hubView === 'read-aloud' ? (
-              <div ref={containerRef} className="flex-1 flex items-stretch gap-2 overflow-hidden">
-                    <div style={{ width: `${leftPanelWidth}%` }} className="flex-shrink-0 h-full">
-                        <FileViewer file={file} />
-                    </div>
-                    <div onMouseDown={handleMouseDown} className="w-2 flex-shrink-0 cursor-col-resize bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-primary transition-colors duration-200" />
-                    <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-                       {hubView === 'actions' ? (
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-full">
-                                <ActionCard titleKey="uploadslides.actions.summarize" descKey="uploadslides.actions.summarize.desc" onClick={() => handleAnalysis('summarize')} />
-                                <ActionCard titleKey="uploadslides.actions.explain" descKey="uploadslides.actions.explain.desc" onClick={() => handleAnalysis('explain')} />
-                                <ActionCard titleKey="uploadslides.actions.chat" descKey="uploadslides.actions.chat.desc" onClick={() => handleAnalysis('chat')} />
-                                <ActionCard titleKey="uploadslides.actions.read" descKey="uploadslides.actions.read.desc" onClick={() => handleAnalysis('read')} />
-                            </div>
-                       ) : ( // hubView === 'read-aloud'
-                            <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 h-full flex flex-col justify-center items-center">
-                                <h4 className="font-bold text-lg text-gray-800 dark:text-white mb-4">{t('uploadslides.actions.read')}</h4>
-                                {isProcessing && !analysisResults.read ? (
-                                    <div className="text-center my-4">
-                                        <div className="animate-spin w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full mx-auto mb-3"></div>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">{loadingMessage || t('uploadslides.loading.read')}</p>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-4">
-                                         <button onClick={handlePlay} disabled={audioState === 'playing' || isProcessing || !analysisResults.read} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PlayIcon className="w-6 h-6"/></button>
-                                         <button onClick={handlePause} disabled={audioState !== 'playing'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><PauseIcon className="w-6 h-6"/></button>
-                                         <button onClick={handleStop} disabled={audioState === 'idle'} className="p-3 bg-gray-200 dark:bg-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50"><StopIcon className="w-6 h-6"/></button>
-                                    </div>
-                                )}
-                                 <button onClick={() => setHubView('actions')} className="mt-6 flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-                                    <ArrowLeftIcon className="w-4 h-4"/> {t('uploadslides.backToActions')}
-                                </button>
-                            </div>
-                       )}
-                    </div>
-              </div>
-          ) : (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-xl font-bold capitalize">{t('uploadslides.results.title', { mode: hubView })}</h4>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <ActionCard titleKey="uploadslides.actions.summarize" descKey="uploadslides.actions.summarize.desc" onClick={() => handleAnalysis('summarize')} />
+                <ActionCard titleKey="uploadslides.actions.explain" descKey="uploadslides.actions.explain.desc" onClick={() => handleAnalysis('explain')} />
+                <ActionCard titleKey="uploadslides.actions.chat" descKey="uploadslides.actions.chat.desc" onClick={() => setHubView('chat')} />
+                <ActionCard titleKey="uploadslides.actions.read" descKey="uploadslides.actions.read.desc" onClick={handleReadAloudClick} />
+            </div>
+
+             {hubView === 'actions' ? (
+                <div className="flex-1 flex items-center justify-center text-center text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                    <p>{t('uploadslides.selectAction')}</p>
+                </div>
+             ) : (
+                <div className="h-full flex flex-col">
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-lg font-semibold capitalize">{t('uploadslides.results.title', { mode: hubView })}</h4>
                         <div className="flex items-center gap-2">
-                             <button onClick={() => setHubView('actions')} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                            <button onClick={() => setHubView('actions')} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
                                 <ArrowLeftIcon className="w-4 h-4"/> {t('uploadslides.backToActions')}
                             </button>
-                             {hubView !== 'chat' && (
+                            {hubView !== 'chat' && (
                                 <>
                                     <button onClick={copyContent} disabled={isProcessing || !analysisResults[hubView as 'summarize' | 'explain']} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 disabled:opacity-50"><CopyIcon className="w-4 h-4"/></button>
                                     <button onClick={saveToNotes} disabled={isProcessing || !analysisResults[hubView as 'summarize' | 'explain']} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 disabled:opacity-50"><SaveIcon className="w-4 h-4"/></button>
@@ -928,7 +1094,8 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                         />
                     ) : <AnalysisView />}
                 </div>
-          )}
+            )}
+          </div>
         </div>
     );
   }

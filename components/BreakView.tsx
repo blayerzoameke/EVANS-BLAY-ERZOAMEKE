@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ActiveSession } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { ExpandIcon } from './icons/ExpandIcon.tsx';
 
 interface BreakViewProps {
     session: ActiveSession;
@@ -17,27 +18,44 @@ const getEmbedUrl = (url: string): string | null => {
 
     try {
         const urlObj = new URL(fullUrl);
+        const hostname = urlObj.hostname.toLowerCase();
         
         // YouTube
-        if (urlObj.hostname.includes('youtube.com') || urlObj.hostname.includes('youtu.be')) {
-            const videoId = urlObj.hostname.includes('youtu.be')
+        if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+            const videoId = hostname.includes('youtu.be')
                 ? urlObj.pathname.slice(1)
                 : urlObj.searchParams.get('v');
             // Ensure we return an embeddable URL with autoplay
             return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : fullUrl;
         }
 
-        // TikTok
-        if (urlObj.hostname.includes('tiktok.com')) {
+        // TikTok - Use the simpler /embed/ path and more robust ID finding
+        if (hostname.includes('tiktok.com')) {
             const pathParts = urlObj.pathname.split('/');
-            // Video ID is usually the last part of the path
-            const videoId = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
-            // Check if videoId is a long number, typical for TikTok videos
-            if (videoId && /^\d+$/.test(videoId)) {
-                return `https://www.tiktok.com/embed/v2/${videoId}`;
+            // Find the numeric video ID in the path
+            const videoId = pathParts.find(part => /^\d{10,20}$/.test(part)); // TikTok IDs are typically 19 digits long
+            if (videoId) {
+                return `https://www.tiktok.com/embed/${videoId}`;
             }
-            return fullUrl; // Fallback for other TikTok links (e.g., profiles)
+            return fullUrl; // Fallback for other TikTok links (e.g., profiles), which likely won't embed
         }
+
+        // Spotify
+        if (hostname.includes('spotify.com')) {
+            const path = urlObj.pathname;
+            if (path.startsWith('/track/') || path.startsWith('/album/') || path.startsWith('/playlist/')) {
+                // Spotify's embed URL is `open.spotify.com/embed/` + type + id
+                return `https://open.spotify.com/embed${path}`;
+            }
+            return fullUrl; // Fallback for other Spotify links
+        }
+
+        // Apple Music
+        if (hostname.includes('music.apple.com')) {
+            // Apple Music's embed URL is `embed.music.apple.com/` + rest of path
+            return `https://embed.music.apple.com${urlObj.pathname}${urlObj.search}`;
+        }
+
 
         // For any other valid URL, return it to be iframed.
         return fullUrl;
@@ -57,6 +75,7 @@ const formatTime = (seconds: number) => {
 
 const BreakView: React.FC<BreakViewProps> = ({ session, onEnd }) => {
     const { t } = useLanguage();
+    const iframeRef = useRef<HTMLIFrameElement>(null);
     const embedUrl = session.fromSlot.link ? getEmbedUrl(session.fromSlot.link) : null;
     const [timeLeft, setTimeLeft] = useState(Math.max(0, Math.round((session.endTime - Date.now()) / 1000)));
 
@@ -79,6 +98,20 @@ const BreakView: React.FC<BreakViewProps> = ({ session, onEnd }) => {
         return () => clearInterval(timer);
     }, [handleEnd]);
     
+    const handleFullscreen = () => {
+        if (iframeRef.current) {
+            if (iframeRef.current.requestFullscreen) {
+                iframeRef.current.requestFullscreen();
+            } else if ((iframeRef.current as any).mozRequestFullScreen) { // Firefox
+                (iframeRef.current as any).mozRequestFullScreen();
+            } else if ((iframeRef.current as any).webkitRequestFullscreen) { // Chrome, Safari & Opera
+                (iframeRef.current as any).webkitRequestFullscreen();
+            } else if ((iframeRef.current as any).msRequestFullscreen) { // IE/Edge
+                (iframeRef.current as any).msRequestFullscreen();
+            }
+        }
+    };
+    
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] no-print">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl h-auto max-h-[90vh] flex flex-col overflow-hidden">
@@ -87,23 +120,31 @@ const BreakView: React.FC<BreakViewProps> = ({ session, onEnd }) => {
                         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">{session.fromSlot.activity || t('breakview.title')}</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400">{t('breakview.body')}</p>
                     </div>
-                    <div className="text-center">
-                         <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                             {formatTime(timeLeft)}
-                         </div>
-                         <button onClick={() => handleEnd(true)} className="text-xs text-gray-500 hover:underline">
-                             {t('breakview.skip')}
-                         </button>
+                    <div className="flex items-center gap-4">
+                        {embedUrl && (
+                            <button onClick={handleFullscreen} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="Enlarge">
+                                <ExpandIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                            </button>
+                        )}
+                        <div className="text-center">
+                             <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                                 {formatTime(timeLeft)}
+                             </div>
+                             <button onClick={() => handleEnd(true)} className="text-xs text-gray-500 hover:underline">
+                                 {t('breakview.skip')}
+                             </button>
+                        </div>
                     </div>
                 </div>
                 <div className="flex-1 bg-black flex items-center justify-center">
                     {embedUrl ? (
                         <iframe
+                            ref={iframeRef}
                             src={embedUrl}
                             title={session.subject}
                             className="w-full h-full"
                             frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                             allowFullScreen
                         ></iframe>
                     ) : (

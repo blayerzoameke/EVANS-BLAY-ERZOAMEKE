@@ -4,6 +4,17 @@ import { CloseIcon } from './icons/CloseIcon.tsx';
 import type { PlanSlot } from '../types.ts';
 import { timeToMinutes } from '../lib/utils.ts';
 
+interface SchedulePromptModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    onReject: () => void;
+    sessionInfo: {
+        slot: PlanSlot;
+        nextSlot: PlanSlot | null;
+    };
+}
+
 const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     const parts = text.split(/(\*\*.*?\*\*)/g).filter(part => part);
     
@@ -19,17 +30,6 @@ const FormattedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-interface SchedulePromptModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onConfirm: () => void;
-    onReject: () => void;
-    sessionInfo: {
-        slot: PlanSlot;
-        nextSlot: PlanSlot | null;
-    };
-}
-
 const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClose, onConfirm, onReject, sessionInfo }) => {
     const { t } = useLanguage();
 
@@ -43,6 +43,7 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
 
     const isNextBreak = nextSlot?.type === 'break';
     
+    // FIX: Use i18n function instead of hardcoded strings for better internationalization.
     const message = t('schedulePrompt.message', {
         course: slot.activity,
         startTime: slot.startTime,

@@ -97,48 +97,24 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
     }, [isComplete, playRingtone, session, totalDurationSeconds, timeLeft, trackedData, setTrackedData]);
 
     const handleStartNextBreakEarly = () => {
-        if (!session.nextSlot || session.nextSlot.type !== 'break') {
-            addToast("No break scheduled next.", "info");
+        if (!session.nextSlot || session.nextSlot.type !== 'break' || session.breakPlacement !== 'during') {
+            addToast("No 'during-session' break is scheduled for this session.", "info");
             return;
         }
 
-        if (!session.isUntracked) {
-            const timeStudiedMs = (totalDurationSeconds - timeLeft) * 1000;
-            const durationMinutes = Math.round(timeStudiedMs / (1000 * 60));
-
-            if (durationMinutes > 0) {
-                const newLog: TrackedSession = {
-                    subject: session.subject,
-                    durationMinutes,
-                    date: new Date().toISOString().split('T')[0],
-                };
-                setTrackedData([...(trackedData || []), newLog]);
-                addToast(`Logged ${durationMinutes} minutes for ${session.subject}.`, 'success');
-            }
-        }
-
-        const breakSlot = session.nextSlot;
-        const breakDurationMinutes = breakSlot.durationMinutes || (timeToMinutes(breakSlot.endTime) - timeToMinutes(breakSlot.startTime));
+        // Don't end the current session. Just trigger the break state within it.
+        // The session's total endTime already accounts for the break.
+        // By updating breakStartsAt, we just change *when* the break happens.
+        // The main timer will pause, and the break view will take over.
+        setSession({
+            ...session,
+            breakStartsAt: Date.now(),
+        });
         
-        if (breakDurationMinutes <= 0) {
-            addToast("Scheduled break has no duration.", "warning");
-            setSession(null);
-            return;
-        }
-
-        const now = Date.now();
-        const breakSession: ActiveSession = {
-            startTime: now,
-            endTime: now + breakDurationMinutes * 60 * 1000,
-            subject: breakSlot.activity,
-            type: 'break',
-            fromSlot: breakSlot,
-            nextSlot: null,
-            isUntracked: session.isUntracked,
-            postBreakView: learningHubFile ? 'uploadslides' : undefined,
-        };
-        
-        setSession(breakSession);
+        // Manually trigger the break UI and sound.
+        setBreakTriggered(true);
+        setIsBreakActive(true);
+        playRingtone();
     };
     
     const handleStartScheduledBreak = () => {
