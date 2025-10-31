@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import type { UserDetails, ReportDraft } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { UploadIcon } from './icons/UploadIcon.tsx';
-import { CloseIcon } from './icons/CloseIcon.tsx';
+import type { UserDetails, ReportDraft, Toast } from '../types';
+import { useLanguage } from '../contexts/LanguageContext';
+import { UploadIcon } from './icons/UploadIcon';
+import { CloseIcon } from './icons/CloseIcon';
 
 interface ReportsProps {
   userDetails: UserDetails | null;
   reportDraft: ReportDraft;
   setReportDraft: React.Dispatch<React.SetStateAction<ReportDraft>>;
+  addToast: (message: string, type: Toast['type']) => void;
 }
 
-const Reports: React.FC<ReportsProps> = ({ userDetails, reportDraft, setReportDraft }) => {
+const Reports: React.FC<ReportsProps> = ({ userDetails, reportDraft, setReportDraft, addToast }) => {
   const { t } = useLanguage();
   const [successMessage, setSuccessMessage] = useState('');
   const { category, description, attachment, contactEmail, contactWhatsApp } = reportDraft;
@@ -27,10 +28,15 @@ const Reports: React.FC<ReportsProps> = ({ userDetails, reportDraft, setReportDr
   };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles[0]) {
-      updateDraft('attachment', acceptedFiles[0]);
+    const file = acceptedFiles[0];
+    if (file) {
+      if (file.size > 25 * 1024 * 1024) { // 25MB limit
+        addToast(t('toasts.fileSizeTooLarge', { fileName: file.name, size: 25 }), 'error');
+        return;
+      }
+      updateDraft('attachment', file);
     }
-  }, [updateDraft]);
+  }, [updateDraft, addToast, t]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false });
 

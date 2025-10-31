@@ -1,11 +1,11 @@
 import React from 'react';
-import { DayOfWeek } from '../types.ts';
-import { DAYS_OF_WEEK } from '../constants.ts';
-import type { Lecture, StudyGoal, AgendaItem } from '../types.ts';
-import { PlusIcon } from './icons/PlusIcon.tsx';
-import { TrashIcon } from './icons/TrashIcon.tsx';
-import TimeInput from './TimeInput.tsx';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { DayOfWeek } from '../types';
+import { DAYS_OF_WEEK } from '../constants';
+import type { Lecture, StudyGoal, AgendaItem } from '../types';
+import { PlusIcon } from './icons/PlusIcon';
+import { TrashIcon } from './icons/TrashIcon';
+import TimeInput from './TimeInput';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface TimetableInputProps {
   lectures: Lecture[];
@@ -56,9 +56,9 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
     setAgendaItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const addLecture = () => setLectures(p => [...p, { id: Date.now().toString(), subject: '', day: DayOfWeek.Monday, startTime: '09:00 AM', endTime: '10:00 AM' }]);
+  const addLecture = () => setLectures(p => [...p, { id: Date.now().toString(), subject: '', day: DayOfWeek.Monday, startTime: '09:00 AM', endTime: '10:00 AM', location: '' }]);
   const addStudyGoal = () => setStudyGoals(p => [...p, { id: Date.now().toString(), subject: '', hours: 3 }]);
-  const addAgendaItem = () => setAgendaItems(p => [...p, { id: Date.now().toString(), title: '', day: DayOfWeek.Monday, startTime: '12:00 PM', endTime: '01:00 PM' }]);
+  const addAgendaItem = () => setAgendaItems(p => [...p, { id: Date.now().toString(), title: '', day: DayOfWeek.Monday, startTime: '12:00 PM', endTime: '01:00 PM', location: '' }]);
 
   const inputClasses = "block w-full h-10 px-4 py-2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-inner text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700";
   const selectClasses = `${inputClasses} pr-8`;
@@ -70,10 +70,14 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
       <Section title={t('timetableinput.lectures')}>
         <div className="space-y-4">
           {lectures.map(lec => (
-            <div key={lec.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,auto] items-end gap-4">
+            <div key={lec.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,1fr,auto] items-end gap-4">
               <div className="w-full">
                   <label htmlFor={`lec-subject-${lec.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.subject')}</label>
                   <input id={`lec-subject-${lec.id}`} type="text" placeholder={t('timetableinput.subject')} value={lec.subject} onChange={e => updateLecture(lec.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
+              </div>
+               <div>
+                  <label htmlFor={`lec-location-${lec.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Location</label>
+                  <input id={`lec-location-${lec.id}`} type="text" placeholder="e.g. Room 204" value={lec.location} onChange={e => updateLecture(lec.id, 'location', e.target.value)} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
               </div>
               <div>
                   <label htmlFor={`lec-day-${lec.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('common.day')}</label>
@@ -123,10 +127,14 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
       <Section title={t('timetableinput.agenda')}>
         <div className="space-y-4">
           {agendaItems.map(item => (
-            <div key={item.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,auto] items-end gap-4">
+            <div key={item.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,1fr,auto] items-end gap-4">
               <div className="w-full">
                 <label htmlFor={`agenda-title-${item.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.activityTitle')}</label>
                 <input id={`agenda-title-${item.id}`} type="text" placeholder={t('timetableinput.activityTitle')} value={item.title} onChange={e => updateAgendaItem(item.id, 'title', e.target.value)} className={inputClasses} disabled={disabled} />
+              </div>
+              <div>
+                  <label htmlFor={`agenda-location-${item.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Location</label>
+                  <input id={`agenda-location-${item.id}`} type="text" placeholder="e.g. Gym" value={item.location} onChange={e => updateAgendaItem(item.id, 'location', e.target.value)} className={inputClasses} disabled={disabled} />
               </div>
               <div>
                 <label htmlFor={`agenda-day-${item.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('common.day')}</label>

@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { UserDetails, Toast, ProfileEditState, EducationalLevel } from '../types.ts';
-import UserDetailsForm from './UserDetailsForm.tsx';
-import { PencilIcon } from './icons/PencilIcon.tsx';
-import { SaveIcon } from './icons/SaveIcon.tsx';
-import { BuildingIcon } from './icons/BuildingIcon.tsx';
-import CropImageModal from './CropImageModal.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
+import { UserDetails, Toast, ProfileEditState, EducationalLevel } from '../types';
+import UserDetailsForm from './UserDetailsForm';
+import { PencilIcon } from './icons/PencilIcon';
+import { SaveIcon } from './icons/SaveIcon';
+import { BuildingIcon } from './icons/BuildingIcon';
+import CropImageModal from './CropImageModal';
+import { TrashIcon } from './icons/TrashIcon';
 
 interface ProfileProps {
     userDetails: UserDetails | null;
@@ -65,8 +66,8 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
     const handlePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file && file.type.startsWith('image/')) {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                addToast(t('toasts.imageSizeErrorProfile'), 'error');
+            if (file.size > 25 * 1024 * 1024) { // 25MB limit
+                addToast(t('toasts.imageSizeErrorProfile' as any), 'error');
                 return;
             }
             const reader = new FileReader();
@@ -90,8 +91,8 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
     const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file && file.type.startsWith('image/')) {
-            if (file.size > 2 * 1024 * 1024) { // 2MB limit
-                addToast(t('toasts.imageSizeErrorLogo'), 'error');
+            if (file.size > 25 * 1024 * 1024) { // 25MB limit
+                addToast(t('toasts.imageSizeErrorLogo' as any), 'error');
                 return;
             }
             const reader = new FileReader();
@@ -147,6 +148,15 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                                         <PencilIcon className="w-8 h-8" />
                                     </button>
                                     <input type="file" ref={fileInputRef} onChange={handlePictureUpload} className="hidden" accept="image/png, image/jpeg, image/webp" />
+                                    {displayDetails.profilePicture && (
+                                        <button
+                                            onClick={() => setEditableDetails(prev => prev ? { ...prev, profilePicture: undefined } : null)}
+                                            className="absolute -bottom-2 -right-2 bg-red-600 text-white rounded-full p-1.5 shadow-lg hover:bg-red-700 transition-colors"
+                                            aria-label={t('profile.removePictureAria' as any)}
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -165,6 +175,15 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                                             <PencilIcon className="w-6 h-6" />
                                         </button>
                                         <input type="file" ref={logoInputRef} onChange={handleLogoUpload} className="hidden" accept="image/png, image/jpeg, image/webp, image/svg+xml" />
+                                        {displayDetails.institutionLogo && (
+                                            <button
+                                                onClick={() => setEditableDetails(prev => prev ? { ...prev, institutionLogo: undefined } : null)}
+                                                className="absolute -bottom-2 -right-2 bg-red-600 text-white rounded-full p-1.5 shadow-lg hover:bg-red-700 transition-colors"
+                                                aria-label={t('profile.removeLogoAria' as any)}
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </>
                                 )}
                             </div>

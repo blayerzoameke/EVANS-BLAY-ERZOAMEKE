@@ -306,7 +306,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-800 p-4">
+                <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800 p-4">
                      {isPaused ? (
                         <div className="h-full flex items-center justify-center">
                             <div className="text-center">

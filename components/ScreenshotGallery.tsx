@@ -37,7 +37,7 @@ const ScreenshotGallery: React.FC<ScreenshotGalleryProps> = ({ addToast }) => {
     const handleAddScreenshot = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file && file.type.startsWith('image/')) {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            if (file.size > 25 * 1024 * 1024) { // 25MB limit
                 addToast(t('toasts.imageSizeError5' as any), 'error');
                 return;
             }

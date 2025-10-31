@@ -43,13 +43,12 @@ const SchedulePromptModal: React.FC<SchedulePromptModalProps> = ({ isOpen, onClo
 
     const isNextBreak = nextSlot?.type === 'break';
     
-    // FIX: Use i18n function instead of hardcoded strings for better internationalization.
     const message = t('schedulePrompt.message', {
         course: slot.activity,
         startTime: slot.startTime,
         endTime: slot.endTime,
         duration: durationText
-    }) + (isNextBreak && nextSlot ? t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime }) : '');
+    }) + (isNextBreak && nextSlot ? " " + t('schedulePrompt.breakInfo', { startTime: nextSlot.startTime, endTime: nextSlot.endTime }) : '');
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>

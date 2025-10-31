@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface SearchableDropdownProps {
   options: { name: string }[];

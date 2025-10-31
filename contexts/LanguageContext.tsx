@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 import { Language, translations, getTranslator, supportedLanguages, TranslationKey } from '../lib/i18n.ts';
 
@@ -44,7 +43,8 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   const t = getTranslator(language);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t: t as any }}>
+    // FIX: Removed unnecessary `as any` type assertion.
+    <LanguageContext.Provider value={{ language, setLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );

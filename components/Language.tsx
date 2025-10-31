@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { supportedLanguages } from '../lib/i18n.ts';
-import type { Language } from '../lib/i18n.ts';
-import ConfirmationModal from './ConfirmationModal.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
+import { supportedLanguages } from '../lib/i18n';
+import type { Language } from '../lib/i18n';
+import ConfirmationModal from './ConfirmationModal';
 
 const LanguageSettings: React.FC = () => {
     const { language, setLanguage, t } = useLanguage();
@@ -23,20 +23,27 @@ const LanguageSettings: React.FC = () => {
 
     return (
         <>
-            <div className="space-y-2">
-                {supportedLanguages.map((lang) => (
-                    <button
-                        key={lang.code}
-                        onClick={() => handleLanguageChangeRequest(lang)}
-                        className={`w-full text-left p-3 rounded-md transition-colors ${
-                            language === lang.code
-                                ? 'bg-primary text-primary-text font-bold'
-                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                        {lang.name}
-                    </button>
-                ))}
+            <div className="max-w-2xl mx-auto">
+                <div>
+                    <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">{t('preferences.language.title')}</h2>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border dark:border-gray-700">
+                    <div className="space-y-2">
+                        {supportedLanguages.map((lang) => (
+                            <button
+                                key={lang.code}
+                                onClick={() => handleLanguageChangeRequest(lang)}
+                                className={`w-full text-left p-3 rounded-md transition-colors ${
+                                    language === lang.code
+                                        ? 'bg-primary text-primary-text font-bold'
+                                        : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
+                            >
+                                {lang.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {pendingLanguage && (

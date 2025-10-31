@@ -1,439 +1,382 @@
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold, GenerateContentResponse, Type } from "@google/genai";
+import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, ImagePart, QuizQuestion, QuizType, ChatTurn } from '../types';
 
-import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import type {
-  UserDetails,
-  Lecture,
-  StudyGoal,
-  AgendaItem,
-  SmartPlan,
-  ImagePart,
-  QuizQuestion,
-  QuizType,
-  ChatTurn,
-  DayOfWeek,
-} from "../types.ts";
-import { DayOfWeek as DayOfWeekEnum } from "../types.ts";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const textModel = "gemini-2.5-flash";
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 const safetySettings = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
 ];
 
-const generateContent = async (prompt: string | (string | ImagePart)[], responseSchema?: any, options?: { fast?: boolean }) => {
-  try {
-    const config: any = {
-        temperature: 0.5,
-        safetySettings,
-    };
-    if (responseSchema) {
-        config.responseMimeType = "application/json";
-        config.responseSchema = responseSchema;
-    }
+// --- Schemas for JSON responses ---
 
-    if (options?.fast) {
-      config.thinkingConfig = { thinkingBudget: 0 };
-    }
+const planSlotSchema = {
+    type: Type.OBJECT,
+    properties: {
+        activity: { type: Type.STRING },
+        startTime: { type: Type.STRING },
+        endTime: { type: Type.STRING },
+        type: { type: Type.STRING },
+        link: { type: Type.STRING },
+        code: { type: Type.STRING },
+        isLocked: { type: Type.BOOLEAN },
+        durationMinutes: { type: Type.NUMBER },
+        location: { type: Type.STRING },
+    },
+    required: ['activity', 'startTime', 'endTime', 'type']
+};
 
-    let contents;
-    if (Array.isArray(prompt)) {
-        const parts = prompt.map(p => {
-            if (typeof p === 'string') {
-                return { text: p };
-            }
-            return p;
-        });
-        contents = { parts };
-    } else {
-        contents = prompt;
-    }
+const dayPlanSchema = {
+    type: Type.OBJECT,
+    properties: {
+        day: { type: Type.STRING },
+        slots: {
+            type: Type.ARRAY,
+            items: planSlotSchema
+        }
+    },
+    required: ['day', 'slots']
+};
 
-    const result = await ai.models.generateContent({
-        model: textModel,
-        contents,
-        config: config,
-    });
-    
-    // FIX: Access the text content from the response correctly.
-    const text = result.text;
-    
-    if (responseSchema) {
-      // FIX: Clean up the response text before parsing as JSON.
-      // This removes markdown code fences and extracts the JSON object/array.
-      let jsonStr = text.trim();
-      if (jsonStr.startsWith("```json")) {
-        jsonStr = jsonStr.substring(7, jsonStr.length - 3).trim();
-      } else if (jsonStr.startsWith("```")) {
-        jsonStr = jsonStr.substring(3, jsonStr.length - 3).trim();
-      }
-      const firstBracket = jsonStr.indexOf('[');
-      const firstBrace = jsonStr.indexOf('{');
-      
-      let startIndex = -1;
-      
-      if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-          startIndex = firstBracket;
-      } else if (firstBrace !== -1) {
-          startIndex = firstBrace;
-      }
-      
-      if (startIndex !== -1) {
-          const jsonType = jsonStr[startIndex];
-          const endChar = jsonType === '[' ? ']' : '}';
-          const endIndex = jsonStr.lastIndexOf(endChar);
-          if (endIndex > startIndex) {
-              jsonStr = jsonStr.substring(startIndex, endIndex + 1);
-          }
-      }
+const smartPlanSchema = {
+    type: Type.ARRAY,
+    items: dayPlanSchema
+};
 
-      try {
-        return JSON.parse(jsonStr);
-      } catch (e: any) {
-        console.error("Failed to parse AI response as JSON:", e.message);
-        console.error("Attempted to parse this string:", jsonStr);
-        console.error("Original text from model:", text);
-        throw new Error("The AI returned data in an invalid format. Please try generating again.");
-      }
+const quizQuestionSchema = {
+    type: Type.OBJECT,
+    properties: {
+        question: { type: Type.STRING },
+        options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+        },
+        correctAnswer: { type: Type.STRING },
+        explanation: { type: Type.STRING },
+        topic: { type: Type.STRING },
+        type: { type: Type.STRING },
+    },
+    required: ['question', 'correctAnswer', 'explanation', 'topic', 'type']
+};
+
+const quizSchema = {
+    type: Type.ARRAY,
+    items: quizQuestionSchema
+};
+
+const graphSolutionSchema = {
+    type: Type.OBJECT,
+    properties: {
+        explanation: { type: Type.STRING },
+        graphFunction: { type: Type.STRING },
+        suggestedTitle: { type: Type.STRING },
+    },
+    required: ['explanation', 'graphFunction']
+};
+
+
+const parseGeminiResponse = <T>(response: GenerateContentResponse): T => {
+    try {
+        const text = response.text.trim();
+        // The model should return valid JSON now with the schema, but this is a good fallback for markdown-wrapped JSON.
+        const jsonStr = text.startsWith('```json') && text.endsWith('```')
+            ? text.substring(7, text.length - 3)
+            : text;
+        return JSON.parse(jsonStr) as T;
+    } catch (e) {
+        console.error("Failed to parse Gemini response as JSON", response.text, e);
+        throw new Error("Failed to parse AI response. Please try again.");
     }
-    return text;
-  } catch (error: any) {
-    console.error("Gemini API call failed:", error);
-    
-    const errorMessage = (error.message || error.toString()).toLowerCase();
-    
-    if (errorMessage.includes('403') || errorMessage.includes('permission_denied') || errorMessage.includes('does not have permission')) {
-        throw new Error("Gemini API call failed: The API key is invalid or lacks the necessary permissions. Please check your environment configuration.");
-    }
-    
-    if (errorMessage.includes("invalid format")) {
-        throw error;
-    }
-    if (errorMessage.includes("xhr error") || errorMessage.includes("network")) {
-        throw new Error("The request to the AI model failed due to a network issue. Please check your connection or try again. If uploading a file, it might be too large.");
-    }
-    
-    throw new Error("An unexpected error occurred while communicating with the AI model.");
-  }
 };
 
 export const generateSmartPlan = async (
-  userDetails: UserDetails,
-  lectures: Lecture[],
-  studyGoals: StudyGoal[],
-  agendaItems: AgendaItem[],
-  generalGoals: string,
-  existingPlan?: SmartPlan
+    userDetails: UserDetails,
+    lectures: Lecture[],
+    studyGoals: StudyGoal[],
+    agendaItems: AgendaItem[],
+    generalGoals: string,
+    existingPlan?: SmartPlan
 ): Promise<SmartPlan> => {
-  const prompt = `
-    Create a smart weekly timetable for a student with the following details:
-    - Name: ${userDetails.name}
-    - Educational Level: ${userDetails.educationalLevel}
-    - Institution: ${userDetails.institution || 'Not specified'}
-    - Programme of Study: ${userDetails.programmeOfStudy || 'Not specified'}
-
-    Their schedule and goals are as follows:
-    - Lectures: ${JSON.stringify(lectures)}
-    - Weekly Study Goals: ${JSON.stringify(studyGoals)}
-    - Personal Agenda Items: ${JSON.stringify(agendaItems)}
-    - General Goals/Preferences: ${generalGoals || 'Balance study with personal time.'}
-
-    ${existingPlan ? `This is a request to regenerate an existing plan. Here is the current plan for reference: ${JSON.stringify(existingPlan)}. Please make adjustments based on the general goals/preferences provided.` : ''}
-
-    Rules for timetable generation:
-    1.  Schedule all lectures and agenda items at their specified times. These are fixed.
-    2.  Allocate study sessions to meet the weekly study goals for each subject. Spread them out.
-    3.  Incorporate short breaks (15-30 mins) after study sessions and longer breaks (1-2 hours) for meals.
-    4.  Fill remaining time with 'Free Time'.
-    5.  The output must be a valid JSON array of DayPlan objects. CRITICAL: Ensure that any double quotes inside of string values are properly escaped with a backslash (e.g., \\"). Do not include any other text or markdown.
-    6.  The structure for each slot in a day's 'slots' array should be: { activity: string, startTime: string, endTime: string, type: 'lecture' | 'study' | 'agenda' | 'break' | 'free' }.
-    7.  Times should be in "HH:MM AM/PM" format.
-  `;
-  
-  const schema = {
-      type: Type.ARRAY,
-      items: {
-          type: Type.OBJECT,
-          properties: {
-              day: { type: Type.STRING },
-              slots: {
-                  type: Type.ARRAY,
-                  items: {
-                      type: Type.OBJECT,
-                      properties: {
-                          activity: { type: Type.STRING },
-                          startTime: { type: Type.STRING },
-                          endTime: { type: Type.STRING },
-                          type: { type: Type.STRING },
-                          isLocked: { type: Type.BOOLEAN, nullable: true },
-                          code: { type: Type.STRING, nullable: true },
-                          link: { type: Type.STRING, nullable: true }
-                      },
-                      required: ['activity', 'startTime', 'endTime', 'type']
-                  }
-              }
-          },
-          required: ['day', 'slots']
-      }
-  };
-
-  return generateContent(prompt, schema);
-};
-
-export const generatePlanFromImage = async (
-  userDetails: UserDetails,
-  studyGoals: StudyGoal[],
-  generalGoals: string,
-  imagePart: ImagePart,
-  existingPlan?: SmartPlan
-): Promise<SmartPlan | { error: string }> => {
-  const prompt = `
-    Analyze the provided timetable image and create a smart weekly study plan based on it.
-    Student Details:
-    - Name: ${userDetails.name}
-    - Educational Level: ${userDetails.educationalLevel}
-    - Weekly Study Goals: ${JSON.stringify(studyGoals)}
-    - General Goals/Preferences: ${generalGoals || 'Balance study with personal time.'}
-
-    ${existingPlan ? `This is a request to regenerate an existing plan. Here is the current plan for reference: ${JSON.stringify(existingPlan)}. Please make adjustments based on the general goals/preferences provided, considering the image as the base timetable.` : ''}
-
-    Instructions:
-    1.  Extract all fixed events (lectures, labs) from the image. These should be of type 'lecture' and marked as 'isLocked: true'.
-    2.  Incorporate the student's weekly study goals by scheduling 'study' sessions.
-    3.  Add reasonable breaks and free time.
-    4.  The output must be a valid JSON array of DayPlan objects. CRITICAL: Ensure that any double quotes inside of string values are properly escaped with a backslash (e.g., \\").
-    5.  The structure for each slot in a day's 'slots' array should be: { activity: string, startTime: string, endTime: string, type: 'lecture' | 'study' | 'agenda' | 'break' | 'free', isLocked?: boolean, code?: string }.
-  `;
-  
-  const schema = {
-      type: Type.ARRAY,
-      items: {
-          type: Type.OBJECT,
-          properties: {
-              day: { type: Type.STRING },
-              slots: {
-                  type: Type.ARRAY,
-                  items: {
-                      type: Type.OBJECT,
-                      properties: {
-                          activity: { type: Type.STRING },
-                          startTime: { type: Type.STRING },
-                          endTime: { type: Type.STRING },
-                          type: { type: Type.STRING },
-                          isLocked: { type: Type.BOOLEAN, nullable: true },
-                          code: { type: Type.STRING, nullable: true },
-                          link: { type: Type.STRING, nullable: true }
-                      },
-                      required: ['activity', 'startTime', 'endTime', 'type']
-                  }
-              }
-          },
-          required: ['day', 'slots']
-      }
-  };
-
-  return generateContent([prompt, imagePart], schema);
-};
-
-export const isImageTimetable = async (imagePart: ImagePart): Promise<boolean> => {
-  const prompt = "Does this image appear to be a school or university timetable? Respond with only 'true' or 'false'.";
-  const result = await generateContent([prompt, imagePart]);
-  return result.toLowerCase().includes('true');
-};
-
-
-export const getDocumentContext = async (filePart: ImagePart): Promise<string> => {
-  const prompt = "Based on the content of this document/image, what is the primary subject or topic? Be concise, one or two words is best (e.g., 'Calculus', 'World History').";
-  return generateContent([prompt, filePart]);
-};
-
-export const isStudyMaterial = async (filePart: ImagePart): Promise<boolean> => {
-    const prompt = "Does this document/image contain educational content or study material? Answer with only 'true' or 'false'.";
-    const result = await generateContent([prompt, filePart]);
-    return result.toLowerCase().includes('true');
-};
-
-export const summarizeDocument = async (filePart: ImagePart, context: string): Promise<string> => {
-    const prompt = `Provide a concise summary of this document about ${context}. Focus on the key concepts, main arguments, and important definitions. Use markdown for formatting, including headers and lists.`;
-    return generateContent([prompt, filePart]);
-};
-
-export const explainDocument = async (filePart: ImagePart, context: string): Promise<string> => {
-    const prompt = `Explain the most complex or important topics in this document about ${context} in a clear and simple way. Use analogies and examples where possible. Use markdown for formatting.`;
-    return generateContent([prompt, filePart]);
-};
-
-export const extractTextFromDocument = async (filePart: ImagePart): Promise<string> => {
-    const prompt = "Extract all text from this document/image. Preserve formatting as much as possible.";
-    return generateContent([prompt, filePart]);
-};
-
-export const chatWithDocumentStream = async (
-    filePart: ImagePart, 
-    userMessage: string, 
-    history: ChatTurn[], 
-    context: string,
-    smartPlan: SmartPlan | null
-) => {
-    let systemInstruction = `You are a helpful study assistant named Blay. Your primary knowledge is based on the provided document about ${context}. Answer the user's questions based ONLY on the document's content. Do not use external knowledge. CRITICAL RULE: If the user asks you to quiz them, create a test, or generate questions, you MUST NOT create a quiz. Instead, you must politely tell them to go to the 'Exam Prep' section of the app to generate quizzes.`;
-
-    if (smartPlan) {
-        const DAYS_MAP: DayOfWeek[] = [DayOfWeekEnum.Sunday, DayOfWeekEnum.Monday, DayOfWeekEnum.Tuesday, DayOfWeekEnum.Wednesday, DayOfWeekEnum.Thursday, DayOfWeekEnum.Friday, DayOfWeekEnum.Saturday];
-        const today = DAYS_MAP[new Date().getDay()];
-        const todayPlan = smartPlan.find(day => day.day === today);
-
-        if (todayPlan && todayPlan.slots.length > 0) {
-            const relevantSlots = todayPlan.slots.map(s => ({ activity: s.activity, type: s.type, startTime: s.startTime, endTime: s.endTime }));
-            systemInstruction += ` You also have access to the user's schedule for today to answer questions about their timetable. Today's schedule is: ${JSON.stringify(relevantSlots)}.`;
-        }
-    }
-    
-    systemInstruction += " If the answer is not in the document or the provided schedule, say so.";
-    
-    const chatHistory = history.flatMap(turn => [{ role: 'user', parts: [{ text: turn.user }] }, { role: 'model', parts: [{ text: turn.blay }] }]);
-
-    const contents = [
-        ...chatHistory,
-        { role: 'user', parts: [filePart, { text: userMessage }] }
-    ];
-
-    const result = await ai.models.generateContentStream({
-        model: textModel,
-        contents: contents as any,
+    const prompt = `
+        Create a smart study plan based on the following details. The output must be a JSON array of DayPlan objects matching the provided schema.
+        UserDetails: ${JSON.stringify(userDetails)}
+        Lectures: ${JSON.stringify(lectures)}
+        Study Goals: ${JSON.stringify(studyGoals)}
+        Personal Agenda: ${JSON.stringify(agendaItems)}
+        General Goals/Preferences: ${generalGoals}
+        ${existingPlan ? `This is a regeneration request. Here is the existing plan to be modified: ${JSON.stringify(existingPlan)}` : ''}
+        
+        Rules:
+        - The output must be valid JSON matching the provided schema.
+        - A DayPlan is { day: DayOfWeek; slots: PlanSlot[] }.
+        - A PlanSlot is { activity: string; startTime: string; endTime: string; type: ActivityType; link?: string; code?: string; isLocked?: boolean; durationMinutes?: number; location?: string }.
+        - ActivityType can be 'lecture', 'study', 'agenda', 'break', 'free'.
+        - If a lecture or study goal subject contains a recognizable course code (e.g., "CS 101", "MATH203"), extract it and place it in the 'code' field of the corresponding PlanSlot. The 'activity' field should then contain the full name of the course.
+        - Lectures and agenda items are fixed (isLocked: true). Build study sessions around them.
+        - Allocate study time to meet the weekly study goals.
+        - Schedule regular breaks.
+        - Fill empty time with 'free' slots.
+        - Ensure startTime and endTime are in "HH:MM AM/PM" format.
+        - Do NOT include any markdown or commentary outside of the JSON.
+    `;
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: prompt,
         config: {
-            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: smartPlanSchema,
             temperature: 0.7,
             safetySettings,
         },
     });
-
-    return result;
+    return parseGeminiResponse<SmartPlan>(response);
 };
 
+export const generatePlanFromImage = async (
+    userDetails: UserDetails,
+    studyGoals: StudyGoal[],
+    agendaItems: AgendaItem[],
+    generalGoals: string,
+    image: ImagePart,
+    existingPlan?: SmartPlan
+): Promise<SmartPlan> => {
+    const prompt = `
+        First, analyze the provided timetable image to extract all lectures/classes with their subject, day, start time, end time, and location if available.
+        Then, create a smart study plan based on the extracted lectures and the following details. The output must be a JSON array of DayPlan objects.
+
+        UserDetails: ${JSON.stringify(userDetails)}
+        Study Goals: ${JSON.stringify(studyGoals)}
+        Personal Agenda: ${JSON.stringify(agendaItems)}
+        General Goals/Preferences: ${generalGoals}
+        ${existingPlan ? `This is a regeneration request. Here is the existing plan to be modified: ${JSON.stringify(existingPlan)}` : ''}
+        
+        Rules:
+        - The output must be valid JSON matching the provided schema.
+        - A DayPlan is { day: DayOfWeek; slots: PlanSlot[] }.
+        - A PlanSlot is { activity: string; startTime: string; endTime: string; type: ActivityType; link?: string; code?: string; isLocked?: boolean; durationMinutes?: number; location?: string }.
+        - ActivityType can be 'lecture', 'study', 'agenda', 'break', 'free'.
+        - When extracting from the image, if you identify a course code (e.g., "CS 101"), place it in the 'code' field and the full course name in the 'activity' field.
+        - Lectures and agenda items are fixed (isLocked: true). Build study sessions around them.
+        - Allocate study time to meet the weekly study goals.
+        - Schedule regular breaks.
+        - Fill empty time with 'free' slots.
+        - Ensure startTime and endTime are in "HH:MM AM/PM" format.
+        - Do NOT include any markdown or commentary outside of the JSON.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: { parts: [{ text: prompt }, image] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: smartPlanSchema,
+            temperature: 0.7,
+            safetySettings,
+        },
+    });
+    return parseGeminiResponse<SmartPlan>(response);
+};
+
+export const isImageTimetable = async (image: ImagePart): Promise<boolean> => {
+    const prompt = "Does this image appear to be a school or university timetable? Respond with only 'true' or 'false'.";
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [{ text: prompt }, image] },
+        config: {
+            safetySettings,
+        },
+    });
+    return response.text.trim().toLowerCase() === 'true';
+};
+
+export const getDocumentContext = async (file: ImagePart, options?: { fast: boolean }): Promise<string> => {
+    const prompt = "What is the primary subject or topic of this document? Respond with only the subject name (e.g., 'Quantum Physics', 'British History').";
+    const response = await ai.models.generateContent({
+        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        contents: { parts: [{ text: prompt }, file] },
+        config: {
+            safetySettings,
+        },
+    });
+    return response.text.trim();
+};
+
+export const isStudyMaterial = async (file: ImagePart, options?: { fast: boolean }): Promise<boolean> => {
+    const prompt = "Is this document likely to be educational or study material (like lecture notes, a textbook page, a research paper)? Respond with only 'true' or 'false'.";
+    const response = await ai.models.generateContent({
+        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        contents: { parts: [{ text: prompt }, file] },
+        config: {
+            safetySettings,
+        },
+    });
+    return response.text.trim().toLowerCase() === 'true';
+};
+
+export const summarizeDocument = async (file: ImagePart, context: string, options?: { fast: boolean }): Promise<string> => {
+    const prompt = `Provide a concise summary of this document about ${context}. Focus on the key concepts, definitions, and main arguments. Use markdown for formatting.`;
+    const response = await ai.models.generateContent({
+        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        contents: { parts: [{ text: prompt }, file] },
+        config: {
+            safetySettings,
+        },
+    });
+    return response.text.trim();
+};
+
+export const explainDocument = async (file: ImagePart, context: string, options?: { fast: boolean }): Promise<string> => {
+    const prompt = `Explain the content of this document about ${context} in a simple, easy-to-understand way. Use analogies and break down complex ideas. Use markdown for formatting.`;
+    const response = await ai.models.generateContent({
+        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        contents: { parts: [{ text: prompt }, file] },
+        config: {
+            safetySettings,
+        },
+    });
+    return response.text.trim();
+};
+
+export const extractTextFromDocument = async (file: ImagePart, options?: { fast: boolean }): Promise<string> => {
+    const prompt = "Extract all the text from this document. Preserve the original formatting, including headings, lists, and paragraphs, as much as possible using markdown.";
+    const response = await ai.models.generateContent({
+        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        contents: { parts: [{ text: prompt }, file] },
+        config: {
+            safetySettings,
+        },
+    });
+    return response.text.trim();
+};
+
+export const chatWithDocumentStream = async (
+    file: ImagePart | null,
+    userMessage: string,
+    history: ChatTurn[],
+    context: string,
+    smartPlan?: SmartPlan | null
+) => {
+    const chatHistory = history.map(turn => ([
+        { role: 'user', parts: [{ text: turn.user }] },
+        { role: 'model', parts: [{ text: turn.blay }] }
+    ])).flat();
+
+    let systemInstruction = `You are Blay, a helpful AI academic assistant. The user has uploaded a document about "${context}". Answer their questions based on this document.`;
+    if (smartPlan) {
+        systemInstruction += ` You also have access to the user's study plan: ${JSON.stringify(smartPlan)}. You can use this to answer questions about their schedule.`;
+    }
+    
+    const contents: any = [...chatHistory];
+    const userParts: ({ text: string } | ImagePart)[] = [{ text: userMessage }];
+    if (file) {
+        userParts.push(file);
+    }
+    contents.push({ role: 'user', parts: userParts });
+
+    const response = await ai.models.generateContentStream({
+        model: "gemini-2.5-pro",
+        contents: contents,
+        config: {
+            systemInstruction,
+            safetySettings,
+        },
+    });
+
+    return response;
+};
+
+
 export const generateQuiz = async (
-    content: string,
+    context: string,
     numQuestions: number,
     quizType: QuizType,
     focusArea: string
 ): Promise<QuizQuestion[]> => {
     const prompt = `
-        Based on the following study material, generate a quiz.
-        
-        Quiz Parameters:
-        - Number of Questions: ${numQuestions}
-        - Question Type: ${quizType}
-        - Focus Area: ${focusArea || 'General content'}
+        Based on the provided text, generate a quiz.
+        Context: ${context}
+        Number of Questions: ${numQuestions}
+        Quiz Type: ${quizType}
+        ${focusArea ? `Focus specifically on: ${focusArea}` : ''}
 
-        Study Material:
-        ---
-        ${content}
-        ---
-
-        Instructions:
-        1.  Create ${numQuestions} questions of the type '${quizType}'.
-        2.  If the type is 'Multiple Choice', provide 4 options, with one being correct.
-        3.  For all question types, provide a correct answer and a brief explanation.
-        4.  Identify the specific topic within the material for each question.
-        5.  The output must be a valid JSON array of QuizQuestion objects. CRITICAL: Ensure that any double quotes inside of string values (like in the 'explanation' field) are properly escaped with a backslash (e.g., \\"). The response should only contain the JSON array, with no surrounding text or markdown.
+        The output must be a JSON array of QuizQuestion objects matching the provided schema.
+        A QuizQuestion is { question: string; options?: string[]; correctAnswer: string; explanation: string; topic: string; type: QuizType }.
+        - For 'Multiple Choice' questions, provide an 'options' array of 4 strings.
+        - 'correctAnswer' must exactly match one of the options for MCQ.
+        - 'explanation' should clarify why the correct answer is right.
+        - 'topic' should be a short phrase identifying the question's subject.
+        - Ensure questions and answers are formatted with markdown where appropriate (e.g., for code or formulas).
+        - Do NOT include any markdown or commentary outside of the JSON.
     `;
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents: prompt,
+        config: { 
+            responseMimeType: 'application/json',
+            responseSchema: quizSchema,
+            safetySettings 
+        },
+    });
+    return parseGeminiResponse<QuizQuestion[]>(response);
+};
 
-    const schema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                question: { type: Type.STRING },
-                options: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-                correctAnswer: { type: Type.STRING },
-                explanation: { type: Type.STRING },
-                topic: { type: Type.STRING },
-                type: { type: Type.STRING }
-            },
-            required: ['question', 'correctAnswer', 'explanation', 'topic', 'type']
-        }
-    };
-    
-    return generateContent(prompt, schema);
+
+export const isImageAProblem = async (image: ImagePart): Promise<boolean> => {
+    const prompt = "Does this image contain an academic problem, equation, or question (e.g., from a textbook, exam paper, or whiteboard)? Respond with only 'true' or 'false'.";
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [{ text: prompt }, image] },
+        config: {
+            safetySettings,
+        },
+    });
+    return response.text.trim().toLowerCase() === 'true';
 };
 
 export const solveProblem = async (
-  questionText: string,
-  imagePart: ImagePart | null,
-  outputFormat: 'steps' | 'latex' | 'code' | 'graph',
-  programmingLanguage: string,
-  graphInterval: string
+    questionText: string,
+    imagePart: ImagePart | null,
+    outputFormat: string,
+    programmingLanguage: string,
+    graphInterval?: string,
+    graphYInterval?: string,
 ): Promise<string> => {
-    const promptParts: (string | ImagePart)[] = [];
-    let promptText = `Solve the following problem.
-Problem: ${questionText}
+    let prompt = `Solve the following academic problem.
     
-Output Format requirements: ${outputFormat}.
+    Problem: ${questionText}
+    
+    Provide the solution in the following format: ${outputFormat}.
     `;
-    
-    if(outputFormat === 'code') {
-        promptText += `\nProvide the code in ${programmingLanguage}.`;
-    }
 
-    if (outputFormat === 'graph') {
-        promptText += `\nYour task is to solve the problem and provide the necessary information to plot a graph of the solution.
-    1. Provide a step-by-step explanation for the solution.
-    2. Identify the mathematical function that needs to be plotted. IMPORTANT: The function must be an explicit function of y in terms of x (e.g., y = x**2, not x = y^2). If the equation is implicit (like a circle x^2 + y^2 = 25), you MUST solve for y and provide the comma-separated functions for each part (e.g., "sqrt(25 - x**2), -sqrt(25 - x**2)").
-    3. The user has provided graph settings: ${graphInterval || 'auto'}. Use this to inform your response if relevant.
-
-    Your output MUST be a valid JSON object with the following structure:
-    - "explanation": A string containing the step-by-step solution.
-    - "graphFunction": A string containing only the mathematical expression(s) to be plotted (e.g., "x**2 * sin(x)" or "sqrt(25 - x**2), -sqrt(25 - x**2)"). Use standard JavaScript mathematical notation.
-    - "suggestedTitle": An optional string for the graph's title.
-    
-    CRITICAL: Your entire response must be ONLY the JSON object, with no other text, markdown, or explanations. Ensure all string values within the JSON are properly escaped. All newlines within the 'explanation' string must be escaped as \\n.`;
-
-        promptParts.push(promptText);
-
-        if (imagePart) {
-            promptParts.push(imagePart);
-        }
-
-        const schema = {
-            type: Type.OBJECT,
-            properties: {
-                explanation: { type: Type.STRING },
-                graphFunction: { type: Type.STRING },
-                suggestedTitle: { type: Type.STRING, nullable: true },
-            },
-            required: ['explanation', 'graphFunction']
-        };
-        
-        const result = await generateContent(promptParts, schema);
-        return JSON.stringify(result);
+    if (outputFormat === 'code') {
+        prompt += ` Use the programming language: ${programmingLanguage}. Only output the code itself inside a markdown block.`;
+    } else if (outputFormat === 'graph') {
+        prompt += ` Provide a JSON object matching the provided schema with 'explanation', 'graphFunction' (a string like "2*x**2 + 3*x - 5"), and an optional 'suggestedTitle'.
+        ${graphInterval ? `The user suggests an x-axis interval of ${graphInterval}.` : ''}
+        ${graphYInterval ? `The user suggests a y-axis interval of ${graphYInterval}.` : ''}
+        Do NOT include any markdown or commentary outside the JSON object.
+        `;
+    } else {
+        prompt += ` Format the response clearly using markdown, including LaTeX for equations where appropriate.`;
     }
     
-    promptParts.push(promptText);
-
+    const contents: any = { parts: [{ text: prompt }] };
     if (imagePart) {
-        promptParts.push(imagePart);
+        contents.parts.push(imagePart);
     }
     
-    return generateContent(promptParts);
-};
-
-export const isImageAProblem = async (imagePart: ImagePart): Promise<boolean> => {
-    const prompt = "Does this image contain an academic problem, equation, or question (e.g., math, physics, chemistry)? Answer with only 'true' or 'false'.";
-    const result = await generateContent([prompt, imagePart]);
-    return result.toLowerCase().includes('true');
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-pro',
+        contents,
+        config: {
+            ...(outputFormat === 'graph' ? { 
+                responseMimeType: 'application/json',
+                responseSchema: graphSolutionSchema
+            } : {}),
+            safetySettings,
+        },
+    });
+    return response.text.trim();
 };

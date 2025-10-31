@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { CloseIcon } from './icons/CloseIcon.tsx';
-import { CameraIcon } from './icons/CameraIcon.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
+import { CloseIcon } from './icons/CloseIcon';
+import { CameraIcon } from './icons/CameraIcon';
 
 interface CameraCaptureModalProps {
     isOpen: boolean;
@@ -60,12 +60,21 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
     const handleCapture = () => {
         if (videoRef.current) {
             const canvas = document.createElement('canvas');
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
+            const MAX_WIDTH = 1920;
+            let width = videoRef.current.videoWidth;
+            let height = videoRef.current.videoHeight;
+
+            if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width;
+                width = MAX_WIDTH;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
             const ctx = canvas.getContext('2d');
             if (ctx) {
-                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/jpeg');
+                ctx.drawImage(videoRef.current, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
                 onCapture(dataUrl);
             }
         }

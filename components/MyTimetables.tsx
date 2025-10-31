@@ -1,22 +1,20 @@
-
-
-
 import React, { useState, useEffect } from 'react';
-import type { StoredPlan, SmartPlan, Toast } from '../types.ts';
-import SmartPlanView from './SmartPlanView.tsx';
+import type { StoredPlan, SmartPlan, Toast, UserDetails } from '../types';
+import SmartPlanView from './SmartPlanView';
 import { StarIcon } from './icons/StarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { CloseIcon } from './icons/CloseIcon';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface MyTimetablesProps {
   savedTimetables: StoredPlan[];
   setSavedTimetables: (plans: StoredPlan[]) => void;
   onLoadPlan: (plan: SmartPlan) => void;
   addToast: (message: string, type: Toast['type']) => void;
+  userDetails: UserDetails | null;
 }
 
-const MyTimetables: React.FC<MyTimetablesProps> = ({ savedTimetables, setSavedTimetables, onLoadPlan, addToast }) => {
+const MyTimetables: React.FC<MyTimetablesProps> = ({ savedTimetables, setSavedTimetables, onLoadPlan, addToast, userDetails }) => {
   const [modal, setModal] = useState<'view' | 'rename' | 'delete' | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<StoredPlan | null>(null);
   const [newName, setNewName] = useState('');
@@ -106,7 +104,7 @@ const MyTimetables: React.FC<MyTimetablesProps> = ({ savedTimetables, setSavedTi
                 <button onClick={closeModal}><CloseIcon className="w-6 h-6" /></button>
              </div>
              <div className="p-6 overflow-y-auto">
-                {modal === 'view' && <SmartPlanView plan={selectedPlan.plan} />}
+                {modal === 'view' && <SmartPlanView plan={selectedPlan.plan} addToast={addToast} userDetails={userDetails} />}
                 {modal === 'rename' && (
                     <div className="space-y-4">
                         <label>{t('mytimetables.newNameFor', { name: selectedPlan.name })}</label>

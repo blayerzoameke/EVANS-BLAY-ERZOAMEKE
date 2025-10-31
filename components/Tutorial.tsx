@@ -110,8 +110,8 @@ const Tutorial: React.FC<TutorialProps> = ({ tutorialImages, setTutorialImages, 
         if (!file || !file.type.startsWith('image/')) {
             return;
         }
-        if (file.size > 2 * 1024 * 1024) { // 2MB limit
-            addToast(t('toasts.imageSizeError2' as any), 'error');
+        if (file.size > 25 * 1024 * 1024) { // 25MB limit
+            addToast(t('toasts.fileSizeTooLarge' as any, {fileName: file.name, size: 25}), 'error');
             return;
         }
         const reader = new FileReader();

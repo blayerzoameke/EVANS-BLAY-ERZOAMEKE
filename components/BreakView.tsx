@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { ActiveSession } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { ExpandIcon } from './icons/ExpandIcon.tsx';
+import type { ActiveSession } from '../types';
+import { useLanguage } from '../contexts/LanguageContext';
+import { ExpandIcon } from './icons/ExpandIcon';
 
 interface BreakViewProps {
     session: ActiveSession;
@@ -141,16 +141,15 @@ const BreakView: React.FC<BreakViewProps> = ({ session, onEnd }) => {
                         <iframe
                             ref={iframeRef}
                             src={embedUrl}
-                            title={session.subject}
+                            title={session.fromSlot.activity || t('breakview.title')}
                             className="w-full h-full"
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                            allow="autoplay; encrypted-media; picture-in-picture"
                             allowFullScreen
                         ></iframe>
                     ) : (
                         <div className="text-center text-white p-8">
-                            <p className="text-6xl mb-4">☕</p>
-                            <p className="text-xl font-semibold">{t('breakview.title')}</p>
+                            <h3 className="text-3xl font-bold mb-4">{t('breakview.title')}</h3>
+                            <p className="text-lg">{t('breakview.body')}</p>
                         </div>
                     )}
                 </div>

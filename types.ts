@@ -1,4 +1,4 @@
-
+import React from 'react';
 
 // FIX: Export DayOfWeek enum and remove circular import from constants.ts
 export enum DayOfWeek {
@@ -19,7 +19,8 @@ export type View =
   | 'notes'
   | 'uploadslides'
   | 'examprep'
-  | 'preferences'
+  | 'language'
+  | 'theme'
   | 'settings'
   | 'report'
   | 'feedback'
@@ -27,7 +28,8 @@ export type View =
   | 'about'
   | 'library'
   | 'terms'
-  | 'tutorial';
+  | 'tutorial'
+  | 'notification';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -50,6 +52,8 @@ export interface UserDetails {
   institutionLogo?: string;
   programmeOfStudy?: string;
   institutionAbbreviation?: string;
+  recoveryQuestion?: string;
+  recoveryAnswer?: string;
 }
 
 export interface Lecture {
@@ -74,6 +78,7 @@ export interface AgendaItem {
   day: DayOfWeek;
   startTime: string;
   endTime: string;
+  location?: string;
 }
 
 export enum ActivityType {
@@ -93,6 +98,7 @@ export interface PlanSlot {
   code?: string;
   isLocked?: boolean;
   durationMinutes?: number;
+  location?: string;
 }
 
 export type DayPlan = {
@@ -151,6 +157,16 @@ export interface Note {
   isFavourite: boolean;
 }
 
+// FIX: Add missing NotificationSettings type
+export interface NotificationSettings {
+    status: 'unconfigured' | 'configured';
+    enabled: boolean;
+    reminders: boolean;
+    reminderTime: number; // in minutes
+    sessionStart: boolean;
+    breakStartEnd: boolean;
+}
+
 export interface UploadedFile {
     name: string;
     type: string;
@@ -159,7 +175,7 @@ export interface UploadedFile {
     context: string;
 }
 
-export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'read' | 'chat' | 'read-focus';
+export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'read' | 'chat' | 'read-focus' | 'actions';
 
 export interface LearningHubState {
     file: UploadedFile | null;
@@ -171,10 +187,6 @@ export interface LearningHubState {
     };
     chatHistory: ChatTurn[];
     isProcessing: boolean;
-    intendedStudyContext?: {
-        subject: string;
-        fromSlot: PlanSlot;
-    } | null;
 }
 
 export enum QuizType {
@@ -212,15 +224,6 @@ export interface TrackedSession {
     subject: string;
     durationMinutes: number;
     date: string; // YYYY-MM-DD
-}
-
-export interface NotificationSettings {
-    status: 'unconfigured' | 'configured';
-    enabled: boolean;
-    reminders: boolean;
-    reminderTime: number;
-    sessionStart: boolean;
-    breakStartEnd: boolean;
 }
 
 export interface ConflictInfo {
@@ -271,6 +274,7 @@ export interface ExamPrepState {
     outputFormat: 'steps' | 'latex' | 'code' | 'graph';
     programmingLanguage: string;
     graphInterval: string;
+    graphYInterval: string;
 }
 
 export interface ProfileEditState {
@@ -288,12 +292,6 @@ export interface ReportDraft {
     description: string;
     attachment: File | null;
     contactEmail: string;
-    contactWhatsApp: string;
-}
 
-export interface FeedbackDraft {
-    rating: number;
-    category: string;
-    comments: string;
-    canUseAsTestimonial: boolean;
+    contactWhatsApp: string;
 }

@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import UserDetailsForm from './UserDetailsForm.tsx';
-import TimetableInput from './TimetableInput.tsx';
-import SmartPlanView from './SmartPlanView.tsx';
-import CourseCodeModal from './CourseCodeModal.tsx';
-import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService.ts';
-import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession, GenerationState, DashboardInputState, LearningHubState } from '../types.ts';
-import { EducationalLevel, ActivityType, DayOfWeek } from '../types.ts';
-import { UploadIcon } from './icons/UploadIcon.tsx';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { LogoIcon } from './icons/LogoIcon.tsx';
-import { DAYS_OF_WEEK } from '../constants.ts';
-import EditTimetableModal from './EditTimetableModal.tsx';
-import { RefreshIcon } from './icons/RefreshIcon.tsx';
-import { LogIcon } from './icons/LogIcon.tsx';
-import { ClockIcon } from './icons/ClockIcon.tsx';
-import { PlayIcon } from './icons/PlayIcon.tsx';
-import LogStudyModal from './LogStudyModal.tsx';
-import { timeToMinutes } from '../lib/utils.ts';
+import UserDetailsForm from './UserDetailsForm';
+import TimetableInput from './TimetableInput';
+import SmartPlanView from './SmartPlanView';
+import CourseCodeModal from './CourseCodeModal';
+import { generateSmartPlan, generatePlanFromImage, isImageTimetable } from '../services/geminiService';
+import type { UserDetails, Lecture, StudyGoal, AgendaItem, SmartPlan, StoredPlan, ImagePart, CourseCodeMap, Toast, ActiveSession, PlanSlot, TrackedSession, GenerationState, DashboardInputState, LearningHubState } from '../types';
+import { EducationalLevel, ActivityType, DayOfWeek } from '../types';
+import { UploadIcon } from './icons/UploadIcon';
+import { useLanguage } from '../contexts/LanguageContext';
+import { LogoIcon } from './icons/LogoIcon';
+import { DAYS_OF_WEEK } from '../constants';
+import EditTimetableModal from './EditTimetableModal';
+import { RefreshIcon } from './icons/RefreshIcon';
+import { LogIcon } from './icons/LogIcon';
+import { ClockIcon } from './icons/ClockIcon';
+import { PlayIcon } from './icons/PlayIcon';
+import LogStudyModal from './LogStudyModal';
+import { timeToMinutes, processAndResizeImage } from '../lib/utils';
 
 const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '', programmeOfStudy: '', institutionAbbreviation: '' };
 
@@ -89,6 +89,40 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const { lectures, studyGoals, agendaItems, generalGoals, imageFile, imagePreview, step, isEditing } = dashboardInputs;
 
+  const checkForAgendaConflicts = useCallback((
+    plan: SmartPlan, 
+    originalLectures: Lecture[], 
+    originalAgendaItems: AgendaItem[]
+  ) => {
+    originalAgendaItems.forEach(item => {
+        if (!item.title.trim()) return;
+
+        const isScheduled = plan.some(dayPlan => 
+            dayPlan.day === item.day &&
+            dayPlan.slots.some(slot => 
+                slot.type === ActivityType.AGENDA &&
+                slot.activity === item.title &&
+                timeToMinutes(slot.startTime) === timeToMinutes(item.startTime)
+            )
+        );
+        
+        if (!isScheduled) {
+            const itemStart = timeToMinutes(item.startTime);
+            const itemEnd = timeToMinutes(item.endTime);
+
+            const conflictingLecture = originalLectures.find(lec => 
+                lec.day === item.day &&
+                itemStart < timeToMinutes(lec.endTime) &&
+                itemEnd > timeToMinutes(lec.startTime)
+            );
+
+            if (conflictingLecture) {
+                addToast(t('toasts.agendaConflict', { title: item.title, lecture: conflictingLecture.subject }), 'warning');
+            }
+        }
+    });
+  }, [addToast, t]);
+
   const handleScrollToCurrentActivity = () => {
     if (currentActivity?.day && dayRefs.current[currentActivity.day]) {
       dayRefs.current[currentActivity.day]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -134,7 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             if (nextSlotIndex !== -1) {
                 relevantSlot = sortedSlots[nextSlotIndex];
                 if (nextSlotIndex + 1 < sortedSlots.length) {
-                    nextSlotForRelevant = sortedSlots[nextSlotIndex + 1];
+                    nextSlotForRelevant = sortedSlots[currentSlotIndex + 1];
                 }
             }
         }
@@ -177,6 +211,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     const codes = new Set<string>();
     plan.forEach(day => {
         day.slots.forEach(slot => {
+            // Check the dedicated code field first
+            if (slot.code) {
+                codes.add(slot.code);
+            }
+            // Fallback to checking the activity name
             if (slot.type === ActivityType.LECTURE || slot.type === ActivityType.STUDY) {
                 const matches = slot.activity.match(codeRegex);
                 if (matches) {
@@ -201,12 +240,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   
   const handleNextStep = () => {
     if (!userDetails || !userDetails.name || !userDetails.educationalLevel) {
-        setGenerationState({ ...generationState, error: t('dashboard.error.fillDetails'), source: 'dashboard' });
+        addToast(t('dashboard.error.fillDetails'), 'error');
         return;
     }
     const isUniversityLevel = ![EducationalLevel.HIGH_SCHOOL, EducationalLevel.OTHER].includes(userDetails.educationalLevel);
     if (isUniversityLevel && !userDetails.country) {
-        setGenerationState({ ...generationState, error: t('common.countryRequired'), source: 'dashboard' });
+        addToast(t('common.countryRequired'), 'error');
         return;
     }
     setDashboardInputs(prev => ({...prev, step: 2}));
@@ -214,58 +253,70 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const handleGeneratePlan = async () => {
     if (!isInputSufficient || !userDetails) {
-        setGenerationState({ ...generationState, error: t('dashboard.error.noInput'), source: 'dashboard' });
+        addToast(t('dashboard.error.noInput'), 'error');
         return;
     }
 
     const isRegeneration = !!smartPlan;
     setGenerationState({ isLoading: true, message: '', error: null, source: 'dashboard' });
-    try {
-      let plan;
-      const existingPlan = isRegeneration ? smartPlan : undefined;
 
-      if (imageFile) {
+    if (imageFile) {
         setGenerationState(prev => ({ ...prev, message: t('dashboard.verifyingImage') }));
-        
-        const reader = new FileReader();
-        reader.readAsDataURL(imageFile);
-        reader.onloadend = async () => {
-            try {
-                const base64String = (reader.result as string).split(',')[1];
-                const imagePart: ImagePart = {
-                    inlineData: { data: base64String, mimeType: imageFile.type }
-                };
-                
-                if (!isRegeneration) {
-                    const isTimetable = await isImageTimetable(imagePart);
-                    if (!isTimetable) {
-                        setGenerationState({ isLoading: false, message: '', error: t('dashboard.error.notATimetable'), source: 'dashboard' });
-                        return;
-                    }
-                }
-
-                setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
-                const result = await generatePlanFromImage(userDetails, studyGoals, generalGoals, imagePart, existingPlan);
-
-                if ('error' in result) {
-                    setGenerationState({ isLoading: false, message: '', error: result.error, source: 'dashboard' });
-                } else {
-                    processPlanForCodes(result, !isRegeneration);
+        try {
+            const { base64, mimeType } = await processAndResizeImage(imageFile);
+            const imagePart: ImagePart = {
+                inlineData: { data: base64, mimeType }
+            };
+            
+            if (!isRegeneration) {
+                const isTimetable = await isImageTimetable(imagePart);
+                if (!isTimetable) {
+                    addToast(t('dashboard.error.notATimetable'), 'error');
                     setGenerationState({ isLoading: false, message: '', error: null, source: null });
+                    return;
                 }
-
-            } catch (e: any) {
-                 setGenerationState({ isLoading: false, message: '', error: e.message || t('toasts.error.imageProcessing'), source: 'dashboard' });
             }
-        };
-      } else {
+
+            setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
+            const generatedPlan = await generatePlanFromImage(userDetails, studyGoals, agendaItems, generalGoals, imagePart, isRegeneration ? smartPlan : undefined);
+            
+            const extractedLectures: Lecture[] = [];
+            generatedPlan.forEach(dayPlan => {
+                dayPlan.slots.forEach(slot => {
+                    if (slot.type === ActivityType.LECTURE) {
+                        extractedLectures.push({
+                            id: `${dayPlan.day}-${slot.startTime}`,
+                            subject: slot.activity,
+                            day: dayPlan.day,
+                            startTime: slot.startTime,
+                            endTime: slot.endTime,
+                            location: slot.location
+                        });
+                    }
+                });
+            });
+
+            checkForAgendaConflicts(generatedPlan, extractedLectures, agendaItems);
+            processPlanForCodes(generatedPlan, !isRegeneration);
+            setGenerationState({ isLoading: false, message: '', error: null, source: null });
+
+        } catch (e) {
+             const message = e instanceof Error ? e.message : String(e);
+             addToast(message || t('toasts.error.unexpected'), 'error');
+             setGenerationState({ isLoading: false, message: '', error: null, source: null });
+        }
+    } else {
         setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
-        plan = await generateSmartPlan(userDetails, lectures, studyGoals, agendaItems, generalGoals, existingPlan);
-        processPlanForCodes(plan, !isRegeneration);
-        setGenerationState({ isLoading: false, message: '', error: null, source: null });
-      }
-    } catch (e: any) {
-      setGenerationState({ isLoading: false, message: '', error: e.message || t('toasts.error.unexpected'), source: 'dashboard' });
+        try {
+            const plan = await generateSmartPlan(userDetails, lectures, studyGoals, agendaItems, generalGoals, isRegeneration ? smartPlan : undefined);
+            checkForAgendaConflicts(plan, lectures, agendaItems);
+            processPlanForCodes(plan, !isRegeneration);
+            setGenerationState({ isLoading: false, message: '', error: null, source: null });
+        } catch (e: any) {
+            const message = e instanceof Error ? e.message : String(e);
+            addToast(message || t('toasts.error.unexpected'), 'error');
+            setGenerationState({ isLoading: false, message: '', error: null, source: null });
+        }
     }
   };
   
@@ -276,17 +327,24 @@ const Dashboard: React.FC<DashboardProps> = ({
         ...day,
         slots: day.slots.map(slot => {
             const codeRegex = /\b([A-Z]{2,5}\s?\d{2,4})\b/g;
-            const matches = slot.activity.match(codeRegex);
-            const code = matches?.[0];
+            // Prefer the dedicated code field, but fall back to regex on the activity.
+            const codeToMatch = slot.code || slot.activity.match(codeRegex)?.[0];
 
-            if (code && code in confirmedMap) {
-                const newName = confirmedMap[code];
+            if (codeToMatch && codeToMatch in confirmedMap) {
+                const newName = confirmedMap[codeToMatch];
+                // If user provided a new name, update the activity and ensure the code field is set.
                 if (newName && newName.trim() !== '') {
-                    return { ...slot, activity: newName.trim(), code: code };
-                } else {
-                    return { ...slot, activity: code, code: undefined };
+                    return { ...slot, activity: newName.trim(), code: codeToMatch };
                 }
             }
+            
+            // If no new name was provided, or no code was found,
+            // we still want to ensure the code field is populated if we found a code in the activity string.
+            if (codeToMatch && !slot.code) {
+                return { ...slot, code: codeToMatch };
+            }
+
+            // Otherwise, return the original slot from the temp plan.
             return slot;
         })
     }));
@@ -300,16 +358,19 @@ const Dashboard: React.FC<DashboardProps> = ({
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
+        if (file.size > 25 * 1024 * 1024) { // 25MB limit
+            addToast(t('toasts.fileSizeTooLarge', { fileName: file.name, size: 25 }), 'error');
+            return;
+        }
         setDashboardInputs(prev => ({
             ...prev,
             imageFile: file,
             imagePreview: URL.createObjectURL(file),
             lectures: [],
             studyGoals: [],
-            agendaItems: [],
         }));
     }
-  }, [setDashboardInputs]);
+  }, [setDashboardInputs, addToast, t]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -430,7 +491,6 @@ const Dashboard: React.FC<DashboardProps> = ({
               <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">{t('dashboard.createPlanTitle')}</h2>
               <p className="text-gray-500 dark:text-gray-400 mb-6">{t('dashboard.createPlanSubtitle')}</p>
               <UserDetailsForm userDetails={userDetails} setUserDetails={setUserDetails} />
-              {generationState.error && generationState.source === 'dashboard' && <p className="text-red-500 mt-4">{generationState.error}</p>}
               <button onClick={handleNextStep} className="mt-6 w-full py-3 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark transition-colors">{t('common.confirm')}</button>
             </div>
         );
@@ -471,7 +531,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                    generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
                    manualSectionsDisabled={!!imageFile}
                />
-               {generationState.error && generationState.source === 'dashboard' && <p className="text-red-500 mt-4">{generationState.error}</p>}
                <button onClick={handleGeneratePlan} className="mt-8 w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all" disabled={!isInputSufficient || generationState.isLoading}>
                  {generationState.isLoading ? t('dashboard.generating') : (smartPlan ? t('dashboard.regeneratePlan') : t('dashboard.generatePlan'))}
                </button>
@@ -534,7 +593,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             )
           )}
 
-          <SmartPlanView plan={smartPlan} onStudySlotClick={handleStudySlotClick} dayRefs={dayRefs} />
+          <SmartPlanView plan={smartPlan} onStudySlotClick={handleStudySlotClick} dayRefs={dayRefs} addToast={addToast} userDetails={userDetails} />
         </div>
       ) : (
         <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 md:p-10">

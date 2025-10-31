@@ -1,9 +1,9 @@
 
 
 import React, { useState } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { ChevronDownIcon } from './icons/ChevronDownIcon.tsx';
-import type { View } from '../types.ts';
+import { useLanguage } from '../contexts/LanguageContext';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import type { View } from '../types';
 
 interface HelpProps {
     setView: (view: View) => void;

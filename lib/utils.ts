@@ -1,4 +1,4 @@
-import { DayOfWeek } from '../types.ts';
+import { DayOfWeek } from '../types';
 
 /**
  * Returns the day of the week from a Date object as a DayOfWeek enum string.
@@ -93,3 +93,82 @@ export const timeToMinutes = (time: string): number => {
         return 0;
     }
 };
+
+const dayNameToIndex: Record<DayOfWeek, number> = {
+    [DayOfWeek.Sunday]: 0,
+    [DayOfWeek.Monday]: 1,
+    [DayOfWeek.Tuesday]: 2,
+    [DayOfWeek.Wednesday]: 3,
+    [DayOfWeek.Thursday]: 4,
+    [DayOfWeek.Friday]: 5,
+    [DayOfWeek.Saturday]: 6,
+};
+
+export const getNextDateForDay = (day: DayOfWeek, timeStr: string): Date => {
+    const targetDayIndex = dayNameToIndex[day];
+    const now = new Date();
+    const currentDayIndex = now.getDay();
+    let dayDifference = targetDayIndex - currentDayIndex;
+
+    const timeInMinutes = timeToMinutes(timeStr);
+    const nowInMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    if (dayDifference === 0 && timeInMinutes <= nowInMinutes) {
+        // If it's for today but the time has passed, schedule for next week
+        dayDifference += 7;
+    } else if (dayDifference < 0) {
+        // If it's for a day that has passed this week, schedule for next week
+        dayDifference += 7;
+    }
+
+    const targetDate = new Date();
+    targetDate.setDate(now.getDate() + dayDifference);
+    
+    return parseTimeToDate(timeStr, targetDate);
+};
+
+export async function processAndResizeImage(
+    file: File, 
+    options: { maxWidth: number; maxHeight: number; quality: number } = { maxWidth: 1920, maxHeight: 1920, quality: 0.9 }
+): Promise<{ base64: string; mimeType: string; dataUrl: string }> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            if (!event.target?.result) return reject(new Error("FileReader error: result is null."));
+            const img = new Image();
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > options.maxWidth) {
+                        height *= options.maxWidth / width;
+                        width = options.maxWidth;
+                    }
+                } else {
+                    if (height > options.maxHeight) {
+                        width *= options.maxHeight / height;
+                        height = options.maxHeight;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error('Could not get canvas context for image resizing.'));
+                
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Use JPEG for better compression, especially for photos.
+                const dataUrl = canvas.toDataURL('image/jpeg', options.quality);
+                const base64 = dataUrl.split(',')[1];
+                resolve({ base64, mimeType: 'image/jpeg', dataUrl });
+            };
+            img.onerror = (e) => reject(new Error(`Image load error: ${e}`));
+            img.src = event.target.result as string;
+        };
+        reader.onerror = (e) => reject(new Error(`FileReader error: ${e}`));
+        reader.readAsDataURL(file);
+    });
+}

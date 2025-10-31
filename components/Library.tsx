@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { libraryResources } from '../data/libraryResources.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { SearchIcon } from './icons/SearchIcon.tsx';
-import { BookIcon } from './icons/BookIcon.tsx';
-import { ToolsIcon } from './icons/ToolsIcon.tsx';
-import { WriteIcon } from './icons/WriteIcon.tsx';
-import { BuildingIcon } from './icons/BuildingIcon.tsx';
+import { libraryResources } from '../data/libraryResources';
+import { useLanguage } from '../contexts/LanguageContext';
+import { SearchIcon } from './icons/SearchIcon';
+import { BookIcon } from './icons/BookIcon';
+import { ToolsIcon } from './icons/ToolsIcon';
+import { WriteIcon } from './icons/WriteIcon';
+import { BuildingIcon } from './icons/BuildingIcon';
 
 const categoryIcons: { [key: string]: React.FC<React.SVGProps<SVGSVGElement>> } = {
     'digital-book-libraries': BuildingIcon,

@@ -1,4 +1,4 @@
-import { DayOfWeek } from './types.ts';
+import { DayOfWeek } from './types';
 
 export const DAYS_OF_WEEK: DayOfWeek[] = [
   DayOfWeek.Monday,

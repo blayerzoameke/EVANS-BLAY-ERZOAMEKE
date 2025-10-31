@@ -1,22 +1,23 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useDropzone } from 'react-dropzone';
-import { generateQuiz, extractTextFromDocument, isStudyMaterial, solveProblem, isImageAProblem } from '../services/geminiService.ts';
-import type { Toast, QuizQuestion, AnswerFeedback, QuizSummary, ImagePart, GenerationState, QuizState, Note, ExamPrepState, View } from '../types.ts';
-import { QuizType } from '../types.ts';
-import { ArrowLeftIcon } from './icons/ArrowLeftIcon.tsx';
-import { ArrowRightIcon } from './icons/ArrowRightIcon.tsx';
-import { CheckIcon } from './icons/CheckIcon.tsx';
-import { CloseIcon } from './icons/CloseIcon.tsx';
-import { UploadIcon } from './icons/UploadIcon.tsx';
-import { DocumentIcon } from './icons/DocumentIcon.tsx';
-import { CameraIcon } from './icons/CameraIcon.tsx';
-import { MicrophoneIcon } from './icons/MicrophoneIcon.tsx';
+import { generateQuiz, extractTextFromDocument, isStudyMaterial, solveProblem, isImageAProblem } from '../services/geminiService';
+import type { Toast, QuizQuestion, AnswerFeedback, QuizSummary, ImagePart, GenerationState, QuizState, Note, ExamPrepState, View } from '../types';
+import { QuizType } from '../types';
+import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
+import { ArrowRightIcon } from './icons/ArrowRightIcon';
+import { CheckIcon } from './icons/CheckIcon';
+import { CloseIcon } from './icons/CloseIcon';
+import { UploadIcon } from './icons/UploadIcon';
+import { DocumentIcon } from './icons/DocumentIcon';
+import { CameraIcon } from './icons/CameraIcon';
+import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import katex from 'katex';
-import CameraCaptureModal from './CameraCaptureModal.tsx';
-import { SaveIcon } from './icons/SaveIcon.tsx';
-import { CopyIcon } from './icons/CopyIcon.tsx';
-import { AdvancedGraphPlotter, type GraphConfig } from '../utils/AdvancedGraphPlotter.ts';
+import CameraCaptureModal from './CameraCaptureModal';
+import { SaveIcon } from './icons/SaveIcon';
+import { CopyIcon } from './icons/CopyIcon';
+import { AdvancedGraphPlotter, type GraphConfig } from '../utils/AdvancedGraphPlotter';
+import { processAndResizeImage } from '../lib/utils';
 
 declare global {
   interface Window {
@@ -468,7 +469,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
     setExamPrepState
 }) => {
     const { t } = useLanguage();
-    const { mode, numQuestions, quizType, uploadedFiles, focusArea, questionImage, questionText, solution, outputFormat, programmingLanguage, graphInterval } = examPrepState;
+    const { mode, numQuestions, quizType, uploadedFiles, focusArea, questionImage, questionText, solution, outputFormat, programmingLanguage, graphInterval, graphYInterval } = examPrepState;
     const recognitionRef = useRef<any>(null);
     const [isListening, setIsListening] = useState(false);
     const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
@@ -544,7 +545,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
         }
     };
 
-    const onDrop = useCallback((acceptedFiles: File[]) => {
+    const onDrop = useCallback(async (acceptedFiles: File[]) => {
         if (mode === 'quiz') {
             const validFiles = acceptedFiles.filter(file => {
                 if (file.size > 25 * 1024 * 1024) { // 25MB limit
@@ -564,11 +565,12 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                     addToast(t('toasts.fileSizeTooLarge', {fileName: file.name, size: 25}), 'error');
                     return;
                 }
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    updateState('questionImage', reader.result as string);
-                };
-                reader.readAsDataURL(file);
+                try {
+                    const { dataUrl } = await processAndResizeImage(file);
+                    updateState('questionImage', dataUrl);
+                } catch(e: any) {
+                    addToast(e.message || 'Failed to process image.', 'error');
+                }
             } else if (file) {
                 addToast(t('toasts.invalidImageFile'), 'error');
             }
@@ -602,9 +604,9 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 });
                 const filePart: ImagePart = { inlineData: { data: base64String, mimeType: file.type } };
                 
-                const isMaterial = await isStudyMaterial(filePart);
+                const isMaterial = await isStudyMaterial(filePart, { fast: true });
                 if (isMaterial) {
-                    const text = await extractTextFromDocument(filePart);
+                    const text = await extractTextFromDocument(filePart, { fast: true });
                     combinedContent += text + '\n\n';
                 } else {
                     addToast(t('examprep.error.notStudyMaterial', { fileName: file.name }), 'warning');
@@ -631,7 +633,8 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                  throw new Error(t('examprep.error.noQuestions'));
             }
         } catch (error: any) {
-            setGenerationState({ isLoading: false, message: '', error: error.message || t('examprep.error.generic'), source: 'quiz' });
+            addToast(error.message || t('examprep.error.generic'), 'error');
+            setGenerationState({ isLoading: false, message: '', error: null, source: null });
         }
     };
 
@@ -704,7 +707,8 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                 imagePart,
                 outputFormat,
                 programmingLanguage,
-                graphInterval
+                graphInterval,
+                graphYInterval
             );
 
             if (outputFormat === 'graph') {
@@ -713,10 +717,34 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                     updateState('solution', graphData.explanation);
                     
                     const plotter = new AdvancedGraphPlotter();
-                    const functions = graphData.graphFunction.split(',').map((f: string) => f.trim());
                     
+                    let functions: string[] = [];
+                    if (typeof graphData.graphFunction === 'string') {
+                        const rawFunc = graphData.graphFunction.trim();
+                        if (rawFunc.startsWith('[') && rawFunc.endsWith(']')) {
+                            try {
+                                const parsed = JSON.parse(rawFunc);
+                                if (Array.isArray(parsed)) {
+                                    functions = parsed.filter(item => typeof item === 'string');
+                                } else {
+                                     functions = [String(parsed)];
+                                }
+                            } catch (e) {
+                                functions = rawFunc.replace(/[\[\]"']/g, '').split(',').map(f => f.trim()).filter(f => f);
+                            }
+                        } else {
+                            functions = rawFunc.split(',').map(f => f.trim()).filter(f => f);
+                        }
+                    } else if (Array.isArray(graphData.graphFunction)) {
+                        functions = graphData.graphFunction.filter(item => typeof item === 'string');
+                    }
+
+                    if (functions.length === 0) {
+                        throw new Error("Could not parse function expression from AI response.");
+                    }
+
                     const intervalConfig = plotter.parseInterval(graphInterval);
-                    const smartInterval = plotter.determineSmartInterval(graphData.graphFunction);
+                    const smartInterval = plotter.determineSmartInterval(functions[0]);
                     
                     const xMin = intervalConfig?.xMin ?? smartInterval.xMin;
                     const xMax = intervalConfig?.xMax ?? smartInterval.xMax;
@@ -769,7 +797,8 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
             }
             setGenerationState({ isLoading: false, message: '', error: null, source: null });
         } catch (error: any) {
-            setGenerationState({ isLoading: false, message: '', error: error.message || t('toasts.error.solveProblem'), source: 'solve' });
+            addToast(error.message || t('toasts.error.solveProblem'), 'error');
+            setGenerationState({ isLoading: false, message: '', error: null, source: null });
         }
     };
 
@@ -849,7 +878,6 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                    <button onClick={handleGenerateQuiz} className="w-full py-3 bg-primary text-primary-text font-bold rounded-xl mt-8 hover:bg-primary-dark transition-colors" disabled={generationState.isLoading}>
                      {t('examprep.quiz.generate')}
                    </button>
-                   {generationState.error && generationState.source === 'quiz' && <p className="text-red-500 mt-4 text-center">{generationState.error}</p>}
                 </div>
             ) : (
                 // PROBLEM SOLVER UI
@@ -890,7 +918,7 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                                 </div>
                             </div>
                             
-                             <div>
+                            <div>
                                 <label className="block text-sm font-semibold mb-2">{t('examprep.solver.step2')}</label>
                                 <div className="grid grid-cols-2 gap-4">
                                      <div>
@@ -908,13 +936,19 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                                             <input id="language" type="text" value={programmingLanguage} onChange={e => updateState('programmingLanguage', e.target.value)} className={inputClasses}/>
                                         </div>
                                     )}
-                                    {outputFormat === 'graph' && (
+                                </div>
+                                {outputFormat === 'graph' && (
+                                    <div className="grid grid-cols-2 gap-4 mt-4">
                                         <div>
                                             <label htmlFor="graph-interval" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.solver.graphInterval')}</label>
                                             <input id="graph-interval" type="text" value={graphInterval} onChange={e => updateState('graphInterval', e.target.value)} placeholder={t('examprep.solver.graphIntervalPlaceholder')} className={inputClasses}/>
                                         </div>
-                                    )}
-                                </div>
+                                        <div>
+                                            <label htmlFor="graph-y-interval" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.solver.graphYInterval')}</label>
+                                            <input id="graph-y-interval" type="text" value={graphYInterval} onChange={e => updateState('graphYInterval', e.target.value)} placeholder={t('examprep.solver.graphYIntervalPlaceholder')} className={inputClasses}/>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -922,8 +956,6 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
                             {t('examprep.solver.solve')}
                         </button>
                     </div>
-
-                    {generationState.error && generationState.source === 'solve' && <p className="text-red-500 mt-4 text-center">{generationState.error}</p>}
 
                     {solution && (
                         <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg space-y-4">

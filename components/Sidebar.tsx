@@ -1,8 +1,10 @@
-import React from 'react';
-import type { View } from '../types.ts';
-import { LogoIcon } from './icons/LogoIcon.tsx';
-import { CloseIcon } from './icons/CloseIcon.tsx';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import React, { useState } from 'react';
+import type { View } from '../types';
+import { LogoIcon } from './icons/LogoIcon';
+import { CloseIcon } from './icons/CloseIcon';
+import { useLanguage } from '../contexts/LanguageContext';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import type { TranslationKey } from '../lib/i18n';
 
 interface SidebarProps {
   view: View;
@@ -13,8 +15,13 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => {
   const { t } = useLanguage();
+  const [openSection, setOpenSection] = useState<string | null>(null);
+
+  const toggleSection = (sectionId: string) => {
+    setOpenSection(prev => (prev === sectionId ? null : sectionId));
+  };
   
-  type NavItem = { id: View; nameKey: keyof typeof import('../lib/i18n.ts').translations['en'] };
+  type NavItem = { id: View; nameKey: TranslationKey };
 
   const manageNavItems: NavItem[] = [
     { id: 'dashboard', nameKey: 'sidebar.dashboard' },
@@ -27,7 +34,9 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
   ];
 
   const preferencesNavItems: NavItem[] = [
-    { id: 'preferences', nameKey: 'sidebar.preferences'},
+    { id: 'language', nameKey: 'preferences.language.title' },
+    { id: 'theme', nameKey: 'preferences.theme.title' },
+    { id: 'notification', nameKey: 'preferences.notifications.title' },
   ];
   
   const appNavItems: NavItem[] = [
@@ -71,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
     );
   };
   
-  const NavGroup: React.FC<{titleKey: keyof typeof import('../lib/i18n.ts').translations['en'], items: NavItem[]}> = ({ titleKey, items }) => (
+  const NavGroup: React.FC<{titleKey: TranslationKey, items: NavItem[]}> = ({ titleKey, items }) => (
     <div>
         <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t(titleKey)}</h3>
         <div className="space-y-1">
@@ -79,6 +88,30 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
         </div>
     </div>
   );
+
+  const CollapsibleNavGroup: React.FC<{
+    titleKey: TranslationKey;
+    sectionId: string;
+    items: NavItem[];
+  }> = ({ titleKey, sectionId, items }) => {
+    const isOpen = openSection === sectionId;
+    return (
+        <div>
+            <button
+                onClick={() => toggleSection(sectionId)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+            >
+                <span>{t(titleKey)}</span>
+                <ChevronDownIcon className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+                <div className="pl-6 mt-1 space-y-1 border-l-2 border-gray-200 dark:border-gray-600 ml-2">
+                    {items.map(item => <NavLink key={item.id} item={item} currentView={view} onClick={handleNavClick} />)}
+                </div>
+            )}
+        </div>
+    );
+  };
   
   const sidebarContent = (
       <div className="flex flex-col h-full no-print">
@@ -93,9 +126,9 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
         </div>
         <nav className="flex-1 px-4 py-4 space-y-6 overflow-y-auto">
             <NavGroup titleKey="sidebar.manage" items={manageNavItems} />
-            <NavGroup titleKey="sidebar.preferences" items={preferencesNavItems} />
-            <NavGroup titleKey="sidebar.app" items={appNavItems} />
-            <NavGroup titleKey="sidebar.support" items={supportNavItems} />
+            <CollapsibleNavGroup titleKey="sidebar.preferences" sectionId="preferences" items={preferencesNavItems} />
+            <CollapsibleNavGroup titleKey="sidebar.app" sectionId="app" items={appNavItems} />
+            <CollapsibleNavGroup titleKey="sidebar.support" sectionId="support" items={supportNavItems} />
         </nav>
       </div>
   );

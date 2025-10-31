@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { UserDetails, EducationalLevel } from '../types.ts';
-import { countries } from '../data/countries.ts';
-import { universities } from '../data/universities.ts';
-import SearchableDropdown from './SearchableDropdown.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
+import { UserDetails, EducationalLevel } from '../types';
+import { countries } from '../data/countries';
+import { universities } from '../data/universities';
+import SearchableDropdown from './SearchableDropdown';
 
 interface UserDetailsFormProps {
     userDetails: UserDetails;

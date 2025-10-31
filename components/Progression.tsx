@@ -1,10 +1,10 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types.ts';
-import { DAYS_OF_WEEK } from '../constants.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import { useColorTheme } from '../contexts/ColorThemeContext.tsx';
-import { timeToMinutes } from '../lib/utils.ts';
+import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types';
+import { DAYS_OF_WEEK } from '../constants';
+import { useLanguage } from '../contexts/LanguageContext';
+import { useColorTheme } from '../contexts/ColorThemeContext';
+import { timeToMinutes } from '../lib/utils';
 
 interface ProgressionProps {
   plan: SmartPlan | null;

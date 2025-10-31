@@ -1,9 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.tsx';
-import { LanguageProvider } from './contexts/LanguageContext.tsx';
-import { ThemeProvider } from './contexts/ThemeContext.tsx';
-import { ColorThemeProvider } from './contexts/ColorThemeContext.tsx';
+import App from './src/App';
+import { LanguageProvider } from './contexts/LanguageContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { ColorThemeProvider } from './contexts/ColorThemeContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ClockIcon } from './icons/ClockIcon.tsx';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { ClockIcon } from './icons/ClockIcon';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const generateTimeOptions = () => {
     const times = [];
