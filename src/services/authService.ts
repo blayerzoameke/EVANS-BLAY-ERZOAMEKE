@@ -7,7 +7,6 @@ const STORAGE_KEYS = [
     'users',
     'sessionToken',
     'usersData', // New key for storing all user-specific data
-    'tutorialImages',
     'tutorialVideoUrl',
     'welcomeComplete',
     // Old keys for migration/cleanup

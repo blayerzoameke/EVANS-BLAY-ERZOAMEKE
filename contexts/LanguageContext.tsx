@@ -15,14 +15,12 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [language, setLanguageState] = useState<Language>('en');
 
   useEffect(() => {
-    const savedLang = localStorage.getItem('language');
-    const browserLang = navigator.language.split('-')[0];
-    const defaultLang = savedLang || browserLang;
+    const savedLang = localStorage.getItem('language') as Language | null;
     
-    if (supportedLanguages.some(l => l.code === defaultLang)) {
-      setLanguageState(defaultLang as Language);
+    if (savedLang && supportedLanguages.some(l => l.code === savedLang)) {
+      setLanguageState(savedLang);
     } else {
-      setLanguageState('en');
+      setLanguageState('en'); // Default to English if no valid language is saved
     }
   }, []);
   

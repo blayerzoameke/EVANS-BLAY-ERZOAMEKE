@@ -12,11 +12,8 @@ import { CalculatorIcon } from './icons/CalculatorIcon.tsx';
 import { ChartBarIcon } from './icons/ChartBarIcon.tsx';
 import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon.tsx';
 import { PencilIcon } from './icons/PencilIcon.tsx';
-import ImageModal from './ImageModal.tsx';
 
 interface TutorialProps {
-    tutorialImages: Record<string, string>;
-    setTutorialImages: React.Dispatch<React.SetStateAction<Record<string, string>>>;
     addToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
     tutorialVideoUrl: string;
     setTutorialVideoUrl: (url: string) => void;
@@ -29,13 +26,10 @@ interface TutorialStepProps {
     Icon: React.FC<React.SVGProps<SVGSVGElement>>;
     imageSrc: string;
     altKey: string;
-    onImageClick: () => void;
-    onImageChange: (file: File) => void;
 }
 
-const TutorialStep: React.FC<TutorialStepProps> = ({ step, titleKey, descKey, Icon, imageSrc, altKey, onImageClick, onImageChange }) => {
+const TutorialStep: React.FC<TutorialStepProps> = ({ step, titleKey, descKey, Icon, imageSrc, altKey }) => {
     const { t } = useLanguage();
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     return (
         <div className="w-full text-left bg-white dark:bg-gray-800/50 p-6 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -54,23 +48,8 @@ const TutorialStep: React.FC<TutorialStepProps> = ({ step, titleKey, descKey, Ic
                 <img 
                     src={imageSrc} 
                     alt={t(altKey as any)} 
-                    className="rounded-lg shadow-md cursor-pointer w-full hover:opacity-90 transition-opacity"
-                    onClick={onImageClick} 
+                    className="rounded-lg shadow-md w-full"
                 />
-                 <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => { if (e.target.files && e.target.files[0]) onImageChange(e.target.files[0])}}
-                    className="hidden"
-                    accept="image/png, image/jpeg, image/webp"
-                />
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/60 text-white text-xs font-semibold px-3 py-1.5 rounded-md hover:bg-black/80 transition-all"
-                >
-                    <PencilIcon className="w-3 h-3" />
-                    {t('tutorial.image.change' as any)}
-                </button>
             </div>
         </div>
     );
@@ -92,36 +71,11 @@ const getEmbedUrl = (url: string): string => {
     }
 };
 
-const Tutorial: React.FC<TutorialProps> = ({ tutorialImages, setTutorialImages, addToast, tutorialVideoUrl, setTutorialVideoUrl }) => {
+const Tutorial: React.FC<TutorialProps> = ({ addToast, tutorialVideoUrl, setTutorialVideoUrl }) => {
     const { t } = useLanguage();
-    const [modalImage, setModalImage] = useState<{ src: string, alt: string } | null>(null);
     const [isEditingVideo, setIsEditingVideo] = useState(false);
     const [tempVideoUrl, setTempVideoUrl] = useState(tutorialVideoUrl);
-
-    const openImageModal = (src: string, altKey: string) => {
-        setModalImage({ src, alt: t(altKey as any) });
-    };
-
-    const closeImageModal = () => {
-        setModalImage(null);
-    };
     
-    const handleFileChange = (step: number, file: File) => {
-        if (!file || !file.type.startsWith('image/')) {
-            return;
-        }
-        if (file.size > 25 * 1024 * 1024) { // 25MB limit
-            addToast(t('toasts.fileSizeTooLarge' as any, {fileName: file.name, size: 25}), 'error');
-            return;
-        }
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result as string;
-            setTutorialImages(prev => ({ ...prev, [step.toString()]: base64String }));
-        };
-        reader.readAsDataURL(file);
-    };
-
     const handleSaveVideoUrl = () => {
         setTutorialVideoUrl(tempVideoUrl);
         setIsEditingVideo(false);
@@ -187,7 +141,7 @@ const Tutorial: React.FC<TutorialProps> = ({ tutorialImages, setTutorialImages, 
                 
                 <div className="space-y-6">
                     {steps.map(stepInfo => {
-                        const imageSrc = tutorialImages[stepInfo.step.toString()] || stepInfo.defaultImageSrc;
+                        const imageSrc = stepInfo.defaultImageSrc;
                         return (
                              <TutorialStep 
                                 key={stepInfo.step}
@@ -197,22 +151,11 @@ const Tutorial: React.FC<TutorialProps> = ({ tutorialImages, setTutorialImages, 
                                 Icon={stepInfo.Icon}
                                 imageSrc={imageSrc}
                                 altKey={stepInfo.altKey}
-                                onImageChange={(file) => handleFileChange(stepInfo.step, file)}
-                                onImageClick={() => openImageModal(imageSrc, stepInfo.altKey)}
                             />
                         )
                     })}
                 </div>
             </div>
-            
-            {modalImage && (
-                <ImageModal 
-                    isOpen={!!modalImage}
-                    onClose={closeImageModal}
-                    src={modalImage.src}
-                    alt={modalImage.alt}
-                />
-            )}
         </>
     );
 };

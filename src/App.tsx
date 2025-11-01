@@ -105,7 +105,6 @@ const App: React.FC = () => {
   const [generationState, setGenerationState] = useState<GenerationState>({ isLoading: false, message: '', error: null, source: null });
   const [quizState, setQuizState] = useState<QuizState>(defaultQuizState);
   const [intendedStudyContext, setIntendedStudyContext] = useState<{ subject: string; fromSlot: PlanSlot } | null>(null);
-  const [tutorialImages, setTutorialImages] = useState<Record<string, string>>({});
   const [tutorialVideoUrl, setTutorialVideoUrl] = useState<string>('https://www.youtube.com/watch?v=tBxfJ36t9_A');
   const [welcomeComplete, setWelcomeComplete] = useState(() => storageService.loadItem<boolean>('welcomeComplete') || false);
 
@@ -183,10 +182,6 @@ const App: React.FC = () => {
         }
 
         // Always load global (non-user-specific) settings
-        // FIX: Provide explicit type to loadItem to prevent type error on setter.
-        const tutorialImagesData = storageService.loadItem<Record<string, string>>('tutorialImages');
-        if(tutorialImagesData) setTutorialImages(tutorialImagesData);
-        // FIX: Provide explicit type to loadItem to prevent type error on setter.
         const tutorialVideoUrlData = storageService.loadItem<string>('tutorialVideoUrl');
         if(tutorialVideoUrlData) setTutorialVideoUrl(tutorialVideoUrlData);
 
@@ -205,12 +200,11 @@ const App: React.FC = () => {
       if (isLoggedIn) {
         persistAllState();
         // Persist global settings separately
-        storageService.saveItem('tutorialImages', tutorialImages);
         storageService.saveItem('tutorialVideoUrl', tutorialVideoUrl);
       }
     }, 1000);
     return () => clearTimeout(handler);
-  }, [isLoggedIn, persistAllState, tutorialImages, tutorialVideoUrl]);
+  }, [isLoggedIn, persistAllState, tutorialVideoUrl]);
 
   const dismissToast = (id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -410,8 +404,6 @@ const App: React.FC = () => {
         return <Terms />;
       case 'tutorial':
         return <Tutorial
-                    tutorialImages={tutorialImages}
-                    setTutorialImages={setTutorialImages}
                     addToast={addToast}
                     tutorialVideoUrl={tutorialVideoUrl}
                     setTutorialVideoUrl={setTutorialVideoUrl}
