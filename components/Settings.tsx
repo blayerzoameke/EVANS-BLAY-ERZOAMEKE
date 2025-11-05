@@ -9,15 +9,17 @@ import type { Toast } from '../types';
 
 interface SettingsProps {
     addToast: (message: string, type: Toast['type']) => void;
+    handleLogout: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ addToast }) => {
+const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout }) => {
     const { t } = useLanguage();
     const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
     const importInputRef = React.useRef<HTMLInputElement>(null);
 
     const handleExport = () => {
         storageService.exportAllData();
+        addToast(t('settings.exportSuccess' as any), 'success');
     };
 
     const handleImportClick = () => {
@@ -37,12 +39,12 @@ const Settings: React.FC<SettingsProps> = ({ addToast }) => {
         }
     };
 
-    const handleClearData = () => {
+    const handleConfirmClearData = () => {
         storageService.clearAllData();
-        addToast(t('settings.clearSuccess'), 'info');
-        setTimeout(() => window.location.reload(), 1000);
+        handleLogout();
+        // No need to close the modal, as the app state will reset and unmount this component.
     };
-
+    
     return (
         <>
             <div className="max-w-2xl mx-auto space-y-8">
@@ -80,7 +82,7 @@ const Settings: React.FC<SettingsProps> = ({ addToast }) => {
             <ConfirmationModal
                 isOpen={showClearDataConfirm}
                 onClose={() => setShowClearDataConfirm(false)}
-                onConfirm={handleClearData}
+                onConfirm={handleConfirmClearData}
                 title={t('confirmation.resetApp.title')}
                 message={t('confirmation.resetApp.message')}
                 confirmText={t('common.reset')}

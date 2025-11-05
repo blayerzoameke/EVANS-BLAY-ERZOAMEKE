@@ -1,374 +1,312 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
+import { storageService } from '../src/services/authService';
+import type { UserDetails, Toast } from '../types';
 
-import React, { useState, useEffect } from 'react';
-import { StarIcon } from './icons/StarIcon.tsx';
-import { ThumbsUpIcon } from './icons/ThumbsUpIcon.tsx';
-import { ChatBubbleIcon } from './icons/ChatBubbleIcon.tsx';
-import { TrendingUpIcon } from './icons/TrendingUpIcon.tsx';
-import { UserIcon } from './icons/UserIcon.tsx';
-import { AwardIcon } from './icons/AwardIcon.tsx';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
-import type { Note, StoredPlan } from '../types.ts';
-import { mockReviews } from '../data/mockReviews.ts';
+// Icons
+import { TrendingUpIcon } from './icons/TrendingUpIcon';
+import { UserIcon } from './icons/UserIcon';
+import { StarIcon } from './icons/StarIcon';
+import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
+import { DocumentIcon } from './icons/DocumentIcon';
+import { ThumbsUpIcon } from './icons/ThumbsUpIcon';
+import { SendIcon } from './icons/SendIcon';
 
 interface FeedbackProps {
-    notes: Note[];
-    savedTimetables: StoredPlan[];
-    totalUsers: number;
+    userDetails: UserDetails | null;
+    addToast: (message: string, type: Toast['type']) => void;
 }
 
-const calculateInitialStats = (reviews: any[]) => {
-    const totalRatings = reviews.length;
-    if (totalRatings === 0) {
-        return { averageRating: 0, totalRatings: 0, distribution: { '5': 0, '4': 0, '3': 0, '2': 0, '1': 0 } };
-    }
-    const distribution = { '5': 0, '4': 0, '3': 0, '2': 0, '1': 0 };
-    let totalScore = 0;
-    reviews.forEach(review => {
-        (distribution as any)[review.rating]++;
-        totalScore += review.rating;
+const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
+    const { t } = useLanguage();
+
+    const [globalStats, setGlobalStats] = useState({
+        studyMaterials: 0,
+        totalRatings: 0,
+        satisfaction: 0,
+        activeUsers: 0,
+        totalComments: 0,
+        averageRating: 0,
     });
-    const averageRating = parseFloat((totalScore / totalRatings).toFixed(1));
-    return { averageRating, totalRatings, distribution };
-};
 
-const Feedback: React.FC<FeedbackProps> = ({ notes, savedTimetables, totalUsers }) => {
-  const { t } = useLanguage();
-  const [userRating, setUserRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
-  const [review, setReview] = useState('');
-  const [hasRated, setHasRated] = useState(false);
-  const [showThankYou, setShowThankYou] = useState(false);
-  const [likedReviews, setLikedReviews] = useState<number[]>([]);
-  
-  const [stats, setStats] = useState({
-    averageRating: 0,
-    totalRatings: 0,
-    distribution: { '5': 0, '4': 0, '3': 0, '2': 0, '1': 0 }
-  });
-
-  const [recentReviews, setRecentReviews] = useState<any[]>([]);
-
-  useEffect(() => {
-    const savedData = localStorage.getItem('feedbackData');
-    if (savedData) {
-        const data = JSON.parse(savedData);
-        setStats(data.stats);
-        setRecentReviews(data.reviews);
-        setLikedReviews(data.likedReviews || []);
-        if (data.userRatingData) {
-            setUserRating(data.userRatingData.rating);
-            setReview(data.userRatingData.comment);
-            setHasRated(true);
+    const [allComments, setAllComments] = useState<any[]>([]);
+    const [newComment, setNewComment] = useState('');
+    const [newRating, setNewRating] = useState(0);
+    const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
+    const [hasRated, setHasRated] = useState(false);
+    const [likedComments, setLikedComments] = useState<string[]>([]);
+    
+    const getLocalStorageItem = (key: string, defaultValue: any) => {
+        try {
+            const item = localStorage.getItem(key);
+            return item ? JSON.parse(item) : defaultValue;
+        } catch (e) {
+            console.error(`Error reading ${key} from localStorage`, e);
+            return defaultValue;
         }
-    } else {
-        const initialStats = calculateInitialStats(mockReviews);
-        setStats(initialStats);
-        setRecentReviews(mockReviews);
-    }
-  }, []);
-
-  const persistFeedbackData = (data: any) => {
-    localStorage.setItem('feedbackData', JSON.stringify(data));
-  };
-
-  const handleRatingClick = (rating: number) => {
-    setUserRating(rating);
-  };
-
-  const handleSubmitRating = () => {
-    if (userRating === 0) {
-      alert('Please select a rating');
-      return;
-    }
-
-    const newReview = {
-        id: Date.now(),
-        name: 'You',
-        rating: userRating,
-        comment: review,
-        date: 'Just now',
-        helpful: 0
+    };
+    
+    const setLocalStorageItem = (key: string, value: any) => {
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+        } catch (e) {
+            console.error(`Error writing ${key} to localStorage`, e);
+        }
     };
 
-    const reviewsWithoutPreviousUser = recentReviews.filter(r => r.name !== 'You');
-    const updatedReviews = review.trim() ? [newReview, ...reviewsWithoutPreviousUser] : reviewsWithoutPreviousUser;
+    const loadGlobalData = useCallback(() => {
+        const stats = getLocalStorageItem('eduBlay_globalStats', {
+            totalRatings: 0,
+            satisfaction: 0,
+            totalComments: 0,
+            averageRating: 0
+        });
 
-    const allReviewsForStats = [...reviewsWithoutPreviousUser, { rating: userRating }];
-    const newStats = calculateInitialStats(allReviewsForStats);
-    
-    setStats(newStats);
-    setRecentReviews(updatedReviews);
-    setHasRated(true);
-    
-    persistFeedbackData({
-        stats: newStats,
-        reviews: updatedReviews,
-        userRatingData: { rating: userRating, comment: review },
-        likedReviews,
-    });
-    
-    setShowThankYou(true);
-    setTimeout(() => setShowThankYou(false), 3000);
-  };
+        const allAppUsers = storageService.loadItem<any[]>('users') || [];
+        stats.activeUsers = allAppUsers.length || 1;
 
-  const handleEditRating = () => {
-    setHasRated(false);
-  };
-
-  const handleLikeClick = (reviewId: number) => {
-    const isLiked = likedReviews.includes(reviewId);
-    const updatedLikedReviews = isLiked
-        ? likedReviews.filter(id => id !== reviewId)
-        : [...likedReviews, reviewId];
-    
-    setLikedReviews(updatedLikedReviews);
-
-    const updatedReviews = recentReviews.map(reviewItem => {
-        if (reviewItem.id === reviewId) {
-            return { ...reviewItem, helpful: isLiked ? reviewItem.helpful - 1 : reviewItem.helpful + 1 };
+        const allUsersData = storageService.loadItem<any>('usersData') || {};
+        let totalMaterials = 0;
+        for (const email in allUsersData) {
+            const userData = allUsersData[email];
+            if (userData) {
+                totalMaterials += (userData.notes?.length || 0);
+                totalMaterials += (userData.savedTimetables?.length || 0);
+            }
         }
-        return reviewItem;
-    });
+        stats.studyMaterials = totalMaterials;
+        setGlobalStats(stats);
+
+        const comments = getLocalStorageItem('eduBlay_comments', []);
+        setAllComments(comments.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+
+        if(currentUser?.id) {
+            const userFeedbackData = getLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, { rating: 0, likedComments: [] });
+            if (userFeedbackData.rating > 0) {
+                setNewRating(userFeedbackData.rating);
+                setHasRated(true);
+            } else {
+                setHasRated(false);
+                setNewRating(0);
+            }
+            setLikedComments(userFeedbackData.likedComments || []);
+        }
+    }, [currentUser]);
     
-    setRecentReviews(updatedReviews);
+    useEffect(() => {
+        if (userDetails?.email && userDetails.name) {
+             setCurrentUser({ id: userDetails.email, name: userDetails.name });
+        }
+    }, [userDetails]);
+
+    useEffect(() => {
+        loadGlobalData();
+        const interval = setInterval(loadGlobalData, 10000); // Refresh for real-time feel
+        return () => clearInterval(interval);
+    }, [currentUser, loadGlobalData]);
+
+    const handleRatingSubmit = () => {
+        if (newRating === 0) {
+            addToast(t('feedback.error.selectRating' as any), 'warning');
+            return;
+        }
+        if (hasRated) return;
+
+        const stats = getLocalStorageItem('eduBlay_globalStats', globalStats);
+        
+        const totalScore = (stats.averageRating * stats.totalRatings) + newRating;
+        stats.totalRatings += 1;
+        stats.averageRating = totalScore / stats.totalRatings;
+        stats.satisfaction = Math.round((stats.averageRating / 5) * 100);
+
+        setLocalStorageItem('eduBlay_globalStats', stats);
+        setGlobalStats(stats);
+        
+        if (currentUser) {
+            const userFeedbackData = getLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, { likedComments: [] });
+            userFeedbackData.rating = newRating;
+            setLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, userFeedbackData);
+        }
+
+        setHasRated(true);
+        addToast(t('feedback.ratingThankYou' as any), 'success');
+    };
+
+    const handleCommentSubmit = () => {
+        if (!newComment.trim()) {
+            addToast(t('feedback.error.writeComment' as any), 'warning');
+            return;
+        }
+        if (!currentUser) {
+            addToast(t('feedback.error.waitProfile' as any), 'error');
+            return;
+        }
+
+        const comments = getLocalStorageItem('eduBlay_comments', []);
+        comments.push({
+            id: Date.now().toString(),
+            userId: currentUser.id,
+            userName: currentUser.name,
+            text: newComment,
+            timestamp: new Date().toISOString(),
+            likes: 0
+        });
+        setLocalStorageItem('eduBlay_comments', comments);
+
+        const stats = getLocalStorageItem('eduBlay_globalStats', globalStats);
+        stats.totalComments = (stats.totalComments || 0) + 1;
+        setLocalStorageItem('eduBlay_globalStats', stats);
+
+        setNewComment('');
+        loadGlobalData();
+    };
+
+    const handleLikeComment = (commentId: string) => {
+        if (!currentUser) return;
+
+        let userFeedbackData = getLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, { likedComments: [] });
+        const userLikedComments = new Set(userFeedbackData.likedComments || []);
+        
+        const comments = getLocalStorageItem('eduBlay_comments', []);
+        const updatedComments = comments.map((c: any) => {
+            if (c.id === commentId) {
+                if (userLikedComments.has(commentId)) {
+                    userLikedComments.delete(commentId);
+                    return { ...c, likes: Math.max(0, c.likes - 1) };
+                } else {
+                    userLikedComments.add(commentId);
+                    return { ...c, likes: c.likes + 1 };
+                }
+            }
+            return c;
+        });
+        
+        setLocalStorageItem('eduBlay_comments', updatedComments);
+        userFeedbackData.likedComments = Array.from(userLikedComments);
+        setLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, userFeedbackData);
+        
+        loadGlobalData();
+    };
+
+    const getTimeAgo = (timestamp: string) => {
+        const now = new Date();
+        const past = new Date(timestamp);
+        const diffMs = now.getTime() - past.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return t('feedback.timeAgo.justNow' as any);
+        if (diffMins < 60) return t('feedback.timeAgo.minutes' as any, { count: diffMins });
+        if (diffHours < 24) return t('feedback.timeAgo.hours' as any, { count: diffHours });
+        if (diffDays < 30) return t('feedback.timeAgo.days' as any, { count: diffDays });
+        return past.toLocaleDateString();
+    };
+
+    const StatCard: React.FC<{ icon: React.ReactNode, value: string | number, label: string, gradient: string }> = ({ icon, value, label, gradient }) => (
+        <div className={`rounded-3xl p-6 shadow-2xl ${gradient}`}>
+            <div className="mb-4">{icon}</div>
+            <div className="text-5xl font-bold text-white mb-2">{value}</div>
+            <div className="text-sm font-medium text-white/80">{label}</div>
+        </div>
+    );
     
-    persistFeedbackData({
-        stats,
-        reviews: updatedReviews,
-        userRatingData: hasRated ? { rating: userRating, comment: review } : null,
-        likedReviews: updatedLikedReviews
-    });
-  };
-
-
-  const renderStars = (rating: number, interactive = false) => {
     return (
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            onClick={() => interactive && handleRatingClick(star)}
-            onMouseEnter={() => interactive && setHoverRating(star)}
-            onMouseLeave={() => interactive && setHoverRating(0)}
-            disabled={!interactive}
-            className={`transition-all ${interactive ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
-          >
-            <StarIcon
-              className={`w-8 h-8 ${
-                star <= (interactive ? (hoverRating || userRating) : rating)
-                  ? 'fill-yellow-400 text-yellow-400'
-                  : 'text-gray-300'
-              } transition-colors`}
-            />
-          </button>
-        ))}
-      </div>
-    );
-  };
-  
-    const renderSmallStars = (rating: number) => {
-    return (
-      <div className="flex gap-0.5">
-        {[1, 2, 3, 4, 5].map((star) => (
-            <StarIcon
-              key={star}
-              className={`w-5 h-5 ${
-                star <= rating
-                  ? 'fill-yellow-400 text-yellow-400'
-                  : 'text-gray-300'
-              } transition-colors`}
-            />
-        ))}
-      </div>
-    );
-  };
-
-  const calculatePercentage = (count: number) => {
-    if (stats.totalRatings === 0) return '0';
-    return ((count / stats.totalRatings) * 100).toFixed(0);
-  };
-  
-  const satisfactionPercentage = stats.totalRatings > 0 ? Math.round((stats.averageRating / 5) * 100) : 0;
-
-  return (
-    <div className="max-w-6xl mx-auto">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <AwardIcon className="text-yellow-500 w-8 h-8" />
-            {/* FIX: Argument of type '"feedback.title"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix. */}
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{t('feedback.title' as any)}</h1>
-          </div>
-          {/* FIX: Argument of type '"feedback.subtitle"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix. */}
-          <p className="text-gray-600 dark:text-gray-400">{t('feedback.subtitle' as any)}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl shadow-lg p-6 text-white mb-6">
-            <div className="flex items-center gap-3">
-                <TrendingUpIcon className="w-6 h-6" />
-                {/* FIX: Argument of type '"feedback.highlights.title"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix. */}
-                <h3 className="font-semibold text-lg">{t('feedback.highlights.title' as any)}</h3>
+        <div className="max-w-7xl mx-auto space-y-8">
+            <div className="text-center">
+                <h1 className="text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-2">{t('feedback.communityTitle' as any)}</h1>
+                <p className="text-gray-600 dark:text-blue-200 text-lg">{t('feedback.communitySubtitle' as any)}</p>
             </div>
-            <div className="mt-6 space-y-3">
-                <div className="flex justify-between items-baseline">
-                    <span className="font-bold text-2xl">{t('feedback.highlights.activeUsers')}</span>
-                    <p className="font-bold text-2xl">{totalUsers}</p>
-                </div>
-                <div className="flex justify-between items-baseline">
-                    {/* FIX: Argument of type '"feedback.highlights.totalRatings"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix. */}
-                    <span className="font-bold text-2xl">{t('feedback.highlights.totalRatings' as any)}</span>
-                    <p className="font-bold text-2xl">{stats.totalRatings}</p>
-                </div>
-                <div className="flex justify-between items-baseline">
-                    {/* FIX: Argument of type '"feedback.highlights.satisfaction"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix. */}
-                    <span className="font-bold text-2xl">{t('feedback.highlights.satisfaction' as any)}</span>
-                    <p className="font-bold text-2xl">{satisfactionPercentage}%</p>
-                </div>
-            </div>
-        </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-              <div className="text-center mb-4">
-                {stats.totalRatings > 0 ? (
-                    <>
-                        <div className="text-5xl font-bold text-gray-800 dark:text-white mb-2">
-                          {stats.averageRating}
-                        </div>
-                        <div className="flex justify-center mb-2">
-                          {renderSmallStars(Math.round(stats.averageRating))}
-                        </div>
-                        <div className="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
-                          <UserIcon className="w-4 h-4" />
-                          <span className="text-sm">{stats.totalRatings.toLocaleString()} ratings</span>
-                        </div>
-                    </>
-                ) : (
-                    <div className="py-4">
-                        <p className="text-xl font-bold text-gray-700 dark:text-gray-300">No Ratings Yet</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Be the first to share your feedback!</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard icon={<DocumentIcon className="text-yellow-300" width={32} height={32} />} value={globalStats.studyMaterials} label={t('feedback.studyMaterials' as any)} gradient="bg-gradient-to-br from-slate-700 to-slate-800" />
+                <StatCard icon={<StarIcon className="text-yellow-300" width={32} height={32} />} value={globalStats.totalRatings} label={t('feedback.highlights.totalRatings' as any)} gradient="bg-gradient-to-br from-blue-600 to-blue-700" />
+                <StatCard icon={<TrendingUpIcon className="text-white" width={32} height={32} />} value={`${globalStats.satisfaction}%`} label={t('feedback.highlights.satisfaction' as any)} gradient="bg-gradient-to-br from-green-600 to-green-700" />
+                <StatCard icon={<UserIcon className="text-white" width={32} height={32} />} value={globalStats.activeUsers} label={t('feedback.highlights.activeUsers')} gradient="bg-gradient-to-br from-purple-600 to-purple-700" />
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-6">
+                        <StarIcon className="text-yellow-400" width={28} height={28} />
+                        <h2 className="text-2xl font-bold">{t('feedback.rateAppTitle' as any)}</h2>
                     </div>
-                )}
-              </div>
 
-              <div className="space-y-2 mt-6">
-                {[5, 4, 3, 2, 1].map((stars) => (
-                  <div key={stars} className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400 w-8">{stars}★</span>
-                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-yellow-400 h-full transition-all"
-                        style={{ width: `${calculatePercentage((stats.distribution as any)[stars])}%` }}
-                      />
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">{t('feedback.ratingDesc' as any)}</p>
+
+                    <div className="flex justify-center gap-3 mb-6">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <button key={star} onClick={() => !hasRated && setNewRating(star)} className="transition-transform hover:scale-110 disabled:cursor-not-allowed" disabled={hasRated}>
+                                <StarIcon width={48} height={48} className={`w-10 h-10 ${star <= newRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300 dark:text-gray-600'} transition-colors`} />
+                            </button>
+                        ))}
                     </div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400 w-10 text-right">
-                      {calculatePercentage((stats.distribution as any)[stars])}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
 
-          <div className="lg:col-span-2 space-y-6">
-            {showThankYou && (
-              <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-2xl p-6 flex items-center gap-4 animate-fade-in-down">
-                <ThumbsUpIcon className="text-green-600 w-8 h-8" />
-                <div>
-                  <h3 className="font-bold text-green-800 dark:text-green-300 text-lg">Thank You!</h3>
-                  <p className="text-green-700 dark:text-green-400">Your feedback helps us improve</p>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">
-                {hasRated ? 'Your Rating' : 'Rate Your Experience'}
-              </h2>
-
-              <div className="mb-6">
-                {/* FIX: Argument of type '"feedback.ratingDesc"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix. */}
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t('feedback.ratingDesc' as any)}</label>
-                {renderStars(userRating, !hasRated)}
-                {userRating > 0 && (
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    {userRating === 5 ? '⭐ Excellent!' :
-                     userRating === 4 ? '😊 Great!' :
-                     userRating === 3 ? '👍 Good' :
-                     userRating === 2 ? '😐 Okay' : '😔 Needs improvement'}
-                  </p>
-                )}
-              </div>
-
-              <div className="mb-6">
-                {/* FIX: Argument of type '"feedback.comments"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix. */}
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('feedback.comments' as any)}</label>
-                <textarea
-                  value={review}
-                  onChange={(e) => setReview(e.target.value)}
-                  disabled={hasRated}
-                  placeholder={t('feedback.commentsPlaceholder' as any)}
-                  className="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white text-gray-900 dark:bg-gray-700 dark:text-gray-100 resize-none disabled:bg-gray-50 dark:disabled:bg-gray-700/50"
-                  rows={4}
-                />
-              </div>
-
-              {!hasRated ? (
-                <button
-                  onClick={handleSubmitRating}
-                  className="w-full bg-primary text-primary-text py-3 rounded-lg hover:bg-primary-dark transition-colors font-medium"
-                >
-                  Submit Rating
-                </button>
-              ) : (
-                <button
-                  onClick={handleEditRating}
-                  className="w-full bg-gray-600 text-white py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium"
-                >
-                  Edit Rating
-                </button>
-              )}
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
-              <div className="flex items-center gap-2 mb-6">
-                <ChatBubbleIcon className="text-primary w-6 h-6" />
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Recent Reviews</h2>
-              </div>
-
-              <div className="space-y-4">
-                {recentReviews.length > 0 ? recentReviews.map((reviewItem) => {
-                    const isLiked = likedReviews.includes(reviewItem.id);
-                    return (
-                      <div key={reviewItem.id} className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-0">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <p className="font-semibold text-gray-800 dark:text-gray-200">{reviewItem.name}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              {renderSmallStars(reviewItem.rating)}
-                              <span className="text-xs text-gray-500 dark:text-gray-400">{reviewItem.date}</span>
+                    <button onClick={handleRatingSubmit} disabled={hasRated || newRating === 0} className="w-full bg-primary text-primary-text py-3 rounded-xl hover:bg-primary-dark transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                        {hasRated ? t('feedback.ratingThankYou' as any) : t('feedback.submitRating' as any)}
+                    </button>
+                    {globalStats.totalRatings > 0 && (
+                        <div className="mt-6 p-4 bg-gray-100 dark:bg-gray-700/50 rounded-xl">
+                            <div className="flex items-center justify-between">
+                                <span className="text-gray-600 dark:text-gray-300">{t('feedback.averageRating' as any)}</span>
+                                <div className="flex items-center gap-2">
+                                    <StarIcon className="fill-yellow-400 text-yellow-400" width={20} height={20} />
+                                    <span className="font-bold text-xl">{globalStats.averageRating.toFixed(1)} / 5</span>
+                                </div>
                             </div>
-                          </div>
                         </div>
-                        <p className="text-gray-700 dark:text-gray-300 text-sm mb-2">{reviewItem.comment}</p>
-                        <button 
-                            onClick={() => handleLikeClick(reviewItem.id)}
-                            className={`flex items-center gap-1 text-xs transition-colors ${isLiked ? 'text-primary font-semibold' : 'text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary-light'}`}
-                        >
-                          <ThumbsUpIcon className={`w-3.5 h-3.5 ${isLiked ? 'fill-primary' : ''}`} />
-                          Helpful ({reviewItem.helpful})
-                        </button>
-                      </div>
-                    )
-                }) : (
-                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">Be the first to leave a review!</p>
-                )}
-              </div>
+                    )}
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border dark:border-gray-700">
+                    <div className="flex items-center gap-3 mb-6">
+                        <ChatBubbleIcon className="text-blue-500" width={28} height={28} />
+                        <h2 className="text-2xl font-bold">{t('feedback.shareThoughtsTitle' as any)}</h2>
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">{t('feedback.shareThoughtsSubtitle' as any)}</p>
+                    <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder={t('feedback.commentPlaceholder' as any)} className="w-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-primary resize-none mb-4" rows={3}/>
+                    <button onClick={handleCommentSubmit} disabled={!newComment.trim()} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-500 transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2">
+                        <SendIcon width={20} height={20} />{t('feedback.postComment' as any)}
+                    </button>
+                    <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                        {t('feedback.totalComments' as any, { count: globalStats.totalComments })}
+                    </div>
+                </div>
             </div>
-          </div>
+            
+            <div className="mt-8 bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border dark:border-gray-700">
+                <div className="flex items-center gap-3 mb-6">
+                    <ChatBubbleIcon className="text-green-500" width={28} height={28} />
+                    <h2 className="text-2xl font-bold">{t('feedback.communityFeedbackTitle' as any)}</h2>
+                </div>
+
+                {allComments.length === 0 ? (
+                    <div className="text-center py-12">
+                        <ChatBubbleIcon className="mx-auto mb-4 text-gray-300 dark:text-gray-600" width={64} height={64} />
+                        <p className="text-gray-500 dark:text-gray-400 text-lg">{t('feedback.noComments' as any)}</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                        {allComments.map((comment) => (
+                            <div key={comment.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-start justify-between mb-3">
+                                    <div>
+                                        <p className="font-bold text-lg">{comment.userName}</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">{getTimeAgo(comment.timestamp)}</p>
+                                    </div>
+                                    <button onClick={() => handleLikeComment(comment.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${likedComments.includes(comment.id) ? 'bg-primary/10 text-primary' : 'bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500'}`}>
+                                        <ThumbsUpIcon width={16} height={16} />
+                                        <span className="font-semibold text-sm">{comment.likes}</span>
+                                    </button>
+                                </div>
+                                <p className="text-base leading-relaxed">{comment.text}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
-    </div>
-  );
+    );
 };
 
 export default Feedback;

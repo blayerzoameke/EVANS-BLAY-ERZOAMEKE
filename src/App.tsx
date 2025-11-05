@@ -14,7 +14,7 @@ import Feedback from '../components/Feedback';
 import Help from '../components/Help';
 import About from '../components/About';
 import UploadSlides from '../components/UploadSlides';
-import ExamPrep from '../components/ExamPrep';
+import { ExamPrep } from '../components/ExamPrep';
 import BreakView from '../components/BreakView';
 import FocusedStudyView from '../components/FocusedStudyView';
 import Library from '../components/Library';
@@ -381,7 +381,8 @@ const App: React.FC = () => {
       case 'notification':
         return <NotificationSettingsComponent settings={notificationSettings} setSettings={setNotificationSettings} />;
       case 'settings':
-        return <Settings addToast={addToast} />;
+        // FIX: Pass the 'handleLogout' function to the Settings component as a required prop.
+        return <Settings addToast={addToast} handleLogout={handleLogout} />;
       case 'report':
         return <Reports 
                     userDetails={userDetails} 
@@ -389,10 +390,12 @@ const App: React.FC = () => {
                     setReportDraft={setReportDraft}
                     addToast={addToast}
                 />;
+// FIX: The Feedback component was being passed incorrect props. It should receive `userDetails` and `addToast`. The logic for calculating total users and materials is handled within the component itself from local storage.
       case 'feedback': {
-        const allUsers = storageService.loadItem<any[]>('users') || [];
-        const totalUsersCount = allUsers.length > 0 ? allUsers.length : (isLoggedIn ? 1 : 0);
-        return <Feedback notes={notes} savedTimetables={savedTimetables} totalUsers={totalUsersCount} />;
+        return <Feedback 
+                    userDetails={userDetails} 
+                    addToast={addToast} 
+                />;
       }
       case 'help':
         return <Help setView={setView} />;

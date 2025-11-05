@@ -24,11 +24,9 @@ interface TutorialStepProps {
     titleKey: string;
     descKey: string;
     Icon: React.FC<React.SVGProps<SVGSVGElement>>;
-    imageSrc: string;
-    altKey: string;
 }
 
-const TutorialStep: React.FC<TutorialStepProps> = ({ step, titleKey, descKey, Icon, imageSrc, altKey }) => {
+const TutorialStep: React.FC<TutorialStepProps> = ({ step, titleKey, descKey, Icon }) => {
     const { t } = useLanguage();
 
     return (
@@ -43,13 +41,6 @@ const TutorialStep: React.FC<TutorialStepProps> = ({ step, titleKey, descKey, Ic
                     </h3>
                     <p className="text-gray-600 dark:text-gray-300">{t(descKey as any)}</p>
                 </div>
-            </div>
-            <div className="mt-4 relative group">
-                <img 
-                    src={imageSrc} 
-                    alt={t(altKey as any)} 
-                    className="rounded-lg shadow-md w-full"
-                />
             </div>
         </div>
     );
@@ -82,16 +73,16 @@ const Tutorial: React.FC<TutorialProps> = ({ addToast, tutorialVideoUrl, setTuto
     };
 
     const steps = [
-        { step: 1, titleKey: 'tutorial.step1.title', descKey: 'tutorial.step1.desc', altKey: 'tutorial.step1.alt', Icon: UserCircleIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step1.png' },
-        { step: 2, titleKey: 'tutorial.step2.title', descKey: 'tutorial.step2.desc', altKey: 'tutorial.step2.alt', Icon: UploadCloudIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step2.png' },
-        { step: 3, titleKey: 'tutorial.step3.title', descKey: 'tutorial.step3.desc', altKey: 'tutorial.step3.alt', Icon: EditIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step3.png' },
-        { step: 4, titleKey: 'tutorial.step4.title', descKey: 'tutorial.step4.desc', altKey: 'tutorial.step4.alt', Icon: CalendarIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step4.png' },
-        { step: 5, titleKey: 'tutorial.step5.title', descKey: 'tutorial.step5.desc', altKey: 'tutorial.step5.alt', Icon: BookOpenIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step5.png' },
-        { step: 6, titleKey: 'tutorial.step6.title', descKey: 'tutorial.step6.desc', altKey: 'tutorial.step6.alt', Icon: ChatBubbleIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step6.png' },
-        { step: 7, titleKey: 'tutorial.step7.title', descKey: 'tutorial.step7.desc', altKey: 'tutorial.step7.alt', Icon: QuizIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step7.png' },
-        { step: 8, titleKey: 'tutorial.step8.title', descKey: 'tutorial.step8.desc', altKey: 'tutorial.step8.alt', Icon: CalculatorIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step8.png' },
-        { step: 9, titleKey: 'tutorial.step9.title', descKey: 'tutorial.step9.desc', altKey: 'tutorial.step9.alt', Icon: ChartBarIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step9.png' },
-        { step: 10, titleKey: 'tutorial.step10.title', descKey: 'tutorial.step10.desc', altKey: 'tutorial.step10.alt', Icon: DocumentDuplicateIcon, defaultImageSrc: 'https://storage.googleapis.com/edublay-assets/tutorial_step10.png' },
+        { step: 1, titleKey: 'tutorial.step1.title', descKey: 'tutorial.step1.desc', Icon: UserCircleIcon },
+        { step: 2, titleKey: 'tutorial.step2.title', descKey: 'tutorial.step2.desc', Icon: UploadCloudIcon },
+        { step: 3, titleKey: 'tutorial.step3.title', descKey: 'tutorial.step3.desc', Icon: EditIcon },
+        { step: 4, titleKey: 'tutorial.step4.title', descKey: 'tutorial.step4.desc', Icon: CalendarIcon },
+        { step: 5, titleKey: 'tutorial.step5.title', descKey: 'tutorial.step5.desc', Icon: BookOpenIcon },
+        { step: 6, titleKey: 'tutorial.step6.title', descKey: 'tutorial.step6.desc', Icon: ChatBubbleIcon },
+        { step: 7, titleKey: 'tutorial.step7.title', descKey: 'tutorial.step7.desc', Icon: QuizIcon },
+        { step: 8, titleKey: 'tutorial.step8.title', descKey: 'tutorial.step8.desc', Icon: CalculatorIcon },
+        { step: 9, titleKey: 'tutorial.step9.title', descKey: 'tutorial.step9.desc', Icon: ChartBarIcon },
+        { step: 10, titleKey: 'tutorial.step10.title', descKey: 'tutorial.step10.desc', Icon: DocumentDuplicateIcon },
     ];
 
     return (
@@ -140,20 +131,15 @@ const Tutorial: React.FC<TutorialProps> = ({ addToast, tutorialVideoUrl, setTuto
                 </section>
                 
                 <div className="space-y-6">
-                    {steps.map(stepInfo => {
-                        const imageSrc = stepInfo.defaultImageSrc;
-                        return (
-                             <TutorialStep 
-                                key={stepInfo.step}
-                                step={stepInfo.step}
-                                titleKey={stepInfo.titleKey}
-                                descKey={stepInfo.descKey}
-                                Icon={stepInfo.Icon}
-                                imageSrc={imageSrc}
-                                altKey={stepInfo.altKey}
-                            />
-                        )
-                    })}
+                    {steps.map(stepInfo => (
+                         <TutorialStep 
+                            key={stepInfo.step}
+                            step={stepInfo.step}
+                            titleKey={stepInfo.titleKey}
+                            descKey={stepInfo.descKey}
+                            Icon={stepInfo.Icon}
+                        />
+                    ))}
                 </div>
             </div>
         </>

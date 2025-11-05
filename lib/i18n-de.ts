@@ -1,4 +1,3 @@
-
 export const translations = {
     "common.save": "Speichern",
     "common.cancel": "Abbrechen",
@@ -225,6 +224,7 @@ export const translations = {
     "toasts.examprep.verifyingImage": "Bild wird überprüft...",
     "toasts.examprep.validImage": "Bild ist ein gültiges Problem.",
     "toasts.examprep.invalidImage": "Bild scheint kein Problem zu sein.",
+    "toasts.examprep.notASolvableProblem": "Die Eingabe scheint kein lösbares Problem oder eine darstellbare Funktion zu sein.",
     "toasts.examprep.verifyImageFailed": "Überprüfung des Bildes fehlgeschlagen.",
     "toasts.examprep.speechUnsupported": "Die Spracherkennung wird von Ihrem Browser nicht unterstützt.",
     "toasts.examprep.speechError": "Spracherkennungsfehler: {error}",
@@ -352,6 +352,7 @@ export const translations = {
     "uploadslides.selectAction": "Wählen Sie eine Aktion, um zu beginnen.",
     "uploadslides.fileFormatHint": "PDF, PPTX, DOCX, JPG, PNG (Max 25MB)",
     "uploadslides.loading.content": "Inhalt wird geladen...",
+
     "readAloud.speed": "Geschwindigkeit",
     "readAloud.volume": "Lautstärke",
     "readAloud.pageOf": "Seite {current} von {total}",
@@ -666,6 +667,7 @@ export const translations = {
     "cameraModal.error.permissionDenied": "Der Kamerazugriff wurde verweigert. Bitte erlauben Sie den Kamerazugriff in Ihren Browsereinstellungen, um diese Funktion zu nutzen.",
     "cameraModal.error.noCamera": "Auf Ihrem Gerät wurde keine Kamera gefunden.",
     "cameraModal.error.generic": "Beim Zugriff auf die Kamera ist ein unerwarteter Fehler aufgetreten.",
+    "cameraModal.error.notReadable": "Ihre Kamera konnte nicht gestartet werden. Möglicherweise wird sie von einer anderen Anwendung verwendet.",
     "cameraModal.title": "Problem erfassen",
     "cameraModal.error.title": "Kamerafehler",
     "cameraModal.captureButton": "Erfassen",
@@ -679,5 +681,19 @@ export const translations = {
     "tutorial.image.change": "Ändern",
     "timeInput.placeholder": "HH:MM AM/PM",
     "timeInput.noMatch": "Keine passenden Zeiten",
-    "searchableDropdown.noResults": "Keine Ergebnisse gefunden"
-}
+    "searchableDropdown.noResults": "Keine Ergebnisse gefunden",
+    "settings.title": "Einstellungen",
+    "settings.subtitle": "Verwalten Sie Ihre Anwendungseinstellungen und Daten.",
+    "settings.appSettings.title": "Anwendungseinstellungen",
+    "settings.data.title": "Datenverwaltung",
+    "settings.data.desc": "Exportieren Sie Ihre App-Daten zur Sicherung oder importieren Sie sie auf einem anderen Gerät.",
+    "settings.data.export": "Daten exportieren",
+    "settings.data.import": "Daten importieren",
+    "settings.data.clear": "Alle Daten löschen",
+    "settings.importSuccess": "Daten erfolgreich importiert! Bitte aktualisieren Sie die Seite.",
+    "settings.importError": "Importieren der Daten fehlgeschlagen. Die Datei könnte beschädigt sein.",
+    "settings.clearSuccess": "Alle Daten wurden gelöscht. Die App wird nun neu geladen.",
+    "settings.exportSuccess": "Daten erfolgreich exportiert! Überprüfen Sie Ihren Download-Ordner.",
+    "settings.clearSuccessTitle": "Daten erfolgreich gelöscht",
+    "settings.clearSuccessBody": "Alle Ihre Anwendungsdaten wurden entfernt. Die Anwendung wird nun neu gestartet, um eine neue Sitzung zu beginnen."
+};

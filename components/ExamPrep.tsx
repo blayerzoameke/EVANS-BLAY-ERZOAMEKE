@@ -198,9 +198,9 @@ const GraphRenderer: React.FC<{ chartConfig: any; canvasRef: React.RefObject<HTM
 
 
 const FormattedContent: React.FC<{ content: string }> = React.memo(({ content }) => {
-    const renderInlineElements = (line: string) => {
+    const renderInlineElements = (text: string) => {
         const inlineRegex = /(\$\$[\s\S]*?\$\$)|(\$.*?\$)|(\*\*.*?\*\*)|(`.*?`)/g;
-        const parts = line.split(inlineRegex).filter(Boolean);
+        const parts = text.split(inlineRegex).filter(Boolean);
         return parts.map((part, index) => {
             if (part.startsWith('$$') && part.endsWith('$$')) {
                 return <KatexRenderer key={index} content={part.slice(2, -2)} displayMode={true} />;
@@ -241,9 +241,19 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
                 const lines = block.split('\n');
                 const elements: React.ReactNode[] = [];
                 let listItems: string[] = [];
+                let paragraphLines: string[] = [];
                 let inList = false;
 
+                const flushParagraph = () => {
+                    if (paragraphLines.length > 0) {
+                        const paragraphText = paragraphLines.join('\n');
+                        elements.push(<p key={`p-${elements.length}`} className="my-2">{renderInlineElements(paragraphText)}</p>);
+                        paragraphLines = [];
+                    }
+                };
+
                 const flushList = () => {
+                    flushParagraph();
                     if (listItems.length > 0) {
                         elements.push(
                             <ul key={`ul-${elements.length}`} className="list-disc pl-6 my-2 space-y-1">
@@ -259,29 +269,37 @@ const FormattedContent: React.FC<{ content: string }> = React.memo(({ content })
 
                 lines.forEach((line) => {
                     if (line.match(/^###\s/)) {
+                        flushParagraph();
                         flushList();
                         elements.push(<h4 key={elements.length} className="font-bold text-lg mt-4 mb-2">{renderInlineElements(line.replace(/^###\s/, ''))}</h4>);
                     } else if (line.match(/^##\s/)) {
+                        flushParagraph();
                         flushList();
                         elements.push(<h3 key={elements.length} className="font-bold text-xl mt-5 mb-2">{renderInlineElements(line.replace(/^##\s/, ''))}</h3>);
                     } else if (line.match(/^#\s/)) {
+                        flushParagraph();
                         flushList();
                         elements.push(<h2 key={elements.length} className="font-bold text-2xl mt-6 mb-3">{renderInlineElements(line.replace(/^#\s/, ''))}</h2>);
                     } else if (line.match(/^\s*---\s*$/)) {
+                        flushParagraph();
                         flushList();
                         elements.push(<hr key={elements.length} className="my-4" />);
                     } else if (line.match(/^\s*(\*|-)\s/)) {
+                        flushParagraph();
                         listItems.push(line.replace(/^\s*(\*|-)\s/, ''));
                         inList = true;
                     } else if (line.trim() !== '') {
-                        flushList();
-                        elements.push(<p key={elements.length} className="my-2">{renderInlineElements(line)}</p>);
+                        if (inList) flushList();
+                        paragraphLines.push(line);
                     } else { // Empty line
+                        flushParagraph();
                         flushList();
                     }
                 });
 
+                flushParagraph();
                 flushList();
+                
                 return <React.Fragment key={index}>{elements}</React.Fragment>;
             })}
         </div>
@@ -456,7 +474,7 @@ const QuizSummaryView: React.FC<{
     );
 };
 
-const ExamPrep: React.FC<ExamPrepProps> = ({
+export const ExamPrep: React.FC<ExamPrepProps> = ({
     addToast,
     setView,
     generationState,
@@ -1015,4 +1033,5 @@ const ExamPrep: React.FC<ExamPrepProps> = ({
     );
 };
 
+// No default export was provided. Adding one.
 export default ExamPrep;
