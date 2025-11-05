@@ -72,6 +72,7 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
             if (userData) {
                 totalMaterials += (userData.notes?.length || 0);
                 totalMaterials += (userData.savedTimetables?.length || 0);
+                totalMaterials += (userData.uploadedMaterials?.length || 0);
             }
         }
         stats.studyMaterials = totalMaterials;

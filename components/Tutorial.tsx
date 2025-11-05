@@ -56,7 +56,7 @@ const getEmbedUrl = (url: string): string => {
         } else if (urlObj.hostname.includes('youtu.be')) {
             videoId = urlObj.pathname.slice(1);
         }
-        return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+        return videoId ? `https://www.youtube.com/embed/${videoId}?origin=${window.location.origin}` : url;
     } catch (e) {
         return url; // Return original if parsing fails
     }

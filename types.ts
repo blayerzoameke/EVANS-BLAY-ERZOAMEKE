@@ -175,6 +175,14 @@ export interface UploadedFile {
     context: string;
 }
 
+export interface UploadedMaterialInfo {
+    name: string;
+    type: string;
+    size: number;
+    context: string;
+    uploadedAt: string;
+}
+
 export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'read' | 'chat' | 'read-focus' | 'actions';
 
 export interface LearningHubState {

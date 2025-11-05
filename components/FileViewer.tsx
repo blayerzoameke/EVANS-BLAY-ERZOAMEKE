@@ -252,16 +252,16 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
     return (
         <div className="w-full h-full bg-gray-200 dark:bg-gray-900 rounded-lg overflow-hidden relative flex flex-col">
             {showControls && (isPdf || isImage) && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-full shadow-lg flex items-center gap-2 p-2">
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-gray-100/90 dark:bg-gray-800/90 backdrop-blur-md rounded-full shadow-lg flex items-center gap-2 p-2 border border-gray-300 dark:border-gray-700">
                     {isPdf && (
                         <>
-                             <button onClick={() => setLayoutMode(layoutMode === 'vertical' ? 'horizontal' : 'vertical')} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title={layoutMode === 'vertical' ? t('fileviewer.layout.horizontal') : t('fileviewer.layout.vertical')}>
+                             <button onClick={() => setLayoutMode(layoutMode === 'vertical' ? 'horizontal' : 'vertical')} className="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" title={layoutMode === 'vertical' ? t('fileviewer.layout.horizontal') : t('fileviewer.layout.vertical')}>
                                 {layoutMode === 'vertical' ? <LayoutHorizontalIcon className="w-5 h-5" /> : <LayoutVerticalIcon className="w-5 h-5" />}
                             </button>
                             <div className="w-px h-5 bg-gray-300 dark:bg-gray-600"></div>
                         </>
                     )}
-                    <button onClick={handleZoomOut} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="Zoom Out"><ZoomOutIcon className="w-5 h-5" /></button>
+                    <button onClick={handleZoomOut} className="p-1 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" title="Zoom Out"><ZoomOutIcon className="w-5 h-5" /></button>
                     
                     <input 
                         type="range" 
@@ -274,16 +274,16 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
                         aria-label="Zoom slider"
                     />
 
-                    <button onClick={handleZoomIn} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="Zoom In"><ZoomInIcon className="w-5 h-5" /></button>
+                    <button onClick={handleZoomIn} className="p-1 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" title="Zoom In"><ZoomInIcon className="w-5 h-5" /></button>
                     
                     <div className="w-px h-5 bg-gray-300 dark:bg-gray-600"></div>
                     
-                    <button onClick={handleFitToPage} className={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 ${zoomMode === 'fit-page' ? 'text-primary' : ''}`} title={t('fileviewer.zoom.fitPage')}><FitToPageIcon className="w-5 h-5" /></button>
-                    <button onClick={handleFitToWidth} className={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 ${zoomMode === 'fit-width' ? 'text-primary' : ''}`} title={t('fileviewer.zoom.fitWidth')}><FitToWidthIcon className="w-5 h-5" /></button>
+                    <button onClick={handleFitToPage} className={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 ${zoomMode === 'fit-page' ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`} title={t('fileviewer.zoom.fitPage')}><FitToPageIcon className="w-5 h-5" /></button>
+                    <button onClick={handleFitToWidth} className={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 ${zoomMode === 'fit-width' ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`} title={t('fileviewer.zoom.fitWidth')}><FitToWidthIcon className="w-5 h-5" /></button>
 
                     <div className="w-px h-5 bg-gray-300 dark:bg-gray-600"></div>
 
-                    <button onClick={handleZoomReset} className="text-sm font-semibold px-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md" title="Reset Zoom">
+                    <button onClick={handleZoomReset} className="text-sm font-semibold px-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md" title="Reset Zoom">
                         {Math.round(zoom * 100)}%
                     </button>
                 </div>

@@ -335,6 +335,9 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                             isStudyModeView={true}
                             intendedStudyContext={null}
                             setIntendedStudyContext={dummySetState as any}
+                            // FIX: Add missing properties to satisfy UploadSlidesProps
+                            uploadedMaterials={[]}
+                            setUploadedMaterials={dummySetState as any}
                         />
                     ) : (
                         <div className="h-full flex items-center justify-center text-center text-gray-500 bg-gray-100 dark:bg-gray-800/50 rounded-lg">

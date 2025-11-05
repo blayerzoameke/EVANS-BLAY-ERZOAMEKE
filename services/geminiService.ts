@@ -303,9 +303,12 @@ export const generateQuiz = async (
 
         The output must be a JSON array of QuizQuestion objects matching the provided schema.
         A QuizQuestion is { question: string; options?: string[]; correctAnswer: string; explanation: string; topic: string; type: QuizType }.
-        - For 'Multiple Choice' questions, provide an 'options' array of 4 strings.
-        - 'correctAnswer' must exactly match one of the options for MCQ.
-        - 'explanation' should clarify why the correct answer is right.
+        
+        Rules:
+        - For 'Multiple Choice' (MCQ) questions, YOU MUST provide an 'options' array of 4 strings. The 'correctAnswer' must exactly match one of the options.
+        - For 'Theory-based' questions, YOU MUST NOT provide an 'options' array. The 'correctAnswer' should be a detailed, ideal answer to the question.
+        - For 'Conceptual' questions, you can generate a mix of MCQ and Theory-based questions. If a question is MCQ-style, provide an 'options' array. If it's open-ended, do not provide an 'options' array.
+        - 'explanation' should clarify why the correct answer is right, or provide more context for theory questions.
         - 'topic' should be a short phrase identifying the question's subject.
         - Ensure questions and answers are formatted with markdown where appropriate (e.g., for code or formulas).
         - Do NOT include any markdown or commentary outside of the JSON.

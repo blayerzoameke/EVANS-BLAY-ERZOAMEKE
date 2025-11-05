@@ -328,7 +328,7 @@ const QuizRunner: React.FC<{
         setSelectedAnswer(''); // Reset when question changes
     }, [currentQuestionIndex]);
 
-    const isMCQ = currentQuestion.type === QuizType.MCQ && currentQuestion.options && currentQuestion.options.length > 0;
+    const isMCQ = !!currentQuestion.options && currentQuestion.options.length > 0;
     const inputClasses = "block w-full px-3 py-2 bg-gray-700 dark:bg-gray-700 border border-gray-500 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 text-white dark:text-gray-200 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm";
 
     return (

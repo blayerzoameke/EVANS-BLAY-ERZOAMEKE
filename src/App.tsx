@@ -28,7 +28,7 @@ import NotificationManager from '../components/NotificationManager';
 import Welcome from '../components/Welcome';
 import { getCurrentUser, logout, storageService } from './services/authService';
 
-import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, PlanSlot, View } from '../types';
+import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, PlanSlot, View, UploadedMaterialInfo } from '../types';
 import { QuizType, ActivityType } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { timeToMinutes } from '../lib/utils';
@@ -102,6 +102,7 @@ const App: React.FC = () => {
   const [learningHubState, setLearningHubState] = useState<LearningHubState>({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
   const [trackedData, setTrackedData] = useState<TrackedSession[]>([]);
+  const [uploadedMaterials, setUploadedMaterials] = useState<UploadedMaterialInfo[]>([]);
   const [generationState, setGenerationState] = useState<GenerationState>({ isLoading: false, message: '', error: null, source: null });
   const [quizState, setQuizState] = useState<QuizState>(defaultQuizState);
   const [intendedStudyContext, setIntendedStudyContext] = useState<{ subject: string; fromSlot: PlanSlot } | null>(null);
@@ -131,6 +132,7 @@ const App: React.FC = () => {
         notes,
         notificationSettings,
         trackedData,
+        uploadedMaterials,
         quizState: {
             quiz: quizState.quiz,
             currentQuestionIndex: quizState.currentQuestionIndex,
@@ -140,7 +142,7 @@ const App: React.FC = () => {
     allUsersData[userDetails.email] = currentUserData;
     storageService.saveItem('usersData', allUsersData);
 
-  }, [userDetails, smartPlan, savedTimetables, notes, notificationSettings, trackedData, quizState]);
+  }, [userDetails, smartPlan, savedTimetables, notes, notificationSettings, trackedData, quizState, uploadedMaterials]);
 
     const loadUserData = useCallback((user: UserDetails) => {
         const allUsersData = storageService.loadItem<any>('usersData') || {};
@@ -173,6 +175,7 @@ const App: React.FC = () => {
         setSavedTimetables(userData.savedTimetables || []);
         setNotes(userData.notes || []);
         setTrackedData(userData.trackedData || []);
+        setUploadedMaterials(userData.uploadedMaterials || []);
         setNotificationSettings(userData.notificationSettings || defaultNotificationSettings);
         
         if (userData.quizState && userData.quizState.quiz?.length > 0) {
@@ -234,6 +237,7 @@ const App: React.FC = () => {
     setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
     setNotificationSettings(defaultNotificationSettings);
     setTrackedData([]);
+    setUploadedMaterials([]);
     setQuizState(defaultQuizState);
     setDashboardInputs({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false, isEditing: false });
     setExamPrepState({ mode: 'quiz', topic: '', numQuestions: 5, quizType: QuizType.MCQ, uploadedFiles: [], focusArea: '', isVerifying: false, questionImage: null, questionText: '', solution: null, outputFormat: 'steps', programmingLanguage: 'python', graphInterval: '', graphYInterval: '' });
@@ -360,6 +364,8 @@ const App: React.FC = () => {
                   setNotes={setNotes}
                   intendedStudyContext={intendedStudyContext}
                   setIntendedStudyContext={setIntendedStudyContext}
+                  uploadedMaterials={uploadedMaterials}
+                  setUploadedMaterials={setUploadedMaterials}
                 />;
       case 'examprep':
         return <ExamPrep 

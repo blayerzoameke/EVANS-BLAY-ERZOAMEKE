@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import katex from 'katex';
-import type { SmartPlan, ActiveSession, Toast, LearningHubState, UploadedFile, ImagePart, Note, PlanSlot, ConflictInfo, ChatTurn, View, AnalysisMode } from '../types';
+import type { SmartPlan, ActiveSession, Toast, LearningHubState, UploadedFile, ImagePart, Note, PlanSlot, ConflictInfo, ChatTurn, View, AnalysisMode, UploadedMaterialInfo } from '../types';
 import { ActivityType, DayOfWeek } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { getDocumentContext, isStudyMaterial, summarizeDocument, explainDocument, extractTextFromDocument, chatWithDocumentStream } from '../services/geminiService';
@@ -42,6 +42,8 @@ interface UploadSlidesProps {
   isStudyModeView?: boolean;
   intendedStudyContext: { subject: string; fromSlot: PlanSlot } | null;
   setIntendedStudyContext: (context: { subject: string; fromSlot: PlanSlot } | null) => void;
+  uploadedMaterials: UploadedMaterialInfo[];
+  setUploadedMaterials: React.Dispatch<React.SetStateAction<UploadedMaterialInfo[]>>;
 }
 
 type ReadAloudState = 'idle' | 'loading' | 'interactive' | 'playing' | 'paused';
@@ -383,6 +385,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   learningHubState, setLearningHubState, notes, setNotes,
   showTitle = true, isStudyModeView = false,
   intendedStudyContext, setIntendedStudyContext,
+  uploadedMaterials, setUploadedMaterials
 }) => {
   const { t } = useLanguage();
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -589,9 +592,24 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     if (processedFile) {
         setLearningHubState(prev => ({ ...prev, file: processedFile, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] }));
         setAnalysisMode('actions');
+        
+        const newMaterial: UploadedMaterialInfo = {
+            name: processedFile.name,
+            type: processedFile.type,
+            size: processedFile.size,
+            context: processedFile.context,
+            uploadedAt: new Date().toISOString()
+        };
+
+        setUploadedMaterials(prev => {
+            if (prev.some(m => m.name === newMaterial.name && m.size === newMaterial.size)) {
+                return prev;
+            }
+            return [...prev, newMaterial];
+        });
     }
     setIsProcessing(false);
-  }, [addToast, t, intendedStudyContext, processFile, setLearningHubState, setAnalysisMode]);
+  }, [addToast, t, intendedStudyContext, processFile, setLearningHubState, setAnalysisMode, setUploadedMaterials]);
 
   const handleStartStudyRequest = () => {
     if (!file) return;
@@ -919,7 +937,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                 <div
                     onMouseEnter={() => setIsHoveringTopBar(true)}
                     onMouseLeave={() => setIsHoveringTopBar(false)}
-                    className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center justify-between gap-8 px-4 py-2 bg-white/50 dark:bg-gray-900/50 backdrop-blur-lg rounded-full shadow-xl border border-white/20 dark:border-gray-500/20"
+                    className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center justify-between gap-8 px-4 py-2 bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-full shadow-xl border border-gray-300 dark:border-gray-700"
                 >
                     <button onClick={() => { handleStop(); setAnalysisMode('actions'); }} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600">
                         <ArrowLeftIcon className="w-4 h-4" /> 
@@ -974,7 +992,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                                 left: `${controlsPosition.x}px`, 
                                 top: `${controlsPosition.y}px`,
                             }}
-                            className={`absolute z-30 flex items-center gap-1 p-2 bg-white/50 dark:bg-gray-900/50 backdrop-blur-lg rounded-full shadow-xl border border-white/40 dark:border-gray-500/30 transition-opacity transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 ${isHoveringTopBar ? '!opacity-0' : ''}`}
+                            className={`absolute z-30 flex items-center gap-1 p-2 bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-full shadow-xl border border-gray-300 dark:border-gray-700 transition-opacity transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 ${isHoveringTopBar ? '!opacity-0' : ''}`}
                         >
                             {readAloudState === 'playing' && (
                                 <button onClick={handlePause} className="p-3 text-gray-800 dark:text-white hover:bg-black/10 dark:hover:bg-white/10 rounded-full"><PauseIcon className="w-6 h-6" /></button>
