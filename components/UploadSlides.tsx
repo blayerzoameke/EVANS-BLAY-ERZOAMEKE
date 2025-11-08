@@ -42,8 +42,7 @@ interface UploadSlidesProps {
   isStudyModeView?: boolean;
   intendedStudyContext: { subject: string; fromSlot: PlanSlot } | null;
   setIntendedStudyContext: (context: { subject: string; fromSlot: PlanSlot } | null) => void;
-  uploadedMaterials: UploadedMaterialInfo[];
-  setUploadedMaterials: React.Dispatch<React.SetStateAction<UploadedMaterialInfo[]>>;
+  onNewMaterial: (material: UploadedMaterialInfo) => void;
 }
 
 type ReadAloudState = 'idle' | 'loading' | 'interactive' | 'playing' | 'paused';
@@ -385,7 +384,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   learningHubState, setLearningHubState, notes, setNotes,
   showTitle = true, isStudyModeView = false,
   intendedStudyContext, setIntendedStudyContext,
-  uploadedMaterials, setUploadedMaterials
+  onNewMaterial
 }) => {
   const { t } = useLanguage();
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -590,8 +589,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     const context = intendedStudyContext ? intendedStudyContext.fromSlot.activity : undefined;
     const processedFile = await processFile(droppedFile, context);
     if (processedFile) {
-        setLearningHubState(prev => ({ ...prev, file: processedFile, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] }));
-        setAnalysisMode('actions');
+        setLearningHubState(prev => ({ ...prev, file: processedFile, analysisMode: 'actions', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] }));
         
         const newMaterial: UploadedMaterialInfo = {
             name: processedFile.name,
@@ -601,15 +599,10 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             uploadedAt: new Date().toISOString()
         };
 
-        setUploadedMaterials(prev => {
-            if (prev.some(m => m.name === newMaterial.name && m.size === newMaterial.size)) {
-                return prev;
-            }
-            return [...prev, newMaterial];
-        });
+        onNewMaterial(newMaterial);
     }
     setIsProcessing(false);
-  }, [addToast, t, intendedStudyContext, processFile, setLearningHubState, setAnalysisMode, setUploadedMaterials]);
+  }, [addToast, t, intendedStudyContext, processFile, setLearningHubState, onNewMaterial]);
 
   const handleStartStudyRequest = () => {
     if (!file) return;
@@ -792,6 +785,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
       } else if (mode === 'explain') {
         result = await explainDocument(filePart, file.context, { fast: true });
       } else if (mode === 'read') {
+        // Use the 'fast' option to speed up text extraction for the Read Aloud feature, per user request.
         result = await extractTextFromDocument(filePart, { fast: true });
       }
   
@@ -1015,7 +1009,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 h-full flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-8 flex flex-col">
           <div className="flex justify-between items-start mb-6">
               <div>
                   <h3 className="text-xl font-bold text-gray-800 dark:text-white">{file?.name}</h3>
@@ -1026,14 +1020,14 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
               )}
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <ActionCard titleKey="uploadslides.actions.summarize" descKey="uploadslides.actions.summarize.desc" onClick={() => handleAnalysis('summarize')} />
             <ActionCard titleKey="uploadslides.actions.explain" descKey="uploadslides.actions.explain.desc" onClick={() => handleAnalysis('explain')} />
             <ActionCard titleKey="uploadslides.actions.chat" descKey="uploadslides.actions.chat.desc" onClick={() => setAnalysisMode('chat')} />
             <ActionCard titleKey="uploadslides.actions.read" descKey="uploadslides.actions.read.desc" onClick={handleReadAloudClick} />
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden min-h-[400px]">
             {analysisMode !== 'none' && analysisMode !== 'actions' && (
                 <div className="h-full flex flex-col">
                     <div className="flex justify-between items-center mb-2">

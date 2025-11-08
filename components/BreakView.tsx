@@ -254,7 +254,7 @@ const BreakView: React.FC<BreakViewProps> = ({ session, onEnd }) => {
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] no-print">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl h-auto max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
-                <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                <div className="p-4 border-b dark:border-gray-700 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                     <div>
                         <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">
                             {session.fromSlot.activity || t('breakview.title')}
@@ -263,7 +263,7 @@ const BreakView: React.FC<BreakViewProps> = ({ session, onEnd }) => {
                             {embedUrl ? `${t('breakview.body')} • ${platform}` : t('breakview.body')}
                         </p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-end w-full sm:w-auto gap-4">
                         {embedUrl && (
                             <div className="flex gap-2">
                                 {canEmbed && !embedFailed && (

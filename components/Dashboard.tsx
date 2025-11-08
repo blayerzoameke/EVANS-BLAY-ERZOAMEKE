@@ -549,7 +549,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('dashboard.yourSmartPlan')}</h2>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 w-full justify-start sm:w-auto sm:justify-end">
               <button onClick={handleEditInputs} className="px-4 py-2 text-sm font-medium bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.editInputs')}</button>
               <button onClick={() => setDashboardInputs(prev => ({...prev, isEditing: true}))} className="px-4 py-2 text-sm font-medium bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.editTimetable')}</button>
               <button onClick={handleStartOver} className="px-4 py-2 text-sm font-medium bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.startOver')}</button>

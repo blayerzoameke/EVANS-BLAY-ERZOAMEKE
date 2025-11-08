@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { storageService } from '../src/services/authService';
+import { globalFeedbackService } from '../src/services/globalFeedbackService';
 import type { UserDetails, Toast } from '../types';
 
 // Icons
@@ -32,166 +32,104 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
     const [allComments, setAllComments] = useState<any[]>([]);
     const [newComment, setNewComment] = useState('');
     const [newRating, setNewRating] = useState(0);
-    const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
     const [hasRated, setHasRated] = useState(false);
     const [likedComments, setLikedComments] = useState<string[]>([]);
-    
-    const getLocalStorageItem = (key: string, defaultValue: any) => {
-        try {
-            const item = localStorage.getItem(key);
-            return item ? JSON.parse(item) : defaultValue;
-        } catch (e) {
-            console.error(`Error reading ${key} from localStorage`, e);
-            return defaultValue;
-        }
-    };
-    
-    const setLocalStorageItem = (key: string, value: any) => {
-        try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch (e) {
-            console.error(`Error writing ${key} to localStorage`, e);
-        }
-    };
-
-    const loadGlobalData = useCallback(() => {
-        const stats = getLocalStorageItem('eduBlay_globalStats', {
-            totalRatings: 0,
-            satisfaction: 0,
-            totalComments: 0,
-            averageRating: 0
-        });
-
-        const allAppUsers = storageService.loadItem<any[]>('users') || [];
-        stats.activeUsers = allAppUsers.length || 1;
-
-        const allUsersData = storageService.loadItem<any>('usersData') || {};
-        let totalMaterials = 0;
-        for (const email in allUsersData) {
-            const userData = allUsersData[email];
-            if (userData) {
-                totalMaterials += (userData.notes?.length || 0);
-                totalMaterials += (userData.savedTimetables?.length || 0);
-                totalMaterials += (userData.uploadedMaterials?.length || 0);
-            }
-        }
-        stats.studyMaterials = totalMaterials;
-        setGlobalStats(stats);
-
-        const comments = getLocalStorageItem('eduBlay_comments', []);
-        setAllComments(comments.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-
-        if(currentUser?.id) {
-            const userFeedbackData = getLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, { rating: 0, likedComments: [] });
-            if (userFeedbackData.rating > 0) {
-                setNewRating(userFeedbackData.rating);
-                setHasRated(true);
-            } else {
-                setHasRated(false);
-                setNewRating(0);
-            }
-            setLikedComments(userFeedbackData.likedComments || []);
-        }
-    }, [currentUser]);
-    
-    useEffect(() => {
-        if (userDetails?.email && userDetails.name) {
-             setCurrentUser({ id: userDetails.email, name: userDetails.name });
-        }
-    }, [userDetails]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        loadGlobalData();
-        const interval = setInterval(loadGlobalData, 10000); // Refresh for real-time feel
-        return () => clearInterval(interval);
-    }, [currentUser, loadGlobalData]);
+        setIsLoading(true);
+        const unsubscribeStats = globalFeedbackService.subscribeToGlobalStats(setGlobalStats);
+        const unsubscribeComments = globalFeedbackService.subscribeToComments(setAllComments);
+        setIsLoading(false);
 
-    const handleRatingSubmit = () => {
+        return () => {
+            unsubscribeStats();
+            unsubscribeComments();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (userDetails?.email) {
+            const unsubscribeUserFeedback = globalFeedbackService.subscribeToUserFeedback(userDetails.email, (userFeedback) => {
+                const userHasRated = userFeedback.rating > 0;
+                setHasRated(userHasRated);
+                if (userHasRated) {
+                    setNewRating(userFeedback.rating);
+                } else {
+                    setNewRating(0);
+                }
+                setLikedComments(userFeedback.likedComments || []);
+            });
+
+            return () => {
+                unsubscribeUserFeedback();
+            };
+        } else {
+            setHasRated(false);
+            setNewRating(0);
+            setLikedComments([]);
+        }
+    }, [userDetails?.email]);
+
+    const handleRatingSubmit = async () => {
         if (newRating === 0) {
             addToast(t('feedback.error.selectRating' as any), 'warning');
             return;
         }
-        if (hasRated) return;
+        if (hasRated || !userDetails?.email || isSubmitting) return;
 
-        const stats = getLocalStorageItem('eduBlay_globalStats', globalStats);
-        
-        const totalScore = (stats.averageRating * stats.totalRatings) + newRating;
-        stats.totalRatings += 1;
-        stats.averageRating = totalScore / stats.totalRatings;
-        stats.satisfaction = Math.round((stats.averageRating / 5) * 100);
-
-        setLocalStorageItem('eduBlay_globalStats', stats);
-        setGlobalStats(stats);
-        
-        if (currentUser) {
-            const userFeedbackData = getLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, { likedComments: [] });
-            userFeedbackData.rating = newRating;
-            setLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, userFeedbackData);
+        setIsSubmitting(true);
+        try {
+            await globalFeedbackService.submitRating(userDetails.email, newRating);
+            addToast(t('feedback.ratingThankYou' as any), 'success');
+        } catch (error: any) {
+            console.error("Failed to submit rating:", error);
+            addToast(error.message || "Could not submit rating.", "error");
+        } finally {
+            setIsSubmitting(false);
         }
-
-        setHasRated(true);
-        addToast(t('feedback.ratingThankYou' as any), 'success');
     };
 
-    const handleCommentSubmit = () => {
+    const handleCommentSubmit = async () => {
         if (!newComment.trim()) {
             addToast(t('feedback.error.writeComment' as any), 'warning');
             return;
         }
-        if (!currentUser) {
+        if (!userDetails || !userDetails.name || !userDetails.email || isSubmitting) {
             addToast(t('feedback.error.waitProfile' as any), 'error');
             return;
         }
-
-        const comments = getLocalStorageItem('eduBlay_comments', []);
-        comments.push({
-            id: Date.now().toString(),
-            userId: currentUser.id,
-            userName: currentUser.name,
-            text: newComment,
-            timestamp: new Date().toISOString(),
-            likes: 0
-        });
-        setLocalStorageItem('eduBlay_comments', comments);
-
-        const stats = getLocalStorageItem('eduBlay_globalStats', globalStats);
-        stats.totalComments = (stats.totalComments || 0) + 1;
-        setLocalStorageItem('eduBlay_globalStats', stats);
-
-        setNewComment('');
-        loadGlobalData();
+        setIsSubmitting(true);
+        try {
+            await globalFeedbackService.postComment(userDetails.email, userDetails.name, newComment);
+            setNewComment('');
+        } catch (error: any) {
+            console.error("Failed to post comment:", error);
+            addToast(error.message || "Could not post comment.", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    const handleLikeComment = (commentId: string) => {
-        if (!currentUser) return;
-
-        let userFeedbackData = getLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, { likedComments: [] });
-        const userLikedComments = new Set(userFeedbackData.likedComments || []);
+    const handleLikeComment = async (commentId: string) => {
+        if (!userDetails?.email || isSubmitting) return;
         
-        const comments = getLocalStorageItem('eduBlay_comments', []);
-        const updatedComments = comments.map((c: any) => {
-            if (c.id === commentId) {
-                if (userLikedComments.has(commentId)) {
-                    userLikedComments.delete(commentId);
-                    return { ...c, likes: Math.max(0, c.likes - 1) };
-                } else {
-                    userLikedComments.add(commentId);
-                    return { ...c, likes: c.likes + 1 };
-                }
-            }
-            return c;
-        });
-        
-        setLocalStorageItem('eduBlay_comments', updatedComments);
-        userFeedbackData.likedComments = Array.from(userLikedComments);
-        setLocalStorageItem(`eduBlay_feedback_${currentUser.id}`, userFeedbackData);
-        
-        loadGlobalData();
+        setIsSubmitting(true);
+        try {
+            await globalFeedbackService.likeComment(userDetails.email, commentId);
+        } catch (error: any) {
+            console.error("Failed to like comment:", error);
+            addToast(error.message || "Could not update like.", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    const getTimeAgo = (timestamp: string) => {
+    const getTimeAgo = (timestamp: any) => {
+        if (!timestamp) return '';
         const now = new Date();
-        const past = new Date(timestamp);
+        const past = timestamp.toDate(); // Convert Firestore Timestamp to Date
         const diffMs = now.getTime() - past.getTime();
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
@@ -212,6 +150,14 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
         </div>
     );
     
+    if (isLoading) {
+        return (
+             <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
+            </div>
+        )
+    }
+
     return (
         <div className="max-w-7xl mx-auto space-y-8">
             <div className="text-center">
@@ -243,8 +189,8 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
                         ))}
                     </div>
 
-                    <button onClick={handleRatingSubmit} disabled={hasRated || newRating === 0} className="w-full bg-primary text-primary-text py-3 rounded-xl hover:bg-primary-dark transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
-                        {hasRated ? t('feedback.ratingThankYou' as any) : t('feedback.submitRating' as any)}
+                    <button onClick={handleRatingSubmit} disabled={hasRated || newRating === 0 || isSubmitting} className="w-full bg-primary text-primary-text py-3 rounded-xl hover:bg-primary-dark transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                        {isSubmitting ? "Submitting..." : hasRated ? t('feedback.ratingThankYou' as any) : t('feedback.submitRating' as any)}
                     </button>
                     {globalStats.totalRatings > 0 && (
                         <div className="mt-6 p-4 bg-gray-100 dark:bg-gray-700/50 rounded-xl">
@@ -266,8 +212,8 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 mb-4">{t('feedback.shareThoughtsSubtitle' as any)}</p>
                     <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder={t('feedback.commentPlaceholder' as any)} className="w-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-primary resize-none mb-4" rows={3}/>
-                    <button onClick={handleCommentSubmit} disabled={!newComment.trim()} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-500 transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2">
-                        <SendIcon width={20} height={20} />{t('feedback.postComment' as any)}
+                    <button onClick={handleCommentSubmit} disabled={!newComment.trim() || !userDetails || isSubmitting} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-500 transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2">
+                        {isSubmitting ? "Posting..." : <><SendIcon width={20} height={20} /> {t('feedback.postComment' as any)}</>}
                     </button>
                     <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
                         {t('feedback.totalComments' as any, { count: globalStats.totalComments })}
@@ -295,9 +241,9 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
                                         <p className="font-bold text-lg">{comment.userName}</p>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">{getTimeAgo(comment.timestamp)}</p>
                                     </div>
-                                    <button onClick={() => handleLikeComment(comment.id)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${likedComments.includes(comment.id) ? 'bg-primary/10 text-primary' : 'bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500'}`}>
+                                    <button onClick={() => handleLikeComment(comment.id)} disabled={!userDetails || isSubmitting} className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors disabled:cursor-not-allowed ${likedComments.includes(comment.id) ? 'bg-primary/10 text-primary' : 'bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500'}`}>
                                         <ThumbsUpIcon width={16} height={16} />
-                                        <span className="font-semibold text-sm">{comment.likes}</span>
+                                        <span className="font-semibold text-sm">{comment.likes || 0}</span>
                                     </button>
                                 </div>
                                 <p className="text-base leading-relaxed">{comment.text}</p>

@@ -240,7 +240,7 @@ export const explainDocument = async (file: ImagePart, context: string, options?
 };
 
 export const extractTextFromDocument = async (file: ImagePart, options?: { fast: boolean }): Promise<string> => {
-    const prompt = "Extract all the text from this document. Preserve the original formatting, including headings, lists, and paragraphs, as much as possible using markdown.";
+    const prompt = "Diligently and thoroughly extract every single piece of text from this document. Do not miss any text, including headers, footers, titles, and text inside images or diagrams. Preserve the original formatting, including headings, lists, and paragraphs, as much as possible using markdown.";
     const response = await ai.models.generateContent({
         model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
         contents: { parts: [{ text: prompt }, file] },

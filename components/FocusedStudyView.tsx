@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import type { ActiveSession, UploadedFile, Toast, TrackedSession, LearningHubState, PlanSlot, View } from '../types.ts';
+import type { ActiveSession, UploadedFile, Toast, TrackedSession, LearningHubState, PlanSlot, View, UploadedMaterialInfo } from '../types.ts';
 import { ActivityType } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { ExitIcon } from './icons/ExitIcon.tsx';
@@ -17,16 +17,16 @@ import { timeToMinutes } from '../lib/utils.ts';
 interface FocusedStudyViewProps {
     session: ActiveSession;
     setSession: (session: ActiveSession | null) => void;
-    learningHubFile: UploadedFile | null;
     addToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
     trackedData: TrackedSession[];
     setTrackedData: (data: TrackedSession[]) => void;
     setView: (view: View) => void;
+    learningHubState: LearningHubState;
     setLearningHubState: React.Dispatch<React.SetStateAction<LearningHubState>>;
 }
 
 
-const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession, learningHubFile, addToast, trackedData, setTrackedData, setView, setLearningHubState }) => {
+const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession, addToast, trackedData, setTrackedData, setView, learningHubState, setLearningHubState }) => {
     const { t } = useLanguage();
     
     const totalDurationSeconds = useMemo(() => {
@@ -137,7 +137,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                 fromSlot: breakSlot,
                 nextSlot: null,
                 isUntracked: session.isUntracked,
-                postBreakView: learningHubFile ? 'uploadslides' : undefined,
+                postBreakView: learningHubState.file ? 'uploadslides' : undefined,
             };
             
             setSession(breakSession);
@@ -226,13 +226,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
     const studyProgress = totalDurationSeconds > 0 ? ((totalDurationSeconds - timeLeft) / totalDurationSeconds) * 100 : 0;
     
     const dummySetState = () => {};
-    const dummyLearningHubState: LearningHubState = {
-        file: learningHubFile,
-        analysisMode: 'none',
-        analysisResults: { summarize: null, explain: null, read: null },
-        chatHistory: [],
-        isProcessing: false,
-    };
+    const learningHubFile = learningHubState.file;
 
     const handleNavigate = (target: 'dashboard' | 'uploadslides') => {
         setIsComplete(false);
@@ -327,7 +321,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                             setActiveSession={setSession}
                             setView={setView}
                             addToast={addToast}
-                            learningHubState={dummyLearningHubState}
+                            learningHubState={learningHubState}
                             setLearningHubState={setLearningHubState}
                             notes={[]}
                             setNotes={dummySetState as any}
@@ -335,9 +329,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                             isStudyModeView={true}
                             intendedStudyContext={null}
                             setIntendedStudyContext={dummySetState as any}
-                            // FIX: Add missing properties to satisfy UploadSlidesProps
-                            uploadedMaterials={[]}
-                            setUploadedMaterials={dummySetState as any}
+                            onNewMaterial={() => {}}
                         />
                     ) : (
                         <div className="h-full flex items-center justify-center text-center text-gray-500 bg-gray-100 dark:bg-gray-800/50 rounded-lg">

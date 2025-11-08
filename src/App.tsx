@@ -27,6 +27,7 @@ import { CloseIcon } from '../components/icons/CloseIcon';
 import NotificationManager from '../components/NotificationManager';
 import Welcome from '../components/Welcome';
 import { getCurrentUser, logout, storageService } from './services/authService';
+import { globalFeedbackService } from './services/globalFeedbackService';
 
 import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, PlanSlot, View, UploadedMaterialInfo } from '../types';
 import { QuizType, ActivityType } from '../types';
@@ -103,7 +104,7 @@ const App: React.FC = () => {
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
   const [trackedData, setTrackedData] = useState<TrackedSession[]>([]);
   const [uploadedMaterials, setUploadedMaterials] = useState<UploadedMaterialInfo[]>([]);
-  const [generationState, setGenerationState] = useState<GenerationState>({ isLoading: false, message: '', error: null, source: null });
+  const [generationState, setGenerationState] = useState<GenerationState>({ isLoading: false, message: '', error: null, source: 'dashboard' });
   const [quizState, setQuizState] = useState<QuizState>(defaultQuizState);
   const [intendedStudyContext, setIntendedStudyContext] = useState<{ subject: string; fromSlot: PlanSlot } | null>(null);
   const [tutorialVideoUrl, setTutorialVideoUrl] = useState<string>('https://www.youtube.com/watch?v=tBxfJ36t9_A');
@@ -146,7 +147,7 @@ const App: React.FC = () => {
 
     const loadUserData = useCallback((user: UserDetails) => {
         const allUsersData = storageService.loadItem<any>('usersData') || {};
-        let userData = allUsersData[user.email];
+        let userData = allUsersData[user.email!];
 
         // Migration for users from before the multi-user storage system
         if (!userData) {
@@ -248,6 +249,20 @@ const App: React.FC = () => {
     addToast(t('auth.logoutSuccess'), 'info');
   };
 
+    const handleNewMaterialUpload = useCallback((newMaterial: UploadedMaterialInfo) => {
+        setUploadedMaterials(prevMaterials => {
+            const isNew = !prevMaterials.some(m => m.name === newMaterial.name && m.size === newMaterial.size);
+            if (isNew) {
+                if (userDetails?.id) {
+                    globalFeedbackService.trackMaterialUpload(userDetails.id)
+                        .catch(error => console.error("Failed to track material upload:", error));
+                }
+                return [...prevMaterials, newMaterial];
+            }
+            return prevMaterials;
+        });
+    }, [userDetails?.id]);
+
   const handleBreakCompletion = (skipped: boolean) => {
     const breakSession = activeSession;
     if (!breakSession || breakSession.type !== 'break') {
@@ -305,7 +320,6 @@ const App: React.FC = () => {
     setView('dashboard');
   };
   
-  const learningHubFile = learningHubState.file;
   const isStudyMode = activeSession?.type === 'study';
 
   const renderView = () => {
@@ -364,8 +378,7 @@ const App: React.FC = () => {
                   setNotes={setNotes}
                   intendedStudyContext={intendedStudyContext}
                   setIntendedStudyContext={setIntendedStudyContext}
-                  uploadedMaterials={uploadedMaterials}
-                  setUploadedMaterials={setUploadedMaterials}
+                  onNewMaterial={handleNewMaterialUpload}
                 />;
       case 'examprep':
         return <ExamPrep 
@@ -387,7 +400,6 @@ const App: React.FC = () => {
       case 'notification':
         return <NotificationSettingsComponent settings={notificationSettings} setSettings={setNotificationSettings} />;
       case 'settings':
-        // FIX: Pass the 'handleLogout' function to the Settings component as a required prop.
         return <Settings addToast={addToast} handleLogout={handleLogout} />;
       case 'report':
         return <Reports 
@@ -396,13 +408,11 @@ const App: React.FC = () => {
                     setReportDraft={setReportDraft}
                     addToast={addToast}
                 />;
-// FIX: The Feedback component was being passed incorrect props. It should receive `userDetails` and `addToast`. The logic for calculating total users and materials is handled within the component itself from local storage.
-      case 'feedback': {
+      case 'feedback':
         return <Feedback 
                     userDetails={userDetails} 
                     addToast={addToast} 
                 />;
-      }
       case 'help':
         return <Help setView={setView} />;
       case 'about':
@@ -433,11 +443,11 @@ const App: React.FC = () => {
      return <FocusedStudyView 
                 session={activeSession!} 
                 setSession={setActiveSession}
-                learningHubFile={learningHubFile} 
                 addToast={addToast}
                 trackedData={trackedData}
                 setTrackedData={setTrackedData}
                 setView={setView}
+                learningHubState={learningHubState}
                 setLearningHubState={setLearningHubState}
             />;
   }

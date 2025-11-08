@@ -42,6 +42,7 @@ export enum EducationalLevel {
 }
 
 export interface UserDetails {
+  id?: string;
   name: string;
   educationalLevel: EducationalLevel;
   institution?: string;

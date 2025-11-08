@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon';
 import { CameraIcon } from './icons/CameraIcon';
+import { RefreshIcon } from './icons/RefreshIcon';
 
 interface CameraCaptureModalProps {
     isOpen: boolean;
@@ -14,6 +15,8 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const [cameraError, setCameraError] = useState<string | null>(null);
+    const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+    const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
 
     const stopCamera = useCallback(() => {
         if (streamRef.current) {
@@ -23,39 +26,93 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
     }, []);
 
     useEffect(() => {
-        if (isOpen) {
-            setCameraError(null);
-            const startCamera = async () => {
-                try {
-                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                        setCameraError(t('cameraModal.error.notSupported'));
-                        return;
-                    }
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    streamRef.current = stream;
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                    }
-                } catch (err: any) {
-                    console.error("Error accessing camera:", err);
-                    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                        setCameraError(t('cameraModal.error.permissionDenied'));
-                    } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                         setCameraError(t('cameraModal.error.noCamera'));
-                    } else {
-                        setCameraError(t('cameraModal.error.generic'));
-                    }
-                }
-            };
-            startCamera();
-        } else {
+        if (!isOpen) {
+            setDevices([]); // Clear devices when modal closes
             stopCamera();
+            return;
         }
+
+        const enumerateDevices = async () => {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                     throw new Error(t('cameraModal.error.notSupported'));
+                }
+                // Request permission first to get device labels, which is important for heuristics.
+                await navigator.mediaDevices.getUserMedia({ video: true });
+                const allDevices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = allDevices.filter(device => device.kind === 'videoinput');
+
+                // Heuristic to default to the back camera if available
+                const backCameraIndex = videoDevices.findIndex(d => d.label.toLowerCase().includes('back'));
+                setCurrentDeviceIndex(backCameraIndex !== -1 ? backCameraIndex : 0);
+                
+                setDevices(videoDevices);
+            } catch (err) {
+                 console.error("Error enumerating devices:", err);
+                let errorMessage = t('cameraModal.error.generic');
+                if ((err as Error).name === 'NotAllowedError' || (err as Error).name === 'PermissionDeniedError') {
+                    errorMessage = t('cameraModal.error.permissionDenied');
+                }
+                 setCameraError(errorMessage);
+            }
+        };
+        
+        enumerateDevices();
 
         return () => {
             stopCamera();
+        }
+    }, [isOpen, t, stopCamera]);
+
+
+    useEffect(() => {
+        if (!isOpen || devices.length === 0) {
+            return;
+        }
+
+        let isCancelled = false;
+
+        const startStream = async () => {
+            stopCamera();
+            setCameraError(null);
+
+            const device = devices[currentDeviceIndex];
+            if (!device) {
+                setCameraError(t('cameraModal.error.noCamera'));
+                return;
+            }
+            
+            const constraints = { video: { deviceId: { exact: device.deviceId } } };
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                if (isCancelled) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+                streamRef.current = stream;
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                }
+            } catch(err) {
+                 console.error("Error starting camera stream:", err);
+                 setCameraError(t('cameraModal.error.generic'));
+            }
         };
-    }, [isOpen, onClose, stopCamera, t]);
+
+        startStream();
+
+        return () => {
+            isCancelled = true;
+            stopCamera();
+        }
+    }, [isOpen, devices, currentDeviceIndex, stopCamera, t]);
+
+    const handleSwitchCamera = () => {
+        if (devices.length > 1) {
+            setCurrentDeviceIndex(prev => (prev + 1) % devices.length);
+        }
+    };
 
     const handleCapture = () => {
         if (videoRef.current) {
@@ -92,7 +149,17 @@ const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({ isOpen, onClose
                     </button>
                 </div>
                 <div className="p-6 relative bg-black rounded-md">
-                    <video ref={videoRef} autoPlay playsInline className="w-full h-auto rounded-md"></video>
+                    <video ref={videoRef} autoPlay playsInline className="w-full h-auto rounded-md" muted></video>
+                    {devices.length > 1 && !cameraError && (
+                        <button
+                            onClick={handleSwitchCamera}
+                            className="absolute top-3 right-3 p-2 bg-black/40 text-white rounded-full hover:bg-black/60 transition-colors z-10"
+                            title="Switch Camera"
+                            aria-label="Switch Camera"
+                        >
+                            <RefreshIcon className="w-5 h-5" />
+                        </button>
+                    )}
                     {cameraError && (
                         <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-center p-4">
                             <CameraIcon className="w-12 h-12 text-red-500 mb-4" />

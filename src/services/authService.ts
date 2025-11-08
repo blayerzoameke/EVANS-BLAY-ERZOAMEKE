@@ -1,5 +1,6 @@
 import type { UserDetails } from '../../types.ts';
 import { EducationalLevel } from '../../types.ts';
+import { globalFeedbackService } from './globalFeedbackService';
 
 // --- Centralized Storage Service ---
 
@@ -9,6 +10,7 @@ const STORAGE_KEYS = [
     'usersData', // New key for storing all user-specific data
     'tutorialVideoUrl',
     'welcomeComplete',
+    'eduBlay_feedbackData',
     // Old keys for migration/cleanup
     'userDetails',
     'savedTimetables',
@@ -191,53 +193,70 @@ export const signUp = async (
     recoveryAnswer: string
 ): Promise<UserDetails> => {
     return new Promise((resolve, reject) => {
-        setTimeout(() => { // Simulate network delay
-            const users = getUsers();
-            if (users.some(user => user.email === email)) {
-                reject(new Error('Email already registered'));
-                return;
+        setTimeout(async () => { // Make async
+            try {
+                const users = getUsers();
+                if (users.some(user => user.email === email)) {
+                    reject(new Error('Email already registered'));
+                    return;
+                }
+                
+                const userId = Date.now().toString(); // Use a consistent ID
+                const newUser: UserRecord = {
+                    id: userId,
+                    name,
+                    email,
+                    password: password_param,
+                    recoveryQuestion,
+                    recoveryAnswer,
+                    educationalLevel: EducationalLevel.UNDERGRADUATE,
+                };
+                
+                users.push(newUser);
+                saveUsers(users);
+
+                // Register user in the global feedback system to increment the count
+                await globalFeedbackService.registerUser(userId, name, email);
+
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { password, ...userSession } = newUser;
+                const token = createToken(userSession as UserDetails);
+                storageService.saveItem(SESSION_TOKEN_KEY, token);
+
+                resolve(userSession as UserDetails);
+            } catch (error) {
+                reject(error);
             }
-            
-            const newUser: UserRecord = {
-                id: Date.now().toString(),
-                name,
-                email,
-                password: password_param,
-                recoveryQuestion,
-                recoveryAnswer,
-                educationalLevel: EducationalLevel.UNDERGRADUATE,
-            };
-            
-            users.push(newUser);
-            saveUsers(users);
-
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { password, ...userSession } = newUser;
-            const token = createToken(userSession as UserDetails);
-            storageService.saveItem(SESSION_TOKEN_KEY, token);
-
-            resolve(userSession as UserDetails);
         }, 500);
     });
 };
 
 export const login = async (email: string, password_param: string): Promise<UserDetails> => {
      return new Promise((resolve, reject) => {
-        setTimeout(() => { // Simulate network delay
-            const users = getUsers();
-            const user = users.find(u => u.email === email && u.password === password_param);
-            
-            if (!user) {
-                reject(new Error('Invalid email or password'));
-                return;
+        setTimeout(async () => { // Make async
+            try {
+                const users = getUsers();
+                const user = users.find(u => u.email === email && u.password === password_param);
+                
+                if (!user) {
+                    reject(new Error('Invalid email or password'));
+                    return;
+                }
+
+                // Update activity in the global feedback system (idempotent)
+                if(user.id && user.name && user.email) {
+                    await globalFeedbackService.registerUser(user.id, user.name, user.email);
+                }
+
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { password, ...userSession } = user;
+                const token = createToken(userSession as UserDetails);
+                storageService.saveItem(SESSION_TOKEN_KEY, token);
+
+                resolve(userSession as UserDetails);
+            } catch (error) {
+                reject(error);
             }
-
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { password, ...userSession } = user;
-            const token = createToken(userSession as UserDetails);
-            storageService.saveItem(SESSION_TOKEN_KEY, token);
-
-            resolve(userSession as UserDetails);
         }, 500);
     });
 };
