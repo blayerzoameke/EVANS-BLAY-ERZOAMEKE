@@ -1,5 +1,5 @@
 {
-  "name": "edublay-study-hub",
+  "name": "edublay-study-hub-prem",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -16,7 +16,8 @@
     "react-image-crop": "^11.0.5",
     "katex": "^0.16.22",
     "chart.js": "^4.5.0",
-    "firebase": "^12.5.0"
+    "lucide-react": "^0.553.0",
+    "firebase": "^12.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

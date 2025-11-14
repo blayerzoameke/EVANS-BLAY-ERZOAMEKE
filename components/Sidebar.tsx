@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import type { View } from '../types';
+import type { View, UserDetails } from '../types';
 import { LogoIcon } from './icons/LogoIcon';
 import { CloseIcon } from './icons/CloseIcon';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { CrownIcon } from './icons/CrownIcon';
 import type { TranslationKey } from '../lib/i18n';
 
 interface SidebarProps {
@@ -11,9 +12,10 @@ interface SidebarProps {
   setView: (view: View) => void;
   isOpen: boolean;
   setOpen: (isOpen: boolean) => void;
+  userDetails: UserDetails | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen, userDetails }) => {
   const { t } = useLanguage();
   const [openSection, setOpenSection] = useState<string | null>(null);
 
@@ -130,6 +132,17 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen }) => 
             <CollapsibleNavGroup titleKey="sidebar.app" sectionId="app" items={appNavItems} />
             <CollapsibleNavGroup titleKey="sidebar.support" sectionId="support" items={supportNavItems} />
         </nav>
+        {userDetails?.subscriptionTier === 'free' && (
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                    onClick={() => handleNavClick('pricing')}
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 text-sm font-bold text-white bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg shadow-lg hover:from-yellow-600 hover:to-orange-600 transition-all transform hover:scale-105"
+                >
+                    <CrownIcon className="w-5 h-5" />
+                    {t('sidebar.upgrade' as any)}
+                </button>
+            </div>
+        )}
       </div>
   );
 

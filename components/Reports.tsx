@@ -36,7 +36,7 @@ const Reports: React.FC<ReportsProps> = ({ userDetails, reportDraft, setReportDr
       }
       updateDraft('attachment', file);
     }
-  }, [updateDraft, addToast, t]);
+  }, [addToast, t]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false });
 

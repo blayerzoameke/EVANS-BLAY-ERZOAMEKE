@@ -18,6 +18,7 @@ import { SaveIcon } from './icons/SaveIcon';
 import { CopyIcon } from './icons/CopyIcon';
 import { AdvancedGraphPlotter, type GraphConfig } from '../utils/AdvancedGraphPlotter';
 import { processAndResizeImage } from '../lib/utils';
+import { Language } from '../lib/i18n';
 
 declare global {
   interface Window {
@@ -37,6 +38,8 @@ interface ExamPrepProps {
     setNotes: (notes: Note[]) => void;
     examPrepState: ExamPrepState;
     setExamPrepState: React.Dispatch<React.SetStateAction<ExamPrepState>>;
+    onGenerateQuizAttempt: (action: () => Promise<void>) => void;
+    onSolveProblemAttempt: (action: () => Promise<void>) => void;
 }
 
 const LoadingOverlay: React.FC<{ isLoading: boolean; message: string }> = ({ isLoading, message }) => {
@@ -474,6 +477,19 @@ const QuizSummaryView: React.FC<{
     );
 };
 
+const getLangCodeForSpeech = (lang: Language) => {
+    const map: Record<Language, string> = {
+        en: 'en-US',
+        es: 'es-ES',
+        fr: 'fr-FR',
+        de: 'de-DE',
+        ja: 'ja-JP',
+        zh: 'zh-CN',
+    };
+    return map[lang] || 'en-US';
+}
+
+
 export const ExamPrep: React.FC<ExamPrepProps> = ({
     addToast,
     setView,
@@ -484,9 +500,11 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
     notes,
     setNotes,
     examPrepState,
-    setExamPrepState
+    setExamPrepState,
+    onGenerateQuizAttempt,
+    onSolveProblemAttempt,
 }) => {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const { mode, numQuestions, quizType, uploadedFiles, focusArea, questionImage, questionText, solution, outputFormat, programmingLanguage, graphInterval, graphYInterval } = examPrepState;
     const recognitionRef = useRef<any>(null);
     const [isListening, setIsListening] = useState(false);
@@ -507,7 +525,7 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
                 const recognition = recognitionRef.current;
                 recognition.continuous = true;
                 recognition.interimResults = true;
-                recognition.lang = 'en-US';
+                recognition.lang = getLangCodeForSpeech(language);
 
                 recognition.onresult = (event: any) => {
                     let finalTranscript = '';
@@ -542,7 +560,7 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
                 }
             };
         }
-    }, [mode, addToast, t]);
+    }, [mode, addToast, t, language, setExamPrepState]);
 
     const handleMicClick = () => {
         if (!recognitionRef.current) {
@@ -603,62 +621,68 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
         updateState('uploadedFiles', newFiles);
     };
 
-    const handleGenerateQuiz = async () => {
-        if (uploadedFiles.length === 0) {
-            addToast(t('toasts.examprep.noFiles'), 'warning');
-            return;
-        }
-
-        setGenerationState({ isLoading: true, message: t('examprep.verifying'), error: null, source: 'quiz' });
-
-        try {
-            let combinedContent = '';
-            for (const file of uploadedFiles) {
-                const base64String = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-                    reader.onerror = error => reject(error);
-                    reader.readAsDataURL(file);
-                });
-                const filePart: ImagePart = { inlineData: { data: base64String, mimeType: file.type } };
-                
-                const isMaterial = await isStudyMaterial(filePart, { fast: true });
-                if (isMaterial) {
-                    const text = await extractTextFromDocument(filePart, { fast: true });
-                    combinedContent += text + '\n\n';
-                } else {
-                    addToast(t('examprep.error.notStudyMaterial', { fileName: file.name }), 'warning');
+    const handleGenerateQuiz = () => {
+        onGenerateQuizAttempt(async () => {
+            if (uploadedFiles.length === 0) {
+                addToast(t('toasts.examprep.noFiles'), 'warning');
+                return;
+            }
+    
+            setGenerationState({ isLoading: true, message: t('examprep.verifying'), error: null, source: 'quiz' });
+    
+            try {
+                let combinedContent = '';
+                for (const file of uploadedFiles) {
+                    const base64String = await new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+                        reader.onerror = error => reject(error);
+                        reader.readAsDataURL(file);
+                    });
+                    const filePart: ImagePart = { inlineData: { data: base64String, mimeType: file.type } };
+                    
+                    const isMaterial = await isStudyMaterial(filePart, { fast: true });
+                    if (isMaterial) {
+                        const text = await extractTextFromDocument(filePart, { fast: true });
+                        combinedContent += text + '\n\n';
+                    } else {
+                        addToast(t('examprep.error.notStudyMaterial', { fileName: file.name }), 'warning');
+                    }
                 }
+                
+                const MAX_CONTEXT = 30000;
+                if(combinedContent.length > MAX_CONTEXT) {
+                    combinedContent = combinedContent.substring(0, MAX_CONTEXT);
+                    addToast(t('toasts.quizContentTruncated'), 'warning');
+                }
+    
+                if (!combinedContent.trim()) {
+                    throw new Error(t('toasts.examprep.textExtractFailed'));
+                }
+    
+                setGenerationState(prev => ({ ...prev, message: t('examprep.creatingQuiz') }));
+                const questions = await generateQuiz(combinedContent, numQuestions, quizType, focusArea);
+                
+                if (Array.isArray(questions) && questions.length > 0) {
+                     setQuizState({ quiz: questions, currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
+                     setGenerationState({ isLoading: false, message: '', error: null, source: null });
+                } else {
+                     console.error("Received non-array or empty response for quiz:", questions);
+                     throw new Error(t('examprep.error.noQuestions'));
+                }
+            } catch (error: any) {
+                addToast(error.message || t('examprep.error.generic'), 'error');
+                setGenerationState({ isLoading: false, message: '', error: null, source: null });
             }
-            
-            const MAX_CONTEXT = 30000;
-            if(combinedContent.length > MAX_CONTEXT) {
-                combinedContent = combinedContent.substring(0, MAX_CONTEXT);
-                addToast(t('toasts.quizContentTruncated'), 'warning');
-            }
-
-            if (!combinedContent.trim()) {
-                throw new Error(t('toasts.examprep.textExtractFailed'));
-            }
-
-            setGenerationState(prev => ({ ...prev, message: t('examprep.creatingQuiz') }));
-            const questions = await generateQuiz(combinedContent, numQuestions, quizType, focusArea);
-            
-            if (questions && questions.length > 0) {
-                 setQuizState({ quiz: questions, currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
-                 setGenerationState({ isLoading: false, message: '', error: null, source: null });
-            } else {
-                 throw new Error(t('examprep.error.noQuestions'));
-            }
-        } catch (error: any) {
-            addToast(error.message || t('examprep.error.generic'), 'error');
-            setGenerationState({ isLoading: false, message: '', error: null, source: null });
-        }
+        });
     };
 
     const handleAnswerSubmit = (answer: string) => {
         const currentQuestion = quizState.quiz[quizState.currentQuestionIndex];
-        const isCorrect = currentQuestion.correctAnswer.toLowerCase().trim() === answer.toLowerCase().trim();
+        const isCorrect = currentQuestion.options 
+            ? answer === currentQuestion.correctAnswer
+            : currentQuestion.correctAnswer.toLowerCase().trim() === answer.toLowerCase().trim();
+
         setQuizState(prev => ({
             ...prev,
             userAnswers: [...prev.userAnswers, answer],
@@ -670,14 +694,24 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
         if (quizState.currentQuestionIndex < quizState.quiz.length - 1) {
             setQuizState(prev => ({ ...prev, currentQuestionIndex: prev.currentQuestionIndex + 1, feedback: null }));
         } else {
-            const correctAnswers = quizState.userAnswers.filter((answer, index) => quizState.quiz[index].options ? answer === quizState.quiz[index].correctAnswer : answer.toLowerCase().trim() === quizState.quiz[index].correctAnswer.toLowerCase().trim()).length;
+            const correctAnswers = quizState.userAnswers.filter((answer, index) => {
+                const q = quizState.quiz[index];
+                return q.options 
+                    ? answer === q.correctAnswer 
+                    : answer.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
+            }).length;
+
             const score = (correctAnswers / quizState.quiz.length) * 100;
             
             const topics = quizState.quiz.map(q => q.topic);
             const topicPerformance = topics.reduce((acc, topic, i) => {
                 if(!acc[topic]) acc[topic] = { correct: 0, total: 0 };
                 acc[topic].total++;
-                if (quizState.userAnswers[i] === quizState.quiz[i].correctAnswer) {
+                const q = quizState.quiz[i];
+                const isCorrect = q.options 
+                    ? quizState.userAnswers[i] === q.correctAnswer
+                    : quizState.userAnswers[i].toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
+                if (isCorrect) {
                     acc[topic].correct++;
                 }
                 return acc;
@@ -695,129 +729,131 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
         setQuizState({ quiz: [], currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
     };
 
-    const handleSolveProblem = async () => {
-        if (!questionText.trim() && !questionImage) {
-            addToast(t('toasts.examprep.noQuestion'), 'warning');
-            return;
-        }
-
-        setGenerationState({ isLoading: true, message: t('examprep.solver.generatingSolution'), error: null, source: 'solve' });
-
-        try {
-            let imagePart: ImagePart | null = null;
-            if (questionImage) {
-                const base64String = questionImage.split(',')[1];
-                const mimeType = questionImage.match(/data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
-                imagePart = { inlineData: { data: base64String, mimeType } };
-                
-                if (!examPrepState.isVerifying) {
-                    const isProblem = await isImageAProblem(imagePart);
-                    if (!isProblem) {
-                        addToast(t('toasts.examprep.invalidImage'), 'warning');
-                        setGenerationState({ isLoading: false, message: '', error: null, source: null });
-                        return;
+    const handleSolveProblem = () => {
+        onSolveProblemAttempt(async () => {
+            if (!questionText.trim() && !questionImage) {
+                addToast(t('toasts.examprep.noQuestion'), 'warning');
+                return;
+            }
+    
+            setGenerationState({ isLoading: true, message: t('examprep.solver.generatingSolution'), error: null, source: 'solve' });
+    
+            try {
+                let imagePart: ImagePart | null = null;
+                if (questionImage) {
+                    const base64String = questionImage.split(',')[1];
+                    const mimeType = questionImage.match(/data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
+                    imagePart = { inlineData: { data: base64String, mimeType } };
+                    
+                    if (!examPrepState.isVerifying) {
+                        const isProblem = await isImageAProblem(imagePart);
+                        if (!isProblem) {
+                            addToast(t('toasts.examprep.invalidImage'), 'warning');
+                            setGenerationState({ isLoading: false, message: '', error: null, source: null });
+                            return;
+                        }
                     }
                 }
-            }
-            
-            const result = await solveProblem(
-                questionText,
-                imagePart,
-                outputFormat,
-                programmingLanguage,
-                graphInterval,
-                graphYInterval
-            );
-
-            if (outputFormat === 'graph') {
-                try {
-                    const graphData = JSON.parse(result);
-                    updateState('solution', graphData.explanation);
-                    
-                    const plotter = new AdvancedGraphPlotter();
-                    
-                    let functions: string[] = [];
-                    if (typeof graphData.graphFunction === 'string') {
-                        const rawFunc = graphData.graphFunction.trim();
-                        if (rawFunc.startsWith('[') && rawFunc.endsWith(']')) {
-                            try {
-                                const parsed = JSON.parse(rawFunc);
-                                if (Array.isArray(parsed)) {
-                                    functions = parsed.filter(item => typeof item === 'string');
-                                } else {
-                                     functions = [String(parsed)];
+                
+                const result = await solveProblem(
+                    questionText,
+                    imagePart,
+                    outputFormat,
+                    programmingLanguage,
+                    graphInterval,
+                    graphYInterval
+                );
+    
+                if (outputFormat === 'graph') {
+                    try {
+                        const graphData = JSON.parse(result);
+                        updateState('solution', graphData.explanation);
+                        
+                        const plotter = new AdvancedGraphPlotter();
+                        
+                        let functions: string[] = [];
+                        if (typeof graphData.graphFunction === 'string') {
+                            const rawFunc = graphData.graphFunction.trim();
+                            if (rawFunc.startsWith('[') && rawFunc.endsWith(']')) {
+                                try {
+                                    const parsed = JSON.parse(rawFunc);
+                                    if (Array.isArray(parsed)) {
+                                        functions = parsed.filter(item => typeof item === 'string');
+                                    } else {
+                                         functions = [String(parsed)];
+                                    }
+                                } catch (e) {
+                                    functions = rawFunc.replace(/[\[\]"']/g, '').split(',').map(f => f.trim()).filter(f => f);
                                 }
-                            } catch (e) {
-                                functions = rawFunc.replace(/[\[\]"']/g, '').split(',').map(f => f.trim()).filter(f => f);
+                            } else {
+                                functions = rawFunc.split(',').map(f => f.trim()).filter(f => f);
                             }
-                        } else {
-                            functions = rawFunc.split(',').map(f => f.trim()).filter(f => f);
+                        } else if (Array.isArray(graphData.graphFunction)) {
+                            functions = graphData.graphFunction.filter(item => typeof item === 'string');
                         }
-                    } else if (Array.isArray(graphData.graphFunction)) {
-                        functions = graphData.graphFunction.filter(item => typeof item === 'string');
-                    }
-
-                    if (functions.length === 0) {
-                        throw new Error("Could not parse function expression from AI response.");
-                    }
-
-                    const intervalConfig = plotter.parseInterval(graphInterval);
-                    const smartInterval = plotter.determineSmartInterval(functions[0]);
-                    
-                    const xMin = intervalConfig?.xMin ?? smartInterval.xMin;
-                    const xMax = intervalConfig?.xMax ?? smartInterval.xMax;
-                    const samples = intervalConfig?.samples ?? 200;
-                    
-                    const datasets = functions.map((func: string, index: number) => {
-                        const points = plotter.generatePoints({
-                            expr: func,
-                            xMin,
-                            xMax,
-                            samples,
-                            angleMode: intervalConfig?.angleMode || 'radians'
+    
+                        if (functions.length === 0) {
+                            throw new Error("Could not parse function expression from AI response.");
+                        }
+    
+                        const intervalConfig = plotter.parseInterval(graphInterval);
+                        const smartInterval = plotter.determineSmartInterval(functions[0]);
+                        
+                        const xMin = intervalConfig?.xMin ?? smartInterval.xMin;
+                        const xMax = intervalConfig?.xMax ?? smartInterval.xMax;
+                        const samples = intervalConfig?.samples ?? 200;
+                        
+                        const datasets = functions.map((func: string, index: number) => {
+                            const points = plotter.generatePoints({
+                                expr: func,
+                                xMin,
+                                xMax,
+                                samples,
+                                angleMode: intervalConfig?.angleMode || 'radians'
+                            });
+                            
+                            const colors = ['#3b82f6', '#ef4444', '#10b981', '#f97316', '#ec4899'];
+                            
+                            return {
+                                label: func.replace(/Math\./g, ''),
+                                data: points,
+                                borderColor: colors[index % colors.length],
+                                fill: false,
+                                pointRadius: 0
+                            };
                         });
                         
-                        const colors = ['#3b82f6', '#ef4444', '#10b981', '#f97316', '#ec4899'];
-                        
-                        return {
-                            label: func.replace(/Math\./g, ''),
-                            data: points,
-                            borderColor: colors[index % colors.length],
-                            fill: false,
-                            pointRadius: 0
-                        };
-                    });
-                    
-                    setGraphConfig({
-                        type: 'line',
-                        data: {
-                            datasets
-                        },
-                        options: {
-                            plugins: {
-                                title: {
-                                    display: !!graphData.suggestedTitle,
-                                    text: graphData.suggestedTitle
+                        setGraphConfig({
+                            type: 'line',
+                            data: {
+                                datasets
+                            },
+                            options: {
+                                plugins: {
+                                    title: {
+                                        display: !!graphData.suggestedTitle,
+                                        text: graphData.suggestedTitle
+                                    }
                                 }
                             }
-                        }
-                    });
-
-                } catch (e) {
-                    console.error("Failed to parse or plot graph data", e);
-                    addToast('Failed to render graph from AI response.', 'error');
-                    updateState('solution', result); // Show raw JSON as fallback
+                        });
+    
+                    } catch (e) {
+                        console.error("Failed to parse or plot graph data", e);
+                        addToast('Failed to render graph from AI response.', 'error');
+                        updateState('solution', result); // Show raw JSON as fallback
+                        setGraphConfig(null);
+                    }
+                } else {
+                    updateState('solution', result);
                     setGraphConfig(null);
                 }
-            } else {
-                updateState('solution', result);
-                setGraphConfig(null);
+                setGenerationState({ isLoading: false, message: '', error: null, source: null });
+            } catch (error: any) {
+                addToast(error.message || t('toasts.error.solveProblem'), 'error');
+                setGenerationState({ isLoading: false, message: '', error: null, source: null });
             }
-            setGenerationState({ isLoading: false, message: '', error: null, source: null });
-        } catch (error: any) {
-            addToast(error.message || t('toasts.error.solveProblem'), 'error');
-            setGenerationState({ isLoading: false, message: '', error: null, source: null });
-        }
+        });
     };
 
     if (quizState.summary) {
@@ -827,211 +863,218 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
     if (quizState.quiz.length > 0) {
         return <QuizRunner quiz={quizState.quiz} currentQuestionIndex={quizState.currentQuestionIndex} feedback={quizState.feedback} onAnswerSubmit={handleAnswerSubmit} onNextQuestion={handleNextQuestion} />;
     }
-    
-    const inputClasses = "block w-full px-3 py-2 bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm";
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
-            <h2 className="text-3xl font-bold text-center">{t('examprep.main.title')}</h2>
-             <div className="flex justify-center border-b-2 border-gray-200 dark:border-gray-700">
-                <button onClick={() => updateState('mode', 'quiz')} className={`px-6 py-2 font-semibold ${mode === 'quiz' ? 'border-b-2 border-primary text-primary' : 'text-gray-500'}`}>{t('examprep.tab.quiz')}</button>
-                <button onClick={() => updateState('mode', 'solve')} className={`px-6 py-2 font-semibold ${mode === 'solve' ? 'border-b-2 border-primary text-primary' : 'text-gray-500'}`}>{t('examprep.tab.solver')}</button>
+            <div>
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('examprep.main.title')}</h2>
             </div>
-            
-            {mode === 'quiz' ? (
-                // QUIZ GENERATOR UI
-                <div className="relative bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg animate-fade-in">
-                   <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'quiz'} message={generationState.message} />
-                   <div className="flex justify-between items-center">
+
+            <div className="flex bg-gray-200 dark:bg-gray-700 rounded-xl p-1">
+                <button
+                    onClick={() => updateState('mode', 'quiz')}
+                    className={`flex-1 py-2 rounded-lg font-semibold transition-colors hover:bg-gray-300/50 dark:hover:bg-gray-600/50 ${
+                        mode === 'quiz' 
+                        ? 'bg-white dark:bg-gray-800 shadow text-primary' 
+                        : 'text-gray-600 dark:text-gray-400'
+                    }`}
+                >
+                    {t('examprep.tab.quiz')}
+                </button>
+                <button
+                    onClick={() => updateState('mode', 'solve')}
+                    className={`flex-1 py-2 rounded-lg font-semibold transition-colors hover:bg-gray-300/50 dark:hover:bg-gray-600/50 ${
+                        mode === 'solve' 
+                        ? 'bg-white dark:bg-gray-800 shadow text-primary' 
+                        : 'text-gray-600 dark:text-gray-400'
+                    }`}
+                >
+                    {t('examprep.tab.solver')}
+                </button>
+            </div>
+
+            {mode === 'quiz' && (
+                <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 space-y-8">
+                    <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'quiz'} message={generationState.message} />
+                    <div className="text-center">
                         <h3 className="text-2xl font-bold">{t('examprep.quiz.title')}</h3>
-                        <button onClick={resetQuiz} className="text-sm font-semibold text-gray-500 hover:text-primary">{t('examprep.quiz.startOver')}</button>
-                   </div>
-                   <p className="text-gray-500 dark:text-gray-400 mt-1 mb-6">{t('examprep.quiz.intro')}</p>
-                   
-                   <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-semibold mb-2">{t('examprep.quiz.step1')}</label>
-                            <div {...getRootProps()} className={`p-6 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-300 ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600'} hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20`}>
-                                <input {...getInputProps()} />
-                                <div className="flex flex-col items-center justify-center text-center text-gray-500 dark:text-gray-400">
-                                    <UploadIcon className="w-8 h-8 mb-2" />
-                                    <p className="font-semibold">{t('examprep.quiz.dropzone.click')}</p>
-                                    <p className="text-xs">{t('examprep.quiz.dropzone.hint')}</p>
-                                </div>
-                            </div>
-                            <div className="mt-2 space-y-1">
-                                {uploadedFiles.map((file, i) => (
-                                    <div key={i} className="flex items-center justify-between text-sm bg-gray-100 dark:bg-gray-700 p-2 rounded">
-                                        <span className="truncate">{file.name}</span>
-                                        <button onClick={() => removeFile(i)}><CloseIcon className="w-4 h-4 text-red-500" /></button>
+                        <p className="text-gray-500">{t('examprep.quiz.intro')}</p>
+                    </div>
+
+                    <div>
+                        <h4 className="font-bold text-lg mb-2">{t('examprep.quiz.step1')}</h4>
+                        <div {...getRootProps({ className: `p-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'}`})}>
+                            <input {...getInputProps()} />
+                            <UploadIcon className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+                            <p className="font-semibold">{t('examprep.quiz.dropzone.click')}</p>
+                            <p className="text-sm text-gray-500">{t('examprep.quiz.dropzone.hint')}</p>
+                        </div>
+                        {uploadedFiles.length > 0 && (
+                            <div className="mt-4 space-y-2">
+                                {uploadedFiles.map((file, index) => (
+                                    <div key={index} className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <DocumentIcon className="w-5 h-5 flex-shrink-0" />
+                                            <span className="truncate text-sm">{file.name}</span>
+                                        </div>
+                                        <button onClick={() => removeFile(index)}><CloseIcon className="w-4 h-4 text-red-500" /></button>
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        )}
+                    </div>
+                    
+                    <div>
+                        <h4 className="font-bold text-lg mb-2">{t('examprep.quiz.step2')}</h4>
+                        <input type="text" value={focusArea} onChange={(e) => updateState('focusArea', e.target.value)} placeholder={t('examprep.quiz.focusPlaceholder')} className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg" />
+                    </div>
 
-                        <div>
-                            <label htmlFor="focus-area" className="block text-sm font-semibold mb-2">{t('examprep.quiz.step2')}</label>
-                            <input id="focus-area" type="text" value={focusArea} onChange={e => updateState('focusArea', e.target.value)} placeholder={t('examprep.quiz.focusPlaceholder')} className={inputClasses} />
-                        </div>
-                        
-                        <div>
-                            <label className="block text-sm font-semibold mb-2">{t('examprep.quiz.step3')}</label>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="num-questions" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.quiz.numQuestions')}</label>
-                                    <input id="num-questions" type="number" value={numQuestions} onChange={e => updateState('numQuestions', parseInt(e.target.value, 10))} className={inputClasses} min="1" max="20" />
-                                </div>
-                                <div>
-                                    <label htmlFor="quiz-type" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.quiz.quizType')}</label>
-                                    <select id="quiz-type" value={quizType} onChange={e => updateState('quizType', e.target.value as QuizType)} className={inputClasses}>
-                                        <option value={QuizType.MCQ}>{t('quizType.mcq')}</option>
-                                        <option value={QuizType.CONCEPTUAL}>{t('quizType.conceptual')}</option>
-                                        <option value={QuizType.THEORY}>{t('quizType.theory')}</option>
-                                    </select>
-                                </div>
+                    <div>
+                        <h4 className="font-bold text-lg mb-2">{t('examprep.quiz.step3')}</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                             <div>
+                                <label className="block text-sm font-medium">{t('examprep.quiz.numQuestions')}</label>
+                                <input type="number" value={numQuestions} onChange={(e) => updateState('numQuestions', Math.max(1, parseInt(e.target.value, 10)))} min="1" max="20" className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium">{t('examprep.quiz.quizType')}</label>
+                                <select value={quizType} onChange={(e) => updateState('quizType', e.target.value as QuizType)} className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg">
+                                    <option value={QuizType.MCQ}>{t('quizType.mcq')}</option>
+                                    <option value={QuizType.CONCEPTUAL}>{t('quizType.conceptual')}</option>
+                                    <option value={QuizType.THEORY}>{t('quizType.theory')}</option>
+                                </select>
                             </div>
                         </div>
-                   </div>
-
-                   <button onClick={handleGenerateQuiz} className="w-full py-3 bg-primary text-primary-text font-bold rounded-xl mt-8 hover:bg-primary-dark transition-colors" disabled={generationState.isLoading}>
-                     {t('examprep.quiz.generate')}
-                   </button>
+                    </div>
+                    
+                    <button onClick={handleGenerateQuiz} disabled={generationState.isLoading || uploadedFiles.length === 0} className="w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:opacity-50 transition-all">
+                        {t('examprep.quiz.generate')}
+                    </button>
                 </div>
-            ) : (
-                // PROBLEM SOLVER UI
-                <div className="relative animate-fade-in space-y-6">
-                    <div className="relative bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg">
-                        <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'solve'} message={generationState.message} />
-                         <div className="flex justify-between items-center">
+            )}
+            {mode === 'solve' && (
+                <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 space-y-8">
+                    <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'solve'} message={generationState.message} />
+                     <div className="flex justify-between items-center">
+                        <div className="text-center flex-1">
                             <h3 className="text-2xl font-bold">{t('examprep.solver.title')}</h3>
-                            <button onClick={() => { updateState('solution', null); updateState('questionText', ''); updateState('questionImage', null); setGraphConfig(null); }} className="text-sm font-semibold text-gray-500 hover:text-primary">{t('examprep.solver.clear')}</button>
+                            <p className="text-gray-500">{t('examprep.solver.intro')}</p>
                         </div>
-                        <p className="text-gray-500 dark:text-gray-400 mt-1 mb-6">{t('examprep.solver.intro')}</p>
-                        
-                        <div className="space-y-6">
-                            <div>
-                                <label className="block text-sm font-semibold mb-2">{t('examprep.solver.step1')}</label>
-                                {questionImage && (
-                                    <div className="relative my-4">
-                                        <img src={questionImage} alt={t('examprep.solver.alt.questionPreview')} className="max-h-60 w-auto mx-auto rounded-lg shadow-md" />
-                                        <button onClick={() => updateState('questionImage', null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-lg leading-none">&times;</button>
-                                    </div>
-                                )}
-                                <textarea value={questionText} onChange={e => updateState('questionText', e.target.value)} placeholder={t('examprep.solver.questionPlaceholder')} rows={4} className={`${inputClasses} h-auto`} />
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                                     <div {...getRootProps({ className: "p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center cursor-pointer border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300" })}>
-                                        <input {...getInputProps()} />
-                                        <UploadIcon className="w-8 h-8 mb-2 text-gray-500" />
-                                        <span className="text-sm font-semibold">{t('examprep.solver.uploadImage')}</span>
-                                    </div>
-                                    <button onClick={() => setIsCameraModalOpen(true)} className="p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300">
-                                        <CameraIcon className="w-8 h-8 mb-2 text-gray-500" />
-                                        <span className="text-sm font-semibold">{t('examprep.solver.useCamera')}</span>
-                                    </button>
-                                    <button onClick={handleMicClick} className="p-4 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-300">
-                                        <MicrophoneIcon className={`w-8 h-8 mb-2 transition-colors ${isListening ? 'text-red-500' : 'text-gray-500'}`} />
-                                        <span className="text-sm font-semibold">{isListening ? t('examprep.solver.stopMic') : t('examprep.solver.useMic')}</span>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-semibold mb-2">{t('examprep.solver.step2')}</label>
-                                <div className="grid grid-cols-2 gap-4">
-                                     <div>
-                                        <label htmlFor="output-format" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.solver.outputFormat')}</label>
-                                        <select id="output-format" value={outputFormat} onChange={e => updateState('outputFormat', e.target.value as ExamPrepState['outputFormat'])} className={inputClasses}>
-                                            <option value="steps">{t('examprep.solver.format.steps')}</option>
-                                            <option value="latex">{t('examprep.solver.format.latex')}</option>
-                                            <option value="code">{t('examprep.solver.format.code')}</option>
-                                            <option value="graph">{t('examprep.solver.format.graph')}</option>
-                                        </select>
-                                    </div>
-                                    {outputFormat === 'code' && (
-                                        <div>
-                                            <label htmlFor="language" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.solver.language')}</label>
-                                            <input id="language" type="text" value={programmingLanguage} onChange={e => updateState('programmingLanguage', e.target.value)} className={inputClasses}/>
-                                        </div>
-                                    )}
-                                </div>
-                                {outputFormat === 'graph' && (
-                                    <div className="grid grid-cols-2 gap-4 mt-4">
-                                        <div>
-                                            <label htmlFor="graph-interval" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.solver.graphInterval')}</label>
-                                            <input id="graph-interval" type="text" value={graphInterval} onChange={e => updateState('graphInterval', e.target.value)} placeholder={t('examprep.solver.graphIntervalPlaceholder')} className={inputClasses}/>
-                                        </div>
-                                        <div>
-                                            <label htmlFor="graph-y-interval" className="block text-xs font-medium text-gray-500 mb-1">{t('examprep.solver.graphYInterval')}</label>
-                                            <input id="graph-y-interval" type="text" value={graphYInterval} onChange={e => updateState('graphYInterval', e.target.value)} placeholder={t('examprep.solver.graphYIntervalPlaceholder')} className={inputClasses}/>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <button onClick={handleSolveProblem} className="w-full py-3 bg-primary text-primary-text font-bold rounded-xl mt-8 hover:bg-primary-dark transition-colors" disabled={generationState.isLoading}>
-                            {t('examprep.solver.solve')}
+                        <button onClick={() => { updateState('questionText', ''); updateState('questionImage', null); updateState('solution', null); setGraphConfig(null); }} className="text-sm font-semibold text-red-500 hover:underline">
+                            {t('examprep.solver.clear')}
                         </button>
                     </div>
 
-                    {solution && (
-                        <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg space-y-4">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-2xl font-bold">{t('examprep.solution.title')}</h3>
-                                <div className="flex items-center gap-2">
-                                     <button onClick={() => { navigator.clipboard.writeText(solution); addToast(t('toasts.solutionCopied'), 'success'); }} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200" title={t('examprep.solution.copyFull')}>
-                                        <CopyIcon className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={() => {
-                                        const newNote = { id: Date.now().toString(), title: `Solution for: ${questionText.substring(0, 30)}...`, content: solution, subject: 'Problem Solving', createdAt: new Date().toISOString(), isFavourite: false };
-                                        setNotes([newNote, ...notes]);
-                                        addToast(t('toasts.solutionSaved'), 'success');
-                                    }} className="p-2 rounded-md bg-gray-100 dark:bg-gray-700 hover:bg-gray-200" title={t('examprep.solution.saveFull')}>
-                                        <SaveIcon className="w-4 h-4" />
+                    <div>
+                        <h4 className="font-bold text-lg mb-2">{t('examprep.solver.step1')}</h4>
+                        <textarea value={questionText} onChange={(e) => updateState('questionText', e.target.value)} rows={4} placeholder={t('examprep.solver.questionPlaceholder')} className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg" />
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                            <div {...getRootProps({ className: `p-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors flex flex-col items-center justify-center h-32 ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'}`})}>
+                                <input {...getInputProps()} accept="image/*" />
+                                <UploadIcon className="w-8 h-8 mb-2 text-gray-500 dark:text-gray-400" />
+                                <span className="font-semibold text-sm">{t('examprep.solver.uploadImage')}</span>
+                            </div>
+
+                            <button onClick={() => setIsCameraModalOpen(true)} className="p-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 flex flex-col items-center justify-center h-32">
+                                <CameraIcon className="w-8 h-8 mb-2 text-gray-500 dark:text-gray-400" />
+                                <span className="font-semibold text-sm">{t('examprep.solver.useCamera')}</span>
+                            </button>
+
+                            <button onClick={handleMicClick} className={`p-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors flex flex-col items-center justify-center h-32 ${isListening ? 'border-red-500' : 'border-gray-300 dark:border-gray-600 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'}`}>
+                                <MicrophoneIcon className={`w-8 h-8 mb-2 ${isListening ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`} />
+                                <span className="font-semibold text-sm">{isListening ? t('examprep.solver.stopMic') : t('examprep.solver.useMic')}</span>
+                            </button>
+                        </div>
+
+                        {questionImage && (
+                            <div className="mt-4 text-center">
+                                <div className="relative inline-block">
+                                    <img src={questionImage} alt={t('examprep.solver.alt.questionPreview')} className="max-h-40 rounded-md shadow-lg" />
+                                    <button onClick={() => updateState('questionImage', null)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md">
+                                        <CloseIcon className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
-                            <div className="prose-lg dark:prose-invert max-w-none"><FormattedContent content={solution} /></div>
-                            {graphConfig && <GraphRenderer chartConfig={graphConfig} canvasRef={graphCanvasRef} />}
+                        )}
+                    </div>
+
+                    <div>
+                        <h4 className="font-bold text-lg mb-2">{t('examprep.solver.step2')}</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium">{t('examprep.solver.outputFormat')}</label>
+                                <select value={outputFormat} onChange={(e) => updateState('outputFormat', e.target.value as 'steps' | 'latex' | 'code' | 'graph')} className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg">
+                                    <option value="steps">{t('examprep.solver.format.steps')}</option>
+                                    <option value="latex">{t('examprep.solver.format.latex')}</option>
+                                    <option value="code">{t('examprep.solver.format.code')}</option>
+                                    <option value="graph">{t('examprep.solver.format.graph')}</option>
+                                </select>
+                            </div>
+                            {outputFormat === 'code' && (
+                                <div>
+                                    <label className="block text-sm font-medium">{t('examprep.solver.language')}</label>
+                                    <input type="text" value={programmingLanguage} onChange={(e) => updateState('programmingLanguage', e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"/>
+                                </div>
+                            )}
+                             {outputFormat === 'graph' && (
+                                <div className="sm:col-span-2 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium">{t('examprep.solver.graphInterval')}</label>
+                                        <input type="text" value={graphInterval} onChange={(e) => updateState('graphInterval', e.target.value)} placeholder={t('examprep.solver.graphIntervalPlaceholder')} className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium">{t('examprep.solver.graphYInterval')}</label>
+                                        <input type="text" value={graphYInterval} onChange={(e) => updateState('graphYInterval', e.target.value)} placeholder={t('examprep.solver.graphYIntervalPlaceholder')} className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"/>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <button onClick={handleSolveProblem} disabled={generationState.isLoading} className="w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:opacity-50 transition-all">
+                       {t('examprep.solver.solve')}
+                    </button>
+                    {solution && (
+                        <div className="pt-8 border-t dark:border-gray-700">
+                             <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-2xl font-bold">{t('examprep.solution.title')}</h3>
+                                {outputFormat !== 'graph' && (
+                                     <div className="flex items-center gap-2">
+                                        <button onClick={() => { navigator.clipboard.writeText(solution); addToast(t('toasts.solutionCopied'), 'success'); }} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><CopyIcon className="w-4 h-4"/> {t('examprep.solution.copyFull')}</button>
+                                        <button onClick={() => { const newNote = { id: Date.now().toString(), title: `Solution for: ${questionText.substring(0, 30)}...`, content: solution, subject: 'Problem Solving', createdAt: new Date().toISOString(), isFavourite: false }; setNotes([newNote, ...notes]); addToast(t('toasts.solutionSaved'), 'success'); setView('notes'); }} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"><SaveIcon className="w-4 h-4"/> {t('examprep.solution.saveFull')}</button>
+                                    </div>
+                                )}
+                            </div>
+                            {outputFormat === 'graph' ? (
+                                <div className="space-y-4">
+                                    <div>
+                                        <h4 className="font-semibold text-lg">{t('examprep.solution.explanationTitle')}</h4>
+                                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg mt-2"><FormattedContent content={solution} /></div>
+                                    </div>
+                                    {graphConfig && (
+                                        <div>
+                                            <h4 className="font-semibold text-lg">{graphConfig.options?.plugins?.title?.text || "Graph"}</h4>
+                                            <div className="mt-2 p-4 bg-white dark:bg-gray-900 rounded-lg shadow-inner"><GraphRenderer chartConfig={graphConfig} canvasRef={graphCanvasRef} /></div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"><FormattedContent content={solution} /></div>
+                            )}
                         </div>
                     )}
                 </div>
             )}
-            {isCameraModalOpen && (
-                <CameraCaptureModal
-                    isOpen={isCameraModalOpen}
-                    onClose={() => setIsCameraModalOpen(false)}
-                    onCapture={async (imageDataUrl) => {
-                        setIsCameraModalOpen(false);
-                        updateState('questionImage', imageDataUrl);
-                        updateState('isVerifying', true);
-                        setGenerationState({ isLoading: true, message: t('toasts.examprep.verifyingImage'), error: null, source: 'solve' });
-                        try {
-                            const base64String = imageDataUrl.split(',')[1];
-                            const mimeType = imageDataUrl.match(/data:(image\/\w+);base64,/)?.[1] || 'image/jpeg';
-                            const imagePart: ImagePart = { inlineData: { data: base64String, mimeType } };
-                            const isProblem = await isImageAProblem(imagePart);
-                            if (isProblem) {
-                                addToast(t('toasts.examprep.captureSuccess'), 'success');
-                            } else {
-                                addToast(t('toasts.examprep.captureInvalid'), 'warning');
-                                updateState('questionImage', null);
-                            }
-                            setGenerationState({ isLoading: false, message: '', error: null, source: null });
-                        } catch (error: any) {
-                            addToast(t('toasts.examprep.captureFailed'), 'error');
-                            updateState('questionImage', null);
-                            setGenerationState({ isLoading: false, message: '', error: error.message, source: 'solve' });
-                        } finally {
-                            updateState('isVerifying', false);
-                        }
-                    }}
-                />
-            )}
+            
+            <CameraCaptureModal
+                isOpen={isCameraModalOpen}
+                onClose={() => setIsCameraModalOpen(false)}
+                onCapture={(imageDataUrl) => {
+                    updateState('questionImage', imageDataUrl);
+                    setIsCameraModalOpen(false);
+                }}
+            />
         </div>
     );
 };
-
-// No default export was provided. Adding one.
-export default ExamPrep;

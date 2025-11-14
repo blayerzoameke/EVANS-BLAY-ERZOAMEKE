@@ -162,6 +162,7 @@ const getActivityColor = (type: ActivityType) => {
 };
 
 const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: string; isCurrent?: boolean; onAddToCalendarClick: () => void; }> = ({ slot, onClick, tooltip, isCurrent, onAddToCalendarClick }) => {
+    const { t } = useLanguage();
     const isClickable = !!(slot.link || onClick);
 
     const cardClasses = `relative group p-4 rounded-xl shadow-md mb-4 transition-all duration-300 transform hover:shadow-xl hover:scale-105 ${getActivityColor(slot.type)} ${isClickable ? 'cursor-pointer' : 'cursor-default'} ${isCurrent ? 'ring-2 ring-primary dark:ring-primary-light' : ''}`;
@@ -171,7 +172,7 @@ const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: s
              {isCurrent && (
                 <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 text-xs font-semibold bg-red-600 px-2 py-1 rounded-full text-white shadow-md">
                     <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
-                    <span>Live</span>
+                    <span>{t('smartplan.live')}</span>
                 </div>
             )}
             <button 
@@ -270,7 +271,17 @@ const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick, d
             sortedSlots.map((slot, index) => {
               const isClickable = slot.type === ActivityType.STUDY && day === currentDay && !!onStudySlotClick;
               const tooltip = isClickable ? t('smartplan.clickToStudy') : undefined;
-              const isCurrent = day === currentDay && nowMinutes >= timeToMinutes(slot.startTime) && nowMinutes < timeToMinutes(slot.endTime);
+              
+              let isCurrent = false;
+              if (day === currentDay) {
+                  const startMinutes = timeToMinutes(slot.startTime);
+                  const endMinutes = timeToMinutes(slot.endTime);
+                  if (endMinutes < startMinutes) { // Crosses midnight
+                      isCurrent = nowMinutes >= startMinutes || nowMinutes < endMinutes;
+                  } else {
+                      isCurrent = nowMinutes >= startMinutes && nowMinutes < endMinutes;
+                  }
+              }
               
               return (
                   <PlanSlotCard 

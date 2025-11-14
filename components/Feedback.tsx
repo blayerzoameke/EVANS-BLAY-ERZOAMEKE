@@ -11,6 +11,8 @@ import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { DocumentIcon } from './icons/DocumentIcon';
 import { ThumbsUpIcon } from './icons/ThumbsUpIcon';
 import { SendIcon } from './icons/SendIcon';
+import { LockIcon } from './icons/LockIcon';
+
 
 interface FeedbackProps {
     userDetails: UserDetails | null;
@@ -50,16 +52,22 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
     }, []);
 
     useEffect(() => {
-        if (userDetails?.email) {
-            const unsubscribeUserFeedback = globalFeedbackService.subscribeToUserFeedback(userDetails.email, (userFeedback) => {
-                const userHasRated = userFeedback.rating > 0;
-                setHasRated(userHasRated);
-                if (userHasRated) {
-                    setNewRating(userFeedback.rating);
+        if (userDetails?.id) {
+            const unsubscribeUserFeedback = globalFeedbackService.subscribeToUserFeedback(userDetails.id, (userFeedback) => {
+                if(userFeedback) {
+                    const userHasRated = userFeedback.rating > 0;
+                    setHasRated(userHasRated);
+                    if (userHasRated) {
+                        setNewRating(userFeedback.rating);
+                    } else {
+                        setNewRating(0);
+                    }
+                    setLikedComments(userFeedback.likedComments || []);
                 } else {
+                    setHasRated(false);
                     setNewRating(0);
+                    setLikedComments([]);
                 }
-                setLikedComments(userFeedback.likedComments || []);
             });
 
             return () => {
@@ -70,18 +78,18 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
             setNewRating(0);
             setLikedComments([]);
         }
-    }, [userDetails?.email]);
+    }, [userDetails?.id]);
 
     const handleRatingSubmit = async () => {
         if (newRating === 0) {
             addToast(t('feedback.error.selectRating' as any), 'warning');
             return;
         }
-        if (hasRated || !userDetails?.email || isSubmitting) return;
+        if (hasRated || !userDetails?.id || isSubmitting) return;
 
         setIsSubmitting(true);
         try {
-            await globalFeedbackService.submitRating(userDetails.email, newRating);
+            await globalFeedbackService.submitRating(userDetails.id, newRating);
             addToast(t('feedback.ratingThankYou' as any), 'success');
         } catch (error: any) {
             console.error("Failed to submit rating:", error);
@@ -96,13 +104,13 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
             addToast(t('feedback.error.writeComment' as any), 'warning');
             return;
         }
-        if (!userDetails || !userDetails.name || !userDetails.email || isSubmitting) {
+        if (!userDetails || !userDetails.name || !userDetails.id || isSubmitting) {
             addToast(t('feedback.error.waitProfile' as any), 'error');
             return;
         }
         setIsSubmitting(true);
         try {
-            await globalFeedbackService.postComment(userDetails.email, userDetails.name, newComment);
+            await globalFeedbackService.postComment(userDetails.id, userDetails.name, newComment);
             setNewComment('');
         } catch (error: any) {
             console.error("Failed to post comment:", error);
@@ -113,11 +121,11 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
     };
 
     const handleLikeComment = async (commentId: string) => {
-        if (!userDetails?.email || isSubmitting) return;
+        if (!userDetails?.id || isSubmitting) return;
         
         setIsSubmitting(true);
         try {
-            await globalFeedbackService.likeComment(userDetails.email, commentId);
+            await globalFeedbackService.likeComment(userDetails.id, commentId);
         } catch (error: any) {
             console.error("Failed to like comment:", error);
             addToast(error.message || "Could not update like.", "error");
@@ -189,7 +197,7 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
                         ))}
                     </div>
 
-                    <button onClick={handleRatingSubmit} disabled={hasRated || newRating === 0 || isSubmitting} className="w-full bg-primary text-primary-text py-3 rounded-xl hover:bg-primary-dark transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                    <button onClick={handleRatingSubmit} disabled={hasRated || newRating === 0 || isSubmitting} className="w-full bg-primary text-primary-text py-3 rounded-xl hover:bg-primary-dark transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2">
                         {isSubmitting ? "Submitting..." : hasRated ? t('feedback.ratingThankYou' as any) : t('feedback.submitRating' as any)}
                     </button>
                     {globalStats.totalRatings > 0 && (
@@ -213,7 +221,7 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
                     <p className="text-gray-600 dark:text-gray-400 mb-4">{t('feedback.shareThoughtsSubtitle' as any)}</p>
                     <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder={t('feedback.commentPlaceholder' as any)} className="w-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white border border-gray-300 dark:border-gray-600 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-primary resize-none mb-4" rows={3}/>
                     <button onClick={handleCommentSubmit} disabled={!newComment.trim() || !userDetails || isSubmitting} className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-500 transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2">
-                        {isSubmitting ? "Posting..." : <><SendIcon width={20} height={20} /> {t('feedback.postComment' as any)}</>}
+                         {isSubmitting ? "Posting..." : <><SendIcon width={20} height={20} /> {t('feedback.postComment' as any)}</>}
                     </button>
                     <div className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
                         {t('feedback.totalComments' as any, { count: globalStats.totalComments })}

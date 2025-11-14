@@ -41,7 +41,6 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   const t = getTranslator(language);
 
   return (
-    // FIX: Removed unnecessary `as any` type assertion.
     <LanguageContext.Provider value={{ language, setLanguage, t }}>
       {children}
     </LanguageContext.Provider>

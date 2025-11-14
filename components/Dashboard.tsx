@@ -18,8 +18,11 @@ import { ClockIcon } from './icons/ClockIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import LogStudyModal from './LogStudyModal';
 import { timeToMinutes, processAndResizeImage } from '../lib/utils';
+import { initializeUsage, checkUsage } from '../lib/usageManager';
+import UsageIndicator from './UsageIndicator';
 
-const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '', programmeOfStudy: '', institutionAbbreviation: '' };
+// FIX: Added missing 'usage' property to initialize UserDetails correctly.
+const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '', programmeOfStudy: '', institutionAbbreviation: '', usage: initializeUsage() };
 
 const getDayOfWeek = (date: Date): DayOfWeek => {
     const dayIndex = date.getDay(); // Sunday - 0, Monday - 1, ...
@@ -55,6 +58,9 @@ interface DashboardProps {
   setView: (view: any) => void;
   setIntendedStudyContext: (context: { subject: string; fromSlot: PlanSlot } | null) => void;
   setLearningHubState: React.Dispatch<React.SetStateAction<LearningHubState>>;
+  courseCodeMap: CourseCodeMap;
+  setCourseCodeMap: (map: CourseCodeMap) => void;
+  onSavePlanAttempt: (planName: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -75,6 +81,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     setView,
     setIntendedStudyContext,
     setLearningHubState,
+    courseCodeMap,
+    setCourseCodeMap,
+    onSavePlanAttempt
 }) => {
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [planName, setPlanName] = useState('');
@@ -87,7 +96,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   
   const [logStudyModalState, setLogStudyModalState] = useState<{ isOpen: boolean; slot: PlanSlot | null; day: DayOfWeek | null; nextSlot: PlanSlot | null }>({ isOpen: false, slot: null, day: null, nextSlot: null });
 
-  const { lectures, studyGoals, agendaItems, generalGoals, imageFile, imagePreview, step, isEditing } = dashboardInputs;
+  // FIX: Destructure isManualPlan from dashboardInputs.
+  const { lectures, studyGoals, agendaItems, generalGoals, imageFile, imagePreview, step, isManualPlan, isEditing } = dashboardInputs;
 
   const checkForAgendaConflicts = useCallback((
     plan: SmartPlan, 
@@ -155,6 +165,9 @@ const Dashboard: React.FC<DashboardProps> = ({
         const currentSlotIndex = sortedSlots.findIndex(slot => {
             const startMinutes = timeToMinutes(slot.startTime);
             const endMinutes = timeToMinutes(slot.endTime);
+            if (endMinutes < startMinutes) { // Crosses midnight
+                return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+            }
             return startMinutes <= nowMinutes && nowMinutes < endMinutes;
         });
 
@@ -227,16 +240,45 @@ const Dashboard: React.FC<DashboardProps> = ({
     return Array.from(codes);
   };
 
-  const processPlanForCodes = (plan: SmartPlan, isInitialGeneration: boolean) => {
-      const extractedCodes = extractCourseCodes(plan);
-      if (isInitialGeneration && extractedCodes.length > 0) {
-          setTempSmartPlan(plan);
-          setCourseCodes(extractedCodes);
-          setIsCodeModalOpen(true);
-      } else {
-          setSmartPlan(plan);
-      }
-  };
+    const applyCourseCodeMap = (plan: SmartPlan, map: CourseCodeMap): SmartPlan => {
+        if (Object.keys(map).length === 0) return plan;
+
+        return plan.map(day => ({
+            ...day,
+            slots: day.slots.map(slot => {
+                const codeRegex = /\b([A-Z]{2,5}\s?\d{2,4})\b/g;
+                const codeToMatch = slot.code || slot.activity.match(codeRegex)?.[0];
+
+                if (codeToMatch && codeToMatch in map) {
+                    const newName = map[codeToMatch];
+                    if (newName && newName.trim() !== '') {
+                        return { ...slot, activity: newName.trim(), code: codeToMatch };
+                    }
+                }
+                // Ensure code field is populated if found in activity
+                if (codeToMatch && !slot.code) {
+                    return { ...slot, code: codeToMatch };
+                }
+                return slot;
+            })
+        }));
+    };
+
+    const processPlanForCodes = (plan: SmartPlan, isInitialGeneration: boolean) => {
+        const extractedCodes = extractCourseCodes(plan);
+        // Only ask if it's the first generation and there are codes we don't already know.
+        const newCodes = extractedCodes.filter(c => !courseCodeMap[c]);
+
+        if (isInitialGeneration && newCodes.length > 0) {
+            setTempSmartPlan(plan);
+            setCourseCodes(extractedCodes); // Pass all codes to the modal
+            setIsCodeModalOpen(true);
+        } else {
+            // If it's a regeneration, or all codes are known, just apply the map.
+            const finalPlan = applyCourseCodeMap(plan, courseCodeMap);
+            setSmartPlan(finalPlan);
+        }
+    };
   
   const handleNextStep = () => {
     if (!userDetails || !userDetails.name || !userDetails.educationalLevel) {
@@ -280,376 +322,287 @@ const Dashboard: React.FC<DashboardProps> = ({
             setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
             const generatedPlan = await generatePlanFromImage(userDetails, studyGoals, agendaItems, generalGoals, imagePart, isRegeneration ? smartPlan : undefined);
             
-            const extractedLectures: Lecture[] = [];
-            generatedPlan.forEach(dayPlan => {
-                dayPlan.slots.forEach(slot => {
-                    if (slot.type === ActivityType.LECTURE) {
-                        extractedLectures.push({
-                            id: `${dayPlan.day}-${slot.startTime}`,
-                            subject: slot.activity,
-                            day: dayPlan.day,
-                            startTime: slot.startTime,
-                            endTime: slot.endTime,
-                            location: slot.location
-                        });
-                    }
-                });
-            });
-
-            checkForAgendaConflicts(generatedPlan, extractedLectures, agendaItems);
+            if (!Array.isArray(generatedPlan)) {
+                console.error("Received non-array response for plan from image:", generatedPlan);
+                addToast(t('toasts.error.unexpected'), 'error');
+                setGenerationState({ isLoading: false, message: '', error: t('toasts.error.unexpected'), source: null });
+                return;
+            }
+            
+            checkForAgendaConflicts(generatedPlan, lectures, agendaItems);
             processPlanForCodes(generatedPlan, !isRegeneration);
             setGenerationState({ isLoading: false, message: '', error: null, source: null });
-
-        } catch (e) {
-             const message = e instanceof Error ? e.message : String(e);
-             addToast(message || t('toasts.error.unexpected'), 'error');
-             setGenerationState({ isLoading: false, message: '', error: null, source: null });
+        } catch (e: any) {
+            addToast(e.message || 'Failed to generate plan from image.', 'error');
+            setGenerationState({ isLoading: false, message: '', error: e.message, source: null });
         }
-    } else {
-        setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
+    } else { // Manual input
         try {
-            const plan = await generateSmartPlan(userDetails, lectures, studyGoals, agendaItems, generalGoals, isRegeneration ? smartPlan : undefined);
-            checkForAgendaConflicts(plan, lectures, agendaItems);
-            processPlanForCodes(plan, !isRegeneration);
+            setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
+            const generatedPlan = await generateSmartPlan(userDetails, lectures, studyGoals, agendaItems, generalGoals, isRegeneration ? smartPlan : undefined);
+            
+            if (!Array.isArray(generatedPlan)) {
+                console.error("Received non-array response for smart plan:", generatedPlan);
+                addToast(t('toasts.error.unexpected'), 'error');
+                setGenerationState({ isLoading: false, message: '', error: t('toasts.error.unexpected'), source: null });
+                return;
+            }
+
+            checkForAgendaConflicts(generatedPlan, lectures, agendaItems);
+            processPlanForCodes(generatedPlan, !isRegeneration);
             setGenerationState({ isLoading: false, message: '', error: null, source: null });
         } catch (e: any) {
-            const message = e instanceof Error ? e.message : String(e);
-            addToast(message || t('toasts.error.unexpected'), 'error');
-            setGenerationState({ isLoading: false, message: '', error: null, source: null });
+            addToast(e.message || 'Failed to generate plan.', 'error');
+            setGenerationState({ isLoading: false, message: '', error: e.message, source: null });
         }
     }
   };
   
-  const handleCourseCodeConfirmation = (confirmedMap: CourseCodeMap) => {
-    if (!tempSmartPlan) return;
-
-    const finalPlan = tempSmartPlan.map(day => ({
-        ...day,
-        slots: day.slots.map(slot => {
-            const codeRegex = /\b([A-Z]{2,5}\s?\d{2,4})\b/g;
-            // Prefer the dedicated code field, but fall back to regex on the activity.
-            const codeToMatch = slot.code || slot.activity.match(codeRegex)?.[0];
-
-            if (codeToMatch && codeToMatch in confirmedMap) {
-                const newName = confirmedMap[codeToMatch];
-                // If user provided a new name, update the activity and ensure the code field is set.
-                if (newName && newName.trim() !== '') {
-                    return { ...slot, activity: newName.trim(), code: codeToMatch };
-                }
-            }
-            
-            // If no new name was provided, or no code was found,
-            // we still want to ensure the code field is populated if we found a code in the activity string.
-            if (codeToMatch && !slot.code) {
-                return { ...slot, code: codeToMatch };
-            }
-
-            // Otherwise, return the original slot from the temp plan.
-            return slot;
-        })
-    }));
-
-    setSmartPlan(finalPlan);
-    setIsCodeModalOpen(false);
-    setTempSmartPlan(null);
-    setCourseCodes([]);
+  const handleStartOver = () => {
+    setSmartPlan(null);
+    setDashboardInputs({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false, isEditing: false });
   };
-
+  
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
-        if (file.size > 25 * 1024 * 1024) { // 25MB limit
-            addToast(t('toasts.fileSizeTooLarge', { fileName: file.name, size: 25 }), 'error');
-            return;
-        }
-        setDashboardInputs(prev => ({
-            ...prev,
-            imageFile: file,
-            imagePreview: URL.createObjectURL(file),
-            lectures: [],
-            studyGoals: [],
-        }));
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setDashboardInputs(prev => ({ ...prev, imageFile: file, imagePreview: e.target?.result as string, isManualPlan: false }));
+      };
+      reader.readAsDataURL(file);
     }
-  }, [setDashboardInputs, addToast, t]);
+  }, [setDashboardInputs]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/jpeg': ['.jpeg', '.jpg'],
-      'image/png': ['.png'],
-    },
-    multiple: false,
-    disabled: generationState.isLoading || lectures.length > 0 || studyGoals.length > 0,
-  });
-  
-  const clearImage = () => {
-      setDashboardInputs(prev => ({ ...prev, imageFile: null, imagePreview: null }));
-  }
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: { 'image/*': ['.jpeg', '.png', '.jpg'] }, multiple: false });
+
+  const startManualPlan = () => {
+      setDashboardInputs(prev => ({ ...prev, isManualPlan: true, imageFile: null, imagePreview: null}));
+  };
 
   const handleSavePlan = () => {
-      if (smartPlan && planName) {
-          const newPlan: StoredPlan = {
-              id: Date.now().toString(),
-              name: planName,
-              createdAt: new Date().toISOString(),
-              plan: smartPlan,
-              isFavourite: false,
-          };
-          setSavedTimetables([...savedTimetables, newPlan]);
-          setSaveModalOpen(false);
-          setPlanName('');
-          addToast(t('toasts.planSaved'), 'success');
-      }
+    if (!planName.trim()) {
+        addToast(t('toasts.planNameRequired'), 'error');
+        return;
+    }
+    onSavePlanAttempt(planName);
+    setSaveModalOpen(false);
+    setPlanName('');
   };
 
-  const handleStartStudySession = (slot: PlanSlot, day: DayOfWeek) => {
-    setLogStudyModalState({ isOpen: false, slot: null, day: null, nextSlot: null });
-
-    let nextSlot: PlanSlot | null = null;
-    if (smartPlan) {
-        const dayPlan = smartPlan.find(d => d.day === day);
-        if (dayPlan) {
-            const sortedSlots = [...dayPlan.slots].sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
-            const currentIndex = sortedSlots.findIndex(s => s.startTime === slot.startTime && s.activity === slot.activity);
-            if (currentIndex !== -1 && currentIndex + 1 < sortedSlots.length) {
-                nextSlot = sortedSlots[currentIndex + 1];
-            }
+    const handleCodeConfirm = (map: CourseCodeMap) => {
+        const finalMap = { ...courseCodeMap, ...map };
+        setCourseCodeMap(finalMap);
+        if (tempSmartPlan) {
+            const finalPlan = applyCourseCodeMap(tempSmartPlan, finalMap);
+            setSmartPlan(finalPlan);
         }
-    }
-
-    setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
-    const now = Date.now();
-    const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
-    const newSession: ActiveSession = {
-        startTime: now,
-        endTime: now + duration * 60 * 1000,
-        subject: slot.activity,
-        type: ActivityType.STUDY,
-        fromSlot: slot,
-        nextSlot: nextSlot,
-        durationMinutes: duration,
-        day: day,
+        setTempSmartPlan(null);
+        setIsCodeModalOpen(false);
     };
-    setActiveSession(newSession);
-    addToast(t('toasts.sessionStarted'), 'success');
-  };
 
-  const handleStudySlotClick = (slot: PlanSlot, day: DayOfWeek) => {
-    let nextSlot: PlanSlot | null = null;
-    if (smartPlan) {
-        const dayPlan = smartPlan.find(d => d.day === day);
-        if (dayPlan) {
-            const sortedSlots = [...dayPlan.slots].sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
-            const currentIndex = sortedSlots.findIndex(s => s.startTime === slot.startTime && s.activity === slot.activity);
-            if (currentIndex !== -1 && currentIndex + 1 < sortedSlots.length) {
-                nextSlot = sortedSlots[currentIndex + 1];
-            }
-        }
-    }
-    setLogStudyModalState({ isOpen: true, slot, day, nextSlot });
-  };
-  
-  const handleUploadSlidesForSession = (slot: PlanSlot) => {
-    setIntendedStudyContext({ subject: slot.activity, fromSlot: slot });
-    setView('uploadslides');
-    setLogStudyModalState({ isOpen: false, slot: null, day: null, nextSlot: null });
-  };
-  
-  const handleEditInputs = () => {
-    setSmartPlan(null);
-    setDashboardInputs(prev => ({...prev, step: 2}));
-  };
+    const handleStudySlotClick = (slot: PlanSlot, day: DayOfWeek) => {
+        const dayPlan = smartPlan?.find(d => d.day === day);
+        if (!dayPlan) return;
+        
+        const sortedSlots = [...dayPlan.slots].sort((a,b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+        const slotIndex = sortedSlots.findIndex(s => s.startTime === slot.startTime && s.activity === slot.activity);
+        
+        const nextSlot = slotIndex !== -1 && slotIndex + 1 < sortedSlots.length ? sortedSlots[slotIndex + 1] : null;
 
-  const handleStartOver = () => {
-    setSmartPlan(null);
-    setDashboardInputs({
-        lectures: [],
-        studyGoals: [],
-        agendaItems: [],
-        generalGoals: '',
-        imageFile: null,
-        imagePreview: null,
-        step: 1,
-        isManualPlan: false,
-        isEditing: false,
-    });
-  };
+        setLogStudyModalState({ isOpen: true, slot, day, nextSlot });
+    };
 
-  const isNow = (startTime: string, endTime: string): boolean => {
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const startMinutes = timeToMinutes(startTime);
-    const endMinutes = timeToMinutes(endTime);
-    return startMinutes <= nowMinutes && nowMinutes < endMinutes;
-  }
-  
-  const renderPlanCreationSteps = () => {
-    if (!userDetails) return null; // Guard clause
-    if (step === 1) {
-        return (
-            <div>
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">{t('dashboard.createPlanTitle')}</h2>
-              <p className="text-gray-500 dark:text-gray-400 mb-6">{t('dashboard.createPlanSubtitle')}</p>
-              <UserDetailsForm userDetails={userDetails} setUserDetails={setUserDetails} />
-              <button onClick={handleNextStep} className="mt-6 w-full py-3 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark transition-colors">{t('common.confirm')}</button>
-            </div>
-        );
-    }
-    
-    if (step === 2) {
-        return (
-            <div>
-                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 text-center">{t('dashboard.step2.title')}</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6 text-center">{t('dashboard.step2.subtitle')}</p>
-               <div {...getRootProps()} className={`group relative p-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${!!imageFile ? 'border-green-500' : (lectures.length > 0 || studyGoals.length > 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20')} border-gray-300 dark:border-gray-600 text-center ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : ''}`}>
-                 <input {...getInputProps()} />
-                 {imagePreview ? (
-                     <>
-                       <img src={imagePreview} alt={t('dashboard.alt.timetablePreview' as any)} className="max-h-52 mx-auto rounded-lg shadow-md" />
-                       <button onClick={(e) => { e.stopPropagation(); clearImage(); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg leading-none">&times;</button>
-                     </>
-                 ) : (
-                    <>
-                        <UploadIcon className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                        <p className="font-semibold text-gray-700 dark:text-gray-300">{lectures.length > 0 || studyGoals.length > 0 ? t('dashboard.uploadDisabled') : t('dashboard.uploadTimetable')}</p>
-                        <p className="text-sm text-gray-500">{t('dashboard.uploadTimetable.hint')}</p>
-                    </>
-                 )}
-               </div>
-               <div className="flex items-center my-6">
-                 <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
-                 <span className="flex-shrink mx-4 text-gray-500 font-semibold">{t('common.or')}</span>
-                 <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
-               </div>
-                <div className="text-center mb-4">
-                    <p className="text-gray-600 dark:text-gray-400">{t('dashboard.manualEntry')}</p>
-                </div>
-               <TimetableInput 
-                   lectures={lectures} setLectures={setLectures} 
-                   studyGoals={studyGoals} setStudyGoals={setStudyGoals}
-                   agendaItems={agendaItems} setAgendaItems={setAgendaItems}
-                   generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
-                   manualSectionsDisabled={!!imageFile}
-               />
-               <button onClick={handleGeneratePlan} className="mt-8 w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all" disabled={!isInputSufficient || generationState.isLoading}>
-                 {generationState.isLoading ? t('dashboard.generating') : (smartPlan ? t('dashboard.regeneratePlan') : t('dashboard.generatePlan'))}
-               </button>
-             </div>
-        );
-    }
-  };
-  
+    const handleStartSession = (slot: PlanSlot) => {
+        const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
+        const newSession: ActiveSession = {
+            startTime: Date.now(),
+            endTime: Date.now() + duration * 60 * 1000,
+            subject: slot.activity,
+            type: ActivityType.STUDY,
+            fromSlot: slot,
+            nextSlot: logStudyModalState.nextSlot,
+            day: logStudyModalState.day,
+        };
+        setActiveSession(newSession);
+        setView('uploadslides');
+        setLogStudyModalState({isOpen: false, slot: null, day: null, nextSlot: null });
+    };
+
+    const handleUploadSlides = (slot: PlanSlot) => {
+        setIntendedStudyContext({ subject: slot.activity, fromSlot: slot });
+        setView('uploadslides');
+        setLogStudyModalState({isOpen: false, slot: null, day: null, nextSlot: null });
+    };
+
+
   if (!userDetails) {
       return null;
   }
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      {smartPlan ? (
-        <div>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+  if (smartPlan) {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('dashboard.yourSmartPlan')}</h2>
-            <div className="flex flex-wrap gap-2 w-full justify-start sm:w-auto sm:justify-end">
-              <button onClick={handleEditInputs} className="px-4 py-2 text-sm font-medium bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.editInputs')}</button>
-              <button onClick={() => setDashboardInputs(prev => ({...prev, isEditing: true}))} className="px-4 py-2 text-sm font-medium bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.editTimetable')}</button>
-              <button onClick={handleStartOver} className="px-4 py-2 text-sm font-medium bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.startOver')}</button>
-              <button onClick={() => setSaveModalOpen(true)} className="px-4 py-2 text-sm font-medium text-primary-text bg-primary rounded-md hover:bg-primary-dark">{t('common.save')}</button>
+            <div className="flex items-center gap-2">
+                <button onClick={handleStartOver} className="px-4 py-2 text-sm font-semibold bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.startOver')}</button>
+                <button onClick={() => setDashboardInputs(prev => ({...prev, isEditing: true}))} className="px-4 py-2 text-sm font-semibold bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600">{t('dashboard.editTimetable')}</button>
+                <button onClick={handleGeneratePlan} disabled={generationState.isLoading} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary-light/20 text-primary dark:bg-primary-dark/30 dark:text-primary-light rounded-md hover:bg-primary-light/30">
+                    <RefreshIcon className={`w-4 h-4 ${generationState.isLoading ? 'animate-spin' : ''}`} />
+                    {t('dashboard.regeneratePlan')}
+                </button>
+                <button onClick={() => setSaveModalOpen(true)} className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-md hover:bg-green-700">{t('common.save')}</button>
             </div>
-          </div>
+        </div>
+        
+         {currentActivity && (
+             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                 <div className="flex-1">
+                     <h3 className="font-bold text-lg">{t('dashboard.happeningNow')}: <span className="text-primary dark:text-primary-light">{currentActivity.slot.activity}</span></h3>
+                     <p className="text-sm text-gray-500 dark:text-gray-400">{currentActivity.slot.startTime} - {currentActivity.slot.endTime}</p>
+                 </div>
+                 <div className="flex-1 text-center sm:text-left">
+                     <h3 className="font-bold text-lg">{t('dashboard.upNext')}:</h3>
+                     <p className="text-sm text-gray-500 dark:text-gray-400">
+                         {currentActivity.nextSlot ? `${currentActivity.nextSlot.activity} at ${currentActivity.nextSlot.startTime}` : t('dashboard.enjoyFreeTime')}
+                     </p>
+                 </div>
+                 {currentActivity.slot.type === ActivityType.STUDY && (
+                    <button onClick={() => handleStudySlotClick(currentActivity.slot, currentActivity.day)} className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark">
+                        <PlayIcon className="w-5 h-5" />
+                        {t('dashboard.startSession')}
+                    </button>
+                 )}
+                 <button onClick={handleScrollToCurrentActivity} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
+                     <ClockIcon className="w-5 h-5"/>
+                 </button>
+             </div>
+         )}
+        
+        <div className="relative">
+            <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'dashboard'} message={generationState.message} />
+            <SmartPlanView plan={smartPlan} onStudySlotClick={handleStudySlotClick} dayRefs={dayRefs} addToast={addToast} userDetails={userDetails} />
+        </div>
 
-          {smartPlan && (
-            currentActivity ? (
-                <div
-                    onClick={handleScrollToCurrentActivity}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleScrollToCurrentActivity(); } }}
-                    role="button"
-                    tabIndex={0}
-                    className="bg-gradient-to-br from-primary to-sky-400 dark:from-primary-dark dark:to-sky-700 rounded-2xl shadow-xl p-6 md:p-8 mb-8 text-white transition-transform duration-300 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-primary cursor-pointer"
-                >
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <p className="font-semibold text-primary-text/80">{ isNow(currentActivity.slot.startTime, currentActivity.slot.endTime) ? "Happening Now" : "Up Next"} &bull; {currentActivity.day}</p>
-                            <h3 className="text-3xl font-bold mt-1">{currentActivity.slot.activity}</h3>
-                            <div className="flex items-center gap-2 mt-2 text-primary-text/90">
-                                <ClockIcon className="w-5 h-5" />
-                                <span>{currentActivity.slot.startTime} - {currentActivity.slot.endTime}</span>
-                            </div>
-                        </div>
-                        {currentActivity.slot.type === 'study' && getDayOfWeek(new Date()) === currentActivity.day && (
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); handleStudySlotClick(currentActivity.slot, currentActivity.day); }}
-                                className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 rounded-xl font-semibold transition-all backdrop-blur-sm"
-                            >
-                                <PlayIcon className="w-5 h-5"/> Start Session
-                            </button>
-                        )}
-                    </div>
-                </div>
-            ) : (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 text-center mb-8">
-                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">You're all done for today! 🎉</h3>
-                    <p className="text-gray-500 mt-1">Enjoy your free time.</p>
-                </div>
-            )
-          )}
+        {isEditing && (
+            <EditTimetableModal 
+                isOpen={isEditing}
+                onClose={() => setDashboardInputs(prev => ({...prev, isEditing: false}))}
+                plan={smartPlan}
+                setPlan={setSmartPlan}
+                addToast={addToast}
+            />
+        )}
+      </div>
+    );
+  }
 
-          <SmartPlanView plan={smartPlan} onStudySlotClick={handleStudySlotClick} dayRefs={dayRefs} addToast={addToast} userDetails={userDetails} />
+  return (
+    <div className="max-w-4xl mx-auto space-y-8">
+      {step === 1 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+            <h2 className="text-3xl font-bold text-center mb-2">{t('dashboard.createPlanTitle')}</h2>
+            <p className="text-gray-500 text-center mb-8">{t('dashboard.createPlanSubtitle')}</p>
+            <UserDetailsForm userDetails={userDetails} setUserDetails={setUserDetails} />
+            <button onClick={handleNextStep} className="mt-8 w-full py-3 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark transition-colors">{t('common.proceed')}</button>
         </div>
       ) : (
-        <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 md:p-10">
-            <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'dashboard'} message={generationState.message} />
-             {renderPlanCreationSteps()}
-        </div>
-      )}
-
-      {isEditing && smartPlan && (
-        <EditTimetableModal
-            isOpen={isEditing}
-            onClose={() => setDashboardInputs(prev => ({...prev, isEditing: false}))}
-            plan={smartPlan}
-            setPlan={setSmartPlan}
-            addToast={addToast}
-        />
-      )}
-
-      {saveModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm">
-            <h3 className="text-lg font-bold mb-4">{t('dashboard.saveModal.title')}</h3>
-            <input 
-                type="text" 
-                value={planName} 
-                onChange={e => setPlanName(e.target.value)} 
-                placeholder={t('dashboard.planNamePlaceholder')} 
-                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary"
-            />
-            <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
-              <button onClick={handleSavePlan} className="px-4 py-2 bg-primary text-primary-text rounded-md">{t('common.save')}</button>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 relative">
+          <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'dashboard'} message={generationState.message} />
+          <button onClick={() => setDashboardInputs(p => ({...p, step: 1}))} className="absolute top-6 left-6 flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:underline">
+              <LogIcon className="w-4 h-4 rotate-180" /> {t('common.previous')}
+          </button>
+          <div className="text-center pt-8">
+            <h2 className="text-3xl font-bold">{t('dashboard.step2.title')}</h2>
+            <p className="text-gray-500 mb-8">{t('dashboard.step2.subtitle')}</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            {/* Image Upload */}
+            <div className="space-y-4">
+                 <div {...getRootProps()} className={`p-8 border-4 border-dashed rounded-2xl text-center cursor-pointer transition-colors ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600'} ${dashboardInputs.isManualPlan ? 'opacity-50 cursor-not-allowed' : 'hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'}`}>
+                    <input {...getInputProps()} disabled={dashboardInputs.isManualPlan} />
+                    <UploadIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p className="font-semibold">{t('dashboard.uploadTimetable')}</p>
+                    <p className="text-sm text-gray-500">{t('dashboard.uploadTimetable.hint')}</p>
+                </div>
+                {imagePreview && (
+                    <div className="text-center">
+                        <img src={imagePreview} alt={t('dashboard.alt.timetablePreview')} className="max-h-40 mx-auto rounded-md shadow-lg" />
+                    </div>
+                )}
+                 {dashboardInputs.isManualPlan && <p className="text-xs text-center text-yellow-600 dark:text-yellow-400">{t('dashboard.uploadDisabled')}</p>}
             </div>
+
+             <div className="flex items-center gap-4">
+                <hr className="flex-1 border-gray-300 dark:border-gray-600" />
+                <span className="font-bold text-gray-500">{t('common.or')}</span>
+                <hr className="flex-1 border-gray-300 dark:border-gray-600" />
+            </div>
+
+            {/* Manual Entry */}
+             <div className="space-y-4 text-center">
+                <p>{t('dashboard.manualEntry')}</p>
+                <button onClick={startManualPlan} className="px-6 py-3 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark transition-colors">{t('common.proceed')}</button>
+            </div>
+          </div>
+            
+          {isManualPlan && (
+            <div className="mt-8 pt-8 border-t dark:border-gray-700">
+                <TimetableInput 
+                  lectures={lectures} setLectures={setLectures} 
+                  studyGoals={studyGoals} setStudyGoals={setStudyGoals}
+                  agendaItems={agendaItems} setAgendaItems={setAgendaItems}
+                  generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
+                />
+            </div>
+          )}
+
+          <div className="mt-8 text-center">
+            <button onClick={handleGeneratePlan} disabled={!isInputSufficient || generationState.isLoading} className="px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-xl shadow-lg hover:bg-green-700 disabled:opacity-50 transition-all">
+                {t('dashboard.generatePlan')}
+            </button>
           </div>
         </div>
       )}
       
-      {isCodeModalOpen && (
-        <CourseCodeModal
-            isOpen={isCodeModalOpen}
-            onClose={() => setIsCodeModalOpen(false)}
-            onConfirm={handleCourseCodeConfirmation}
-            codes={courseCodes}
-        />
+      {saveModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setSaveModalOpen(false)}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold p-4 border-b dark:border-gray-700">{t('dashboard.saveModal.title')}</h3>
+                <div className="p-4">
+                    <input type="text" value={planName} onChange={e => setPlanName(e.target.value)} placeholder={t('dashboard.planNamePlaceholder')} className="w-full p-2 border rounded-md dark:bg-gray-700" />
+                </div>
+                <div className="flex justify-end gap-2 p-4 border-t dark:border-gray-700">
+                    <button onClick={() => setSaveModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
+                    <button onClick={handleSavePlan} className="px-4 py-2 bg-primary text-primary-text rounded-md">{t('common.save')}</button>
+                </div>
+            </div>
+        </div>
       )}
-
-      <LogStudyModal
+      {isCodeModalOpen && (
+          <CourseCodeModal 
+            isOpen={isCodeModalOpen}
+            onClose={() => { 
+                if (tempSmartPlan) setSmartPlan(tempSmartPlan);
+                setIsCodeModalOpen(false); 
+                setTempSmartPlan(null); 
+            }}
+            onConfirm={handleCodeConfirm}
+            codes={courseCodes}
+            existingMap={courseCodeMap}
+          />
+      )}
+      <LogStudyModal 
         isOpen={logStudyModalState.isOpen}
         onClose={() => setLogStudyModalState({ isOpen: false, slot: null, day: null, nextSlot: null })}
-        onStartSession={(slot) => handleStartStudySession(slot, logStudyModalState.day!)}
-        onUploadSlides={handleUploadSlidesForSession}
+        onStartSession={handleStartSession}
+        onUploadSlides={handleUploadSlides}
         slot={logStudyModalState.slot}
         day={logStudyModalState.day}
         nextSlot={logStudyModalState.nextSlot}
       />
-
     </div>
   );
 };

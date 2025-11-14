@@ -230,9 +230,6 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
 
     const handleNavigate = (target: 'dashboard' | 'uploadslides') => {
         setIsComplete(false);
-        if (target === 'dashboard' && !session.isUntracked) {
-             setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
-        }
         setSession(null);
         setView(target);
     };
@@ -285,7 +282,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                                         className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-200 disabled:opacity-50"
                                         title={`Start your '${session.nextSlot.activity}' break now`}
                                     >
-                                        <CoffeeIcon className="w-4 h-4" /> Start Break
+                                        <CoffeeIcon className="w-4 h-4" /> {t('focusedStudy.startBreak')}
                                     </button>
                                 )}
                                 <button onClick={() => setShowExitConfirm(true)} className="flex items-center gap-2 px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all">
@@ -329,7 +326,9 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                             isStudyModeView={true}
                             intendedStudyContext={null}
                             setIntendedStudyContext={dummySetState as any}
-                            onNewMaterial={() => {}}
+                            onAttemptUpload={(file: File) => {
+                                addToast('Cannot upload new materials during a focused study session.', 'info');
+                            }}
                         />
                     ) : (
                         <div className="h-full flex items-center justify-center text-center text-gray-500 bg-gray-100 dark:bg-gray-800/50 rounded-lg">

@@ -29,9 +29,13 @@ export type View =
   | 'library'
   | 'terms'
   | 'tutorial'
-  | 'notification';
+  | 'notification'
+  | 'pricing'; // New view for monetization
 
 export type Theme = 'light' | 'dark' | 'system';
+
+export type SubscriptionTier = 'free' | 'premium' | 'institution';
+export type SubscriptionStatus = 'active' | 'canceled' | 'expired' | 'trialing';
 
 export enum EducationalLevel {
   HIGH_SCHOOL = 'High School',
@@ -40,6 +44,30 @@ export enum EducationalLevel {
   DOCTORATE = 'Doctorate',
   OTHER = 'Other',
 }
+
+// --- Usage Tracking Types ---
+export type FeatureName = 'timetables' | 'uploads' | 'quizzes' | 'solves';
+
+export interface UsageRecord {
+    count: number;
+    lastReset: string; // ISO string date
+}
+
+export interface UserUsage {
+    timetables: UsageRecord;
+    uploads: UsageRecord;
+    quizzes: UsageRecord;
+    solves: UsageRecord;
+    rewards: {
+        [key in FeatureName]?: number; // Bonus uses granted
+    };
+}
+
+export interface UsageLimit {
+    limit: number;
+    period: 'day' | 'month' | 'total';
+}
+
 
 export interface UserDetails {
   id?: string;
@@ -55,6 +83,9 @@ export interface UserDetails {
   institutionAbbreviation?: string;
   recoveryQuestion?: string;
   recoveryAnswer?: string;
+  subscriptionTier?: SubscriptionTier;
+  subscriptionStatus?: SubscriptionStatus;
+  usage: UserUsage;
 }
 
 export interface Lecture {
@@ -196,6 +227,7 @@ export interface LearningHubState {
     };
     chatHistory: ChatTurn[];
     isProcessing: boolean;
+    processingMessage?: string;
 }
 
 export enum QuizType {

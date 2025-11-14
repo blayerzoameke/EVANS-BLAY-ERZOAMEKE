@@ -6,7 +6,7 @@ import { TrashIcon } from './icons/TrashIcon';
 import { DocumentIcon } from './icons/DocumentIcon';
 import ConfirmationModal from './ConfirmationModal';
 import { storageService, getCurrentUser } from '../src/services/authService';
-import type { Toast, UserDetails, SmartPlan, StoredPlan, Note, TrackedSession, UploadedMaterialInfo } from '../types';
+import type { Toast, UserDetails, SmartPlan, StoredPlan, Note, TrackedSession, UploadedMaterialInfo, View } from '../types';
 
 // Helper functions for PDF generation
 const renderUserDetails = (details: UserDetails | null): string => {
@@ -156,12 +156,16 @@ const renderUploadedMaterials = (materials: UploadedMaterialInfo[] | null): stri
 interface SettingsProps {
     addToast: (message: string, type: Toast['type']) => void;
     handleLogout: () => void;
+    userDetails: UserDetails | null;
+    setShowUpgradeModal: (show: boolean, featureTitle: string) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout }) => {
+const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails, setShowUpgradeModal }) => {
     const { t } = useLanguage();
     const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
     const importInputRef = React.useRef<HTMLInputElement>(null);
+
+    const isPremium = userDetails?.subscriptionTier === 'premium';
 
     const handlePrintReport = () => {
         const currentUser = getCurrentUser();
@@ -248,6 +252,10 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout }) => {
     };
     
     const handleExportData = () => {
+        if (!isPremium) {
+            setShowUpgradeModal(true, t('pricing.feature.export' as any));
+            return;
+        }
         try {
             storageService.exportAllData();
             addToast(t('settings.exportSuccess' as any), 'success');
@@ -295,7 +303,7 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout }) => {
                         <button onClick={handlePrintReport} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700">
                             <DocumentIcon className="w-4 h-4" /> {t('settings.data.printReport' as any)}
                         </button>
-                        <button onClick={handleExportData} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700">
+                        <button onClick={handleExportData} disabled={!isPremium} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">
                             <ExportIcon className="w-4 h-4" /> {t('settings.data.export' as any)}
                         </button>
                         <button onClick={handleImportClick} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700">

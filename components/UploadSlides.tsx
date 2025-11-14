@@ -42,7 +42,7 @@ interface UploadSlidesProps {
   isStudyModeView?: boolean;
   intendedStudyContext: { subject: string; fromSlot: PlanSlot } | null;
   setIntendedStudyContext: (context: { subject: string; fromSlot: PlanSlot } | null) => void;
-  onNewMaterial: (material: UploadedMaterialInfo) => void;
+  onAttemptUpload: (file: File) => void;
 }
 
 type ReadAloudState = 'idle' | 'loading' | 'interactive' | 'playing' | 'paused';
@@ -98,6 +98,7 @@ const KatexRenderer: React.FC<{ content: string; displayMode: boolean }> = React
         const html = katex.renderToString(content, { throwOnError: false, displayMode });
         return <span dangerouslySetInnerHTML={{ __html: html }} />;
     } catch (e) {
+        // FIX: Replaced invalid `code>` with valid `<code>` JSX tag.
         return <code>{content}</code>;
     }
 });
@@ -121,7 +122,7 @@ const RichTextViewer: React.FC<{ content: string; highlightCharIndex?: number }>
             const isHighlighted = highlightCharIndex >= segmentStart && highlightCharIndex < innerOffset && segment.trim().length > 0;
             return <span key={index} className={isHighlighted ? 'bg-primary/20 dark:bg-primary/30 rounded transition-colors duration-150' : ''}>{segment}</span>;
         });
-    }
+    };
 
     const renderInlineElements = (line: string) => {
         const inlineRegex = /(\$\$[\s\S]*?\$\$)|(\$.*?\$)|(\*\*.*?\*\*)|(`.*?`)/g;
@@ -308,7 +309,7 @@ const ChatView: React.FC<ChatViewProps> = ({
     const buttonClass = "p-1.5 bg-gray-100 dark:bg-gray-600/80 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-500/80 backdrop-blur-sm shadow";
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+        <div className="flex flex-col flex-1 bg-gray-50 dark:bg-gray-800/50 rounded-xl overflow-hidden">
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
                 {chatHistory.map((turn, i) => {
                     if (editingMessage && editingMessage.index === i) {
@@ -384,10 +385,9 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   learningHubState, setLearningHubState, notes, setNotes,
   showTitle = true, isStudyModeView = false,
   intendedStudyContext, setIntendedStudyContext,
-  onNewMaterial
+  onAttemptUpload,
 }) => {
   const { t } = useLanguage();
-  const [loadingMessage, setLoadingMessage] = useState('');
   const [chatInput, setChatInput] = useState('');
   
   const [readAloudState, setReadAloudState] = useState<ReadAloudState>('idle');
@@ -408,10 +408,9 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const [customizationRequest, setCustomizationRequest] = useState<{ file: UploadedFile, slot?: PlanSlot, isUntracked: boolean } | null>(null);
   const [editingMessage, setEditingMessage] = useState<{ index: number; text: string } | null>(null);
   
-  const { file, analysisMode, analysisResults, chatHistory, isProcessing } = learningHubState;
+  const { file, analysisMode, analysisResults, chatHistory, isProcessing, processingMessage } = learningHubState;
 
   const setFile = (file: UploadedFile | null) => setLearningHubState(prev => ({ ...prev, file }));
-  const setIsProcessing = (processing: boolean) => setLearningHubState(prev => ({...prev, isProcessing: processing}));
   const setAnalysisMode = (mode: AnalysisMode) => setLearningHubState(prev => ({ ...prev, analysisMode: mode }));
   const setAnalysisResult = (type: 'summarize' | 'explain' | 'read', result: string | null) => {
     setLearningHubState(prev => ({
@@ -527,82 +526,19 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     return { slot, nextSlot, day: currentDay };
   };
 
-  const processFile = useCallback(async (fileToProcess: File, context?: string): Promise<UploadedFile | null> => {
-     try {
-        let base64String: string;
-        let mimeType = fileToProcess.type;
-        let finalSize = fileToProcess.size;
-
-        if (fileToProcess.type.startsWith('image/')) {
-            const resized = await processAndResizeImage(fileToProcess);
-            base64String = resized.base64;
-            mimeType = resized.mimeType;
-            finalSize = atob(base64String).length; // Approximate size
-        } else {
-            base64String = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(fileToProcess);
-                reader.onload = () => resolve((reader.result as string).split(',')[1]);
-                reader.onerror = error => reject(error);
-            });
-        }
-
-        const filePart: ImagePart = { inlineData: { data: base64String, mimeType: mimeType } };
-
-        setLoadingMessage(t('uploadslides.verifying'));
-        const isMaterial = await isStudyMaterial(filePart, { fast: true });
-
-        if (!isMaterial) {
-            addToast(t('examprep.error.notStudyMaterial', { fileName: fileToProcess.name }), 'error');
-            return null;
-        }
-
-        let fileContext = context;
-        if (!fileContext) {
-            setLoadingMessage(t('uploadslides.extractingContext'));
-            fileContext = await getDocumentContext(filePart, { fast: true });
-        }
-
-        return {
-            name: fileToProcess.name,
-            type: mimeType,
-            size: finalSize,
-            base64: base64String,
-            context: fileContext,
-        };
-     } catch(e: any) {
-        addToast(e.message || t('toasts.fileProcessingError'), 'error');
-        return null;
-     }
-  }, [addToast, t]);
   
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[]) => {
     const droppedFile = acceptedFiles[0];
     if (!droppedFile) return;
 
-    if (droppedFile.size > 50 * 1024 * 1024) { // 50MB limit
-        addToast(t('toasts.fileSizeTooLarge', { fileName: droppedFile.name, size: 50 }), 'error');
+    if (droppedFile.size > 25 * 1024 * 1024) { // 25MB limit
+        addToast(t('toasts.fileSizeTooLarge', { fileName: droppedFile.name, size: 25 }), 'error');
         return;
     }
     
-    setIsProcessing(true);
-    const context = intendedStudyContext ? intendedStudyContext.fromSlot.activity : undefined;
-    const processedFile = await processFile(droppedFile, context);
-    if (processedFile) {
-        setLearningHubState(prev => ({ ...prev, file: processedFile, analysisMode: 'actions', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] }));
-        
-        const newMaterial: UploadedMaterialInfo = {
-            name: processedFile.name,
-            type: processedFile.type,
-            size: processedFile.size,
-            context: processedFile.context,
-            uploadedAt: new Date().toISOString()
-        };
+    onAttemptUpload(droppedFile);
 
-        onNewMaterial(newMaterial);
-    }
-    setIsProcessing(false);
-  }, [addToast, t, intendedStudyContext, processFile, setLearningHubState, onNewMaterial]);
+  }, [addToast, t, onAttemptUpload]);
 
   const handleStartStudyRequest = () => {
     if (!file) return;
@@ -775,8 +711,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
       return;
     }
   
-    setIsProcessing(true);
-    setLoadingMessage(t(`uploadslides.loading.${mode}` as any));
+    setLearningHubState(prev => ({...prev, isProcessing: true, processingMessage: t(`uploadslides.loading.${mode}` as any)}));
     try {
       const filePart: ImagePart = { inlineData: { data: file.base64, mimeType: file.type } };
       let result = '';
@@ -794,7 +729,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
       addToast(error.message || `Failed to ${mode} document.`, 'error');
       setAnalysisMode('actions');
     } finally {
-      setIsProcessing(false);
+      setLearningHubState(prev => ({...prev, isProcessing: false, processingMessage: ''}));
       if (mode === 'read') {
         setReadAloudState('interactive');
         setAnalysisMode('read-focus');
@@ -804,17 +739,17 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || !file || isProcessing) return;
-
+    if (!chatInput.trim() || !file) return;
+    
     const userMessage = chatInput;
     const historyForApi: ChatTurn[] = [...chatHistory];
     
     setLearningHubState(prev => ({
         ...prev, 
+        isProcessing: true,
         chatHistory: [...prev.chatHistory, { user: userMessage, blay: t('uploadslides.blayIsTyping') }]
     }));
     setChatInput('');
-    setIsProcessing(true);
 
     try {
         const filePart: ImagePart | null = historyForApi.length === 0 
@@ -844,13 +779,13 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             return { ...prev, chatHistory: newHistory };
         });
     } finally {
-        setIsProcessing(false);
+        setLearningHubState(prev => ({...prev, isProcessing: false}));
     }
   };
   
   const clearFile = () => {
     handleStop();
-    setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
+    setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false, processingMessage: '' });
   };
   
   const saveToNotes = () => {
@@ -905,7 +840,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const AnalysisView: React.FC = () => {
     const content = analysisResults[analysisMode as 'summarize' | 'explain' | 'read'];
     
-    if (isProcessing && !content) return <LoadingIndicator message={loadingMessage} />;
+    if (isProcessing && !content) return <LoadingIndicator message={processingMessage || ''} />;
     
     return (
         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 flex-1 overflow-y-auto">
@@ -916,10 +851,8 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
 
   const ActionCard: React.FC<{ titleKey: string; descKey: string; onClick: () => void }> = ({ titleKey, descKey, onClick }) => (
     <button onClick={onClick} disabled={isProcessing} className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 text-left w-full hover:border-primary dark:hover:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-        {/* FIX: Cast to any to bypass incomplete TranslationKey type. */}
-        <h4 className="font-bold text-lg text-gray-800 dark:text-white">{t(titleKey as any)}</h4>
-        {/* FIX: Cast to any to bypass incomplete TranslationKey type. */}
-        <p className="text-sm text-gray-500 mt-1">{t(descKey as any)}</p>
+        <h4 className="font-bold text-lg text-gray-800 dark:text-white">{t(titleKey)}</h4>
+        <p className="text-sm text-gray-500 mt-1">{t(descKey)}</p>
     </button>
   );
 
@@ -927,7 +860,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     if (analysisMode === 'read-focus') {
         const topBarButtonClass = "p-2 rounded-full text-gray-700 dark:text-gray-200 hover:bg-black/10 dark:hover:bg-white/10 disabled:opacity-50 transition-colors";
         return (
-             <div className="h-full flex flex-col relative bg-gray-200 dark:bg-gray-900 rounded-lg">
+             <div className="flex-1 flex flex-col relative bg-gray-200 dark:bg-gray-900 rounded-lg">
                 <div
                     onMouseEnter={() => setIsHoveringTopBar(true)}
                     onMouseLeave={() => setIsHoveringTopBar(false)}
@@ -974,7 +907,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                     >
                          <div className="h-full overflow-y-auto bg-white dark:bg-gray-800 p-6 rounded-lg">
                             {isProcessing && !analysisResults.read ? (
-                                <LoadingIndicator message={t('uploadslides.loading.read')} />
+                                <LoadingIndicator message={processingMessage || t('uploadslides.loading.read')} />
                             ) : (
                                 <RichTextViewer content={analysisResults.read || t('uploadslides.loading.content' as any)} highlightCharIndex={highlightCharIndex} />
                             )}
@@ -1009,7 +942,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-8 flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-4 sm:p-8 flex flex-col flex-1">
           <div className="flex justify-between items-start mb-6">
               <div>
                   <h3 className="text-xl font-bold text-gray-800 dark:text-white">{file?.name}</h3>
@@ -1027,7 +960,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             <ActionCard titleKey="uploadslides.actions.read" descKey="uploadslides.actions.read.desc" onClick={handleReadAloudClick} />
           </div>
 
-          <div className="flex-1 overflow-hidden min-h-[400px]">
+          <div className="flex-1 overflow-hidden min-h-0">
             {analysisMode !== 'none' && analysisMode !== 'actions' && (
                 <div className="h-full flex flex-col">
                     <div className="flex justify-between items-center mb-2">
@@ -1065,6 +998,13 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                 </div>
             )}
           </div>
+          {!isStudyModeView && !activeSession && file && (
+            <div className="mt-6 text-center">
+                <button onClick={handleStartStudyRequest} className="px-8 py-3 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark transition-all">
+                    {t('uploadslides.startStudySession')}
+                </button>
+            </div>
+          )}
         </div>
     );
   }
@@ -1077,10 +1017,10 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             <p className="text-gray-500 dark:text-gray-400 mt-1">{t('uploadslides.subtitle')}</p>
         </div>
       )}
-      <div className="flex-1">
+      <div className="flex-1 flex flex-col min-h-0">
         {file ? renderFileContent() : (
             <div className="relative h-full">
-                <LoadingOverlay isLoading={isProcessing} message={loadingMessage} />
+                <LoadingOverlay isLoading={isProcessing} message={processingMessage || ''} />
                 <div {...getRootProps()} className={`h-full flex flex-col items-center justify-center p-8 border-4 border-dashed rounded-2xl transition-colors ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : 'border-gray-300 dark:border-gray-600'} ${isProcessing ? 'opacity-50' : 'hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'} cursor-pointer`}>
                     <input {...getInputProps()} />
                      {intendedStudyContext ? (
@@ -1099,13 +1039,6 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             </div>
         )}
       </div>
-      {!isStudyModeView && !activeSession && file && (
-        <div className="mt-6 text-center">
-            <button onClick={handleStartStudyRequest} className="px-8 py-3 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark transition-all">
-                {t('uploadslides.startStudySession')}
-            </button>
-        </div>
-      )}
 
       {sessionPrompt && (
           <SchedulePromptModal
@@ -1129,6 +1062,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             isOpen={!!customizationRequest}
             onClose={() => setCustomizationRequest(null)}
             onConfirm={handleCustomizationConfirm}
+            subject={customizationRequest.slot?.activity || customizationRequest.file.context}
             defaultDuration={customizationRequest.slot ? timeToMinutes(customizationRequest.slot.endTime) - timeToMinutes(customizationRequest.slot.startTime) : 50}
         />
        )}

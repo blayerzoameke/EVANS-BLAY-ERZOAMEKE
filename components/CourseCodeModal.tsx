@@ -10,9 +10,10 @@ interface CourseCodeModalProps {
     onClose: () => void;
     onConfirm: (map: CourseCodeMap) => void;
     codes: string[];
+    existingMap: CourseCodeMap;
 }
 
-const CourseCodeModal: React.FC<CourseCodeModalProps> = ({ isOpen, onClose, onConfirm, codes }) => {
+const CourseCodeModal: React.FC<CourseCodeModalProps> = ({ isOpen, onClose, onConfirm, codes, existingMap }) => {
     const { t } = useLanguage();
     const [mappings, setMappings] = useState<CourseCodeMap>({});
 
@@ -20,11 +21,11 @@ const CourseCodeModal: React.FC<CourseCodeModalProps> = ({ isOpen, onClose, onCo
         if (isOpen) {
             const initialMap: CourseCodeMap = {};
             codes.forEach(code => {
-                initialMap[code] = '';
+                initialMap[code] = existingMap[code] || '';
             });
             setMappings(initialMap);
         }
-    }, [isOpen, codes]);
+    }, [isOpen, codes, existingMap]);
 
     if (!isOpen) return null;
 

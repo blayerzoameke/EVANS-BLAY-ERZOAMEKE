@@ -14,7 +14,7 @@ const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
     useEffect(() => {
         const timer = setTimeout(() => {
             onDismiss(toast.id);
-        }, 5000); // Auto-dismiss after 5 seconds
+        }, 3000); // Auto-dismiss after 3 seconds
 
         return () => {
             clearTimeout(timer);

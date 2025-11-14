@@ -77,7 +77,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
                 <label htmlFor="educationalLevel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.level')}</label>
                 <select name="educationalLevel" id="educationalLevel" value={userDetails.educationalLevel} onChange={handleInputChange} className={inputClasses}>
                     {eduLevelOptions.map(({ value, labelKey }) => (
-                        <option key={value} value={value}>{t(labelKey as any)}</option>
+                        <option key={value} value={value}>{t(labelKey)}</option>
                     ))}
                 </select>
             </div>
@@ -149,7 +149,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
                         value={userDetails.institution || ''}
                         onChange={handleInputChange}
                         className={inputClasses}
-                        placeholder={t('userDetails.institutionPlaceholder.school' as any)}
+                        placeholder={t('userDetails.institutionPlaceholder.school')}
                     />
                 </div>
             )}

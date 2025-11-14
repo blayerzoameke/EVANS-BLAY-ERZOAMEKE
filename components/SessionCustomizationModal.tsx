@@ -6,6 +6,7 @@ interface SessionCustomizationModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: (config: { studyDuration: number; breakDuration: number; breakActivity: string; breakLink: string; breakPlacement: 'during' | 'after' }) => void;
+    subject: string;
     defaultDuration?: number;
 }
 
@@ -17,7 +18,7 @@ const breakOptions = [
     { value: 'custom', labelKey: 'sessionCustomization.break.custom' }
 ];
 
-const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ isOpen, onClose, onConfirm, defaultDuration = 50 }) => {
+const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ isOpen, onClose, onConfirm, subject, defaultDuration = 50 }) => {
     const { t } = useLanguage();
     const [studyDuration, setStudyDuration] = useState(defaultDuration);
     
@@ -70,6 +71,10 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
                     </button>
                 </div>
                 <div className="p-6 space-y-6">
+                     <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-md -mt-2">
+                        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('common.subject')}</p>
+                        <p className="font-bold text-lg text-primary dark:text-primary-light truncate">{subject}</p>
+                    </div>
                     <div>
                         <label htmlFor="study-duration" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.duration')}</label>
                         <input type="number" id="study-duration" value={studyDuration} onChange={e => setStudyDuration(parseInt(e.target.value, 10))} className={`${inputClasses} mt-1`} min="1" />

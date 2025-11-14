@@ -1,15 +1,13 @@
-// FIX: Refactor to use Firebase v8 namespaced API to resolve module import errors.
-// FIX: Changed imports to use the 'compat' path for Firebase v8 compatibility.
-import firebase from "firebase/compat/app";
-import "firebase/compat/firestore";
-import "firebase/compat/analytics";
+import * as firebase from "firebase/app";
+import "firebase/firestore";
+import "firebase/analytics";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDpOBBeFe6BhsdRdo0YtdwNjXT0JO4ZVj0",
   authDomain: "gen-lang-client-0620675983.firebaseapp.com",
   projectId: "gen-lang-client-0620675983",
-  storageBucket: "gen-lang-client-0620675983.firebasestorage.app",
+  storageBucket: "gen-lang-client-0620675983.appspot.com",
   messagingSenderId: "116620127648",
   appId: "1:116620127648:web:a455edea4d7ece65e2c8c5",
   measurementId: "G-L1B793VXN4"

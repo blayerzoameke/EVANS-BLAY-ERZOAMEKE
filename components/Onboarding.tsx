@@ -3,13 +3,15 @@ import UserDetailsForm from './UserDetailsForm.tsx';
 import { UserDetails, EducationalLevel, Toast } from '../types.ts';
 import { useLanguage } from '../contexts/LanguageContext.tsx';
 import { LogoIcon } from './icons/LogoIcon.tsx';
+import { initializeUsage } from '../lib/usageManager.ts';
 
 interface OnboardingProps {
   onComplete: (details: UserDetails) => void;
   addToast: (message: string, type: Toast['type']) => void;
 }
 
-const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, programmeOfStudy: '' };
+// FIX: Added missing 'usage' property to initialize UserDetails correctly.
+const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, programmeOfStudy: '', usage: initializeUsage() };
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete, addToast }) => {
   const { t } = useLanguage();

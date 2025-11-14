@@ -28,11 +28,17 @@ import NotificationManager from '../components/NotificationManager';
 import Welcome from '../components/Welcome';
 import { getCurrentUser, logout, storageService } from './services/authService';
 import { globalFeedbackService } from './services/globalFeedbackService';
-
-import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, PlanSlot, View, UploadedMaterialInfo } from '../types';
+import { redirectToCheckout } from './services/paymentService';
+import Pricing from '../components/Pricing';
+import UpgradeModal from '../components/UpgradeModal';
+import AdBanner from '../components/AdBanner';
+import type { UserDetails, SmartPlan, StoredPlan, Note, Toast, ActiveSession, LearningHubState, NotificationSettings, TrackedSession, GenerationState, QuizState, DashboardInputState, ExamPrepState, ProfileEditState, NotesViewState, ReportDraft, PlanSlot, View, UploadedMaterialInfo, CourseCodeMap, FeatureName, ImagePart, UploadedFile } from '../types';
 import { QuizType, ActivityType } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
-import { timeToMinutes } from '../lib/utils';
+import { timeToMinutes, processAndResizeImage } from '../lib/utils';
+import { initializeUsage, checkUsage, incrementUsage } from '../lib/usageManager';
+import { isStudyMaterial, getDocumentContext } from '../services/geminiService';
+
 
 // Notification Prompt Component
 const NotificationPrompt: React.FC<{
@@ -100,7 +106,7 @@ const App: React.FC = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
-  const [learningHubState, setLearningHubState] = useState<LearningHubState>({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
+  const [learningHubState, setLearningHubState] = useState<LearningHubState>({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false, processingMessage: '' });
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(defaultNotificationSettings);
   const [trackedData, setTrackedData] = useState<TrackedSession[]>([]);
   const [uploadedMaterials, setUploadedMaterials] = useState<UploadedMaterialInfo[]>([]);
@@ -109,6 +115,13 @@ const App: React.FC = () => {
   const [intendedStudyContext, setIntendedStudyContext] = useState<{ subject: string; fromSlot: PlanSlot } | null>(null);
   const [tutorialVideoUrl, setTutorialVideoUrl] = useState<string>('https://www.youtube.com/watch?v=tBxfJ36t9_A');
   const [welcomeComplete, setWelcomeComplete] = useState(() => storageService.loadItem<boolean>('welcomeComplete') || false);
+  const [courseCodeMap, setCourseCodeMap] = useState<CourseCodeMap>({});
+
+  const [upgradeModalInfo, setUpgradeModalInfo] = useState({ isOpen: false, featureTitle: '' });
+  const handleShowUpgradeModal = (show: boolean, featureTitle: string) => {
+    setUpgradeModalInfo({ isOpen: show, featureTitle });
+  };
+
 
   // Persistent component states
   const [dashboardInputs, setDashboardInputs] = useState<DashboardInputState>({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false, isEditing: false });
@@ -134,6 +147,7 @@ const App: React.FC = () => {
         notificationSettings,
         trackedData,
         uploadedMaterials,
+        courseCodeMap,
         quizState: {
             quiz: quizState.quiz,
             currentQuestionIndex: quizState.currentQuestionIndex,
@@ -143,13 +157,12 @@ const App: React.FC = () => {
     allUsersData[userDetails.email] = currentUserData;
     storageService.saveItem('usersData', allUsersData);
 
-  }, [userDetails, smartPlan, savedTimetables, notes, notificationSettings, trackedData, quizState, uploadedMaterials]);
+  }, [userDetails, smartPlan, savedTimetables, notes, notificationSettings, trackedData, quizState, uploadedMaterials, courseCodeMap]);
 
     const loadUserData = useCallback((user: UserDetails) => {
         const allUsersData = storageService.loadItem<any>('usersData') || {};
         let userData = allUsersData[user.email!];
 
-        // Migration for users from before the multi-user storage system
         if (!userData) {
             console.log("Migrating legacy data for user:", user.email);
             userData = {};
@@ -160,8 +173,8 @@ const App: React.FC = () => {
             userData.notificationSettings = storageService.loadItem('notificationSettings');
             userData.quizProgress = storageService.loadItem('quizProgress');
             userData.userDetails = storageService.loadItem('userDetails');
+            userData.courseCodeMap = {}; // Initialize for old users
 
-            // Clean up old top-level keys after migration
             storageService.removeItem('smartPlan');
             storageService.removeItem('savedTimetables');
             storageService.removeItem('notes');
@@ -170,14 +183,18 @@ const App: React.FC = () => {
             storageService.removeItem('quizProgress');
             storageService.removeItem('userDetails');
         }
+        
+        // Ensure usage object is initialized
+        const finalUserDetails = { ...user, ...(userData.userDetails || {}), usage: (userData.userDetails?.usage || user.usage || initializeUsage()) };
 
-        setUserDetails(userData.userDetails || user);
+        setUserDetails(finalUserDetails);
         setSmartPlan(userData.smartPlan || null);
         setSavedTimetables(userData.savedTimetables || []);
         setNotes(userData.notes || []);
         setTrackedData(userData.trackedData || []);
         setUploadedMaterials(userData.uploadedMaterials || []);
         setNotificationSettings(userData.notificationSettings || defaultNotificationSettings);
+        setCourseCodeMap(userData.courseCodeMap || {});
         
         if (userData.quizState && userData.quizState.quiz?.length > 0) {
             setQuizState({ ...defaultQuizState, ...userData.quizState, feedback: null, summary: null });
@@ -185,7 +202,6 @@ const App: React.FC = () => {
             setQuizState(defaultQuizState);
         }
 
-        // Always load global (non-user-specific) settings
         const tutorialVideoUrlData = storageService.loadItem<string>('tutorialVideoUrl');
         if(tutorialVideoUrlData) setTutorialVideoUrl(tutorialVideoUrlData);
 
@@ -203,12 +219,45 @@ const App: React.FC = () => {
     const handler = setTimeout(() => {
       if (isLoggedIn) {
         persistAllState();
-        // Persist global settings separately
         storageService.saveItem('tutorialVideoUrl', tutorialVideoUrl);
       }
     }, 1000);
     return () => clearTimeout(handler);
   }, [isLoggedIn, persistAllState, tutorialVideoUrl]);
+  
+  useEffect(() => {
+    const handlePaymentResult = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const trxRef = urlParams.get('trxref'); // Paystack transaction reference
+        const reference = urlParams.get('reference');
+
+        if (trxRef && reference) {
+            if (userDetails && userDetails.subscriptionTier !== 'premium') {
+                const updatedDetails: UserDetails = {
+                    ...userDetails,
+                    subscriptionTier: 'premium',
+                    subscriptionStatus: 'active',
+                };
+                setUserDetails(updatedDetails);
+                addToast(t('toasts.upgradeSuccess'), 'success');
+            }
+        } else if (urlParams.get('payment_status') === 'cancelled') {
+             addToast(t('toasts.paymentCancelled'), 'info');
+        }
+
+        if (trxRef || reference || urlParams.get('payment_status')) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('trxref');
+            url.searchParams.delete('reference');
+            url.searchParams.delete('payment_status');
+            window.history.replaceState({}, document.title, url.toString());
+        }
+    };
+    
+    if(isLoggedIn) {
+        handlePaymentResult();
+    }
+  }, [isLoggedIn, userDetails, addToast, t]);
 
   const dismissToast = (id: number) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -219,16 +268,48 @@ const App: React.FC = () => {
       storageService.saveItem('welcomeComplete', true);
   };
 
+  const checkAndRun = async (
+    feature: FeatureName,
+    featureTitle: string,
+    action: (...args: any[]) => Promise<void> | void,
+    ...args: any[]
+  ) => {
+    if (!userDetails) return;
+
+    if (userDetails.subscriptionTier === 'premium') {
+      try {
+        await action(...args);
+        return true; 
+      } catch {
+        return false;
+      }
+    }
+
+    const usageStatus = checkUsage(userDetails.usage, feature);
+    if (usageStatus.canUse) {
+      try {
+        await action(...args);
+        setUserDetails(prev => prev ? { ...prev, usage: incrementUsage(prev.usage, feature) } : null);
+        return true;
+      } catch {
+        return false; 
+      }
+    } else {
+      handleShowUpgradeModal(true, featureTitle);
+      return false; 
+    }
+  };
+
+
   const handleLogin = (user: UserDetails) => {
     loadUserData(user);
     setIsLoggedIn(true);
   };
 
   const handleLogout = () => {
-    persistAllState(); // Save final state before logging out
+    persistAllState(); 
     logout();
     
-    // Reset all application state
     setUserDetails(null);
     setIsLoggedIn(false);
     setSmartPlan(null);
@@ -240,6 +321,7 @@ const App: React.FC = () => {
     setTrackedData([]);
     setUploadedMaterials([]);
     setQuizState(defaultQuizState);
+    setCourseCodeMap({});
     setDashboardInputs({ lectures: [], studyGoals: [], agendaItems: [], generalGoals: '', imageFile: null, imagePreview: null, step: 1, isManualPlan: false, isEditing: false });
     setExamPrepState({ mode: 'quiz', topic: '', numQuestions: 5, quizType: QuizType.MCQ, uploadedFiles: [], focusArea: '', isVerifying: false, questionImage: null, questionText: '', solution: null, outputFormat: 'steps', programmingLanguage: 'python', graphInterval: '', graphYInterval: '' });
     setProfileEditState({ isEditing: false, details: null });
@@ -249,19 +331,111 @@ const App: React.FC = () => {
     addToast(t('auth.logoutSuccess'), 'info');
   };
 
-    const handleNewMaterialUpload = useCallback((newMaterial: UploadedMaterialInfo) => {
-        setUploadedMaterials(prevMaterials => {
-            const isNew = !prevMaterials.some(m => m.name === newMaterial.name && m.size === newMaterial.size);
-            if (isNew) {
-                if (userDetails?.id) {
-                    globalFeedbackService.trackMaterialUpload(userDetails.id)
-                        .catch(error => console.error("Failed to track material upload:", error));
-                }
-                return [...prevMaterials, newMaterial];
+    const handleNewMaterialUpload = useCallback(async (fileToProcess: File) => {
+        if (!userDetails) return;
+        setLearningHubState(prev => ({...prev, isProcessing: true, processingMessage: t('uploadslides.verifying')}));
+
+        try {
+            const context = intendedStudyContext ? intendedStudyContext.fromSlot.activity : undefined;
+            
+            let base64String: string;
+            let mimeType = fileToProcess.type;
+            let finalSize = fileToProcess.size;
+    
+            if (fileToProcess.type.startsWith('image/')) {
+                const resized = await processAndResizeImage(fileToProcess);
+                base64String = resized.base64;
+                mimeType = resized.mimeType;
+                finalSize = atob(base64String).length;
+            } else {
+                base64String = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(fileToProcess);
+                    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+                    reader.onerror = error => reject(error);
+                });
             }
-            return prevMaterials;
+            const filePart: ImagePart = { inlineData: { data: base64String, mimeType: mimeType } };
+    
+            const isMaterial = await isStudyMaterial(filePart, { fast: true });
+            if (!isMaterial) {
+                throw new Error(t('examprep.error.notStudyMaterial', { fileName: fileToProcess.name }));
+            }
+    
+            let fileContext = context;
+            if (!fileContext) {
+                setLearningHubState(prev => ({ ...prev, processingMessage: t('uploadslides.extractingContext') }));
+                fileContext = await getDocumentContext(filePart, { fast: true });
+            }
+
+            const processedFile: UploadedFile = {
+                name: fileToProcess.name,
+                type: mimeType,
+                size: finalSize,
+                base64: base64String,
+                context: fileContext,
+            };
+            
+            setLearningHubState(prev => ({ ...prev, file: processedFile, analysisMode: 'actions', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [] }));
+            
+            const newMaterial: UploadedMaterialInfo = {
+                name: processedFile.name,
+                type: processedFile.type,
+                size: processedFile.size,
+                context: processedFile.context,
+                uploadedAt: new Date().toISOString()
+            };
+
+            setUploadedMaterials(prevMaterials => {
+                const isNew = !prevMaterials.some(m => m.name === newMaterial.name && m.size === newMaterial.size);
+                if (isNew) {
+                    if (userDetails?.id) {
+                        globalFeedbackService.trackMaterialUpload(userDetails.id).catch(console.error);
+                    }
+                    return [...prevMaterials, newMaterial];
+                }
+                return prevMaterials;
+            });
+
+        } catch (error: any) {
+            addToast(error.message, 'error');
+            throw error;
+        } finally {
+            setLearningHubState(prev => ({...prev, isProcessing: false, processingMessage: ''}));
+        }
+    }, [addToast, t, userDetails, intendedStudyContext]);
+    
+    const handleSavePlanAttempt = (planName: string) => {
+        checkAndRun('timetables', t('pricing.feature.timetables'), () => {
+            if (!smartPlan) return;
+            const newPlan: StoredPlan = {
+                id: Date.now().toString(),
+                name: planName,
+                createdAt: new Date().toISOString(),
+                plan: smartPlan,
+                isFavourite: false,
+            };
+            setSavedTimetables(prev => [...prev, newPlan]);
+            addToast(t('toasts.planSaved'), 'success');
         });
-    }, [userDetails?.id]);
+    };
+
+    const handleNewMaterialUploadAttempt = (file: File) => {
+        checkAndRun('uploads', t('pricing.feature.materials'), handleNewMaterialUpload, file);
+    };
+
+    const handleGenerateQuizAttempt = (apiAction: () => Promise<void>) => {
+        checkAndRun('quizzes', t('pricing.feature.quizzes'), apiAction);
+    };
+
+    const handleSolveProblemAttempt = (apiAction: () => Promise<void>) => {
+        checkAndRun('solves', t('pricing.feature.solver'), apiAction);
+    };
+
+    const handleUpgrade = (isYearly: boolean) => {
+        const planType = isYearly ? 'yearly' : 'monthly';
+        redirectToCheckout(planType, userDetails);
+    };
 
   const handleBreakCompletion = (skipped: boolean) => {
     const breakSession = activeSession;
@@ -323,7 +497,7 @@ const App: React.FC = () => {
   const isStudyMode = activeSession?.type === 'study';
 
   const renderView = () => {
-    if (!userDetails) return null; // Should not happen if logged in
+    if (!userDetails) return null;
     switch (view) {
       case 'dashboard':
         return <Dashboard 
@@ -344,6 +518,9 @@ const App: React.FC = () => {
                   setView={setView}
                   setIntendedStudyContext={setIntendedStudyContext}
                   setLearningHubState={setLearningHubState}
+                  courseCodeMap={courseCodeMap}
+                  setCourseCodeMap={setCourseCodeMap}
+                  onSavePlanAttempt={handleSavePlanAttempt}
                />;
       case 'profile':
         return <Profile 
@@ -356,7 +533,7 @@ const App: React.FC = () => {
       case 'mytimetables':
         return <MyTimetables savedTimetables={savedTimetables} setSavedTimetables={setSavedTimetables} onLoadPlan={(plan) => { setSmartPlan(plan); setView('dashboard'); }} addToast={addToast} userDetails={userDetails} />;
       case 'progression':
-        return <Progression plan={smartPlan} trackedData={trackedData} />;
+        return <Progression plan={smartPlan} trackedData={trackedData} userDetails={userDetails} />;
       case 'notes':
         return <Notes 
                     notes={notes} 
@@ -367,7 +544,7 @@ const App: React.FC = () => {
       case 'uploadslides':
         return <UploadSlides
                   smartPlan={smartPlan}
-                  setSmartPlan={setSmartPlan as (plan: SmartPlan) => void}
+                  setSmartPlan={setSmartPlan}
                   activeSession={activeSession}
                   setActiveSession={setActiveSession}
                   setView={setView}
@@ -378,7 +555,7 @@ const App: React.FC = () => {
                   setNotes={setNotes}
                   intendedStudyContext={intendedStudyContext}
                   setIntendedStudyContext={setIntendedStudyContext}
-                  onNewMaterial={handleNewMaterialUpload}
+                  onAttemptUpload={handleNewMaterialUploadAttempt}
                 />;
       case 'examprep':
         return <ExamPrep 
@@ -392,6 +569,8 @@ const App: React.FC = () => {
                     setNotes={setNotes}
                     examPrepState={examPrepState}
                     setExamPrepState={setExamPrepState}
+                    onGenerateQuizAttempt={handleGenerateQuizAttempt}
+                    onSolveProblemAttempt={handleSolveProblemAttempt}
                 />;
       case 'language':
         return <LanguageSettings />;
@@ -400,7 +579,12 @@ const App: React.FC = () => {
       case 'notification':
         return <NotificationSettingsComponent settings={notificationSettings} setSettings={setNotificationSettings} />;
       case 'settings':
-        return <Settings addToast={addToast} handleLogout={handleLogout} />;
+        return <Settings 
+                    addToast={addToast} 
+                    handleLogout={handleLogout}
+                    userDetails={userDetails}
+                    setShowUpgradeModal={handleShowUpgradeModal}
+                />;
       case 'report':
         return <Reports 
                     userDetails={userDetails} 
@@ -421,6 +605,8 @@ const App: React.FC = () => {
         return <Library />;
       case 'terms':
         return <Terms />;
+      case 'pricing':
+        return <Pricing userDetails={userDetails} onUpgrade={handleUpgrade} />;
       case 'tutorial':
         return <Tutorial
                     addToast={addToast}
@@ -458,7 +644,7 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <NotificationManager plan={smartPlan} settings={notificationSettings} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-      <Sidebar view={view} setView={setView} isOpen={sidebarOpen} setOpen={setSidebarOpen} />
+      <Sidebar view={view} setView={setView} isOpen={sidebarOpen} setOpen={setSidebarOpen} userDetails={userDetails} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {showNotifPrompt && <NotificationPrompt settings={notificationSettings} setSettings={setNotificationSettings} />}
         <Header 
@@ -471,8 +657,15 @@ const App: React.FC = () => {
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
           {renderView()}
         </main>
+        {userDetails?.subscriptionTier === 'free' && <AdBanner setView={setView} />}
       </div>
        {activeSession?.type === 'break' && <BreakView session={activeSession} onEnd={handleBreakCompletion} />}
+       <UpgradeModal
+          isOpen={upgradeModalInfo.isOpen}
+          onClose={() => handleShowUpgradeModal(false, '')}
+          setView={setView}
+          featureTitle={upgradeModalInfo.featureTitle}
+        />
     </div>
   );
 };

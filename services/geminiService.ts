@@ -182,7 +182,8 @@ export const generatePlanFromImage = async (
 export const isImageTimetable = async (image: ImagePart): Promise<boolean> => {
     const prompt = "Does this image appear to be a school or university timetable? Respond with only 'true' or 'false'.";
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        // FIX: Use latest model alias.
+        model: 'gemini-flash-latest',
         contents: { parts: [{ text: prompt }, image] },
         config: {
             safetySettings,
@@ -194,7 +195,8 @@ export const isImageTimetable = async (image: ImagePart): Promise<boolean> => {
 export const getDocumentContext = async (file: ImagePart, options?: { fast: boolean }): Promise<string> => {
     const prompt = "What is the primary subject or topic of this document? Respond with only the subject name (e.g., 'Quantum Physics', 'British History').";
     const response = await ai.models.generateContent({
-        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        // FIX: Use latest model alias.
+        model: options?.fast ? 'gemini-flash-latest' : 'gemini-2.5-pro',
         contents: { parts: [{ text: prompt }, file] },
         config: {
             safetySettings,
@@ -206,7 +208,8 @@ export const getDocumentContext = async (file: ImagePart, options?: { fast: bool
 export const isStudyMaterial = async (file: ImagePart, options?: { fast: boolean }): Promise<boolean> => {
     const prompt = "Is this document likely to be educational or study material (like lecture notes, a textbook page, a research paper)? Respond with only 'true' or 'false'.";
     const response = await ai.models.generateContent({
-        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        // FIX: Use latest model alias.
+        model: options?.fast ? 'gemini-flash-latest' : 'gemini-2.5-pro',
         contents: { parts: [{ text: prompt }, file] },
         config: {
             safetySettings,
@@ -218,7 +221,8 @@ export const isStudyMaterial = async (file: ImagePart, options?: { fast: boolean
 export const summarizeDocument = async (file: ImagePart, context: string, options?: { fast: boolean }): Promise<string> => {
     const prompt = `Provide a concise summary of this document about ${context}. Focus on the key concepts, definitions, and main arguments. Use markdown for formatting.`;
     const response = await ai.models.generateContent({
-        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        // FIX: Use latest model alias.
+        model: options?.fast ? 'gemini-flash-latest' : 'gemini-2.5-pro',
         contents: { parts: [{ text: prompt }, file] },
         config: {
             safetySettings,
@@ -230,7 +234,8 @@ export const summarizeDocument = async (file: ImagePart, context: string, option
 export const explainDocument = async (file: ImagePart, context: string, options?: { fast: boolean }): Promise<string> => {
     const prompt = `Explain the content of this document about ${context} in a simple, easy-to-understand way. Use analogies and break down complex ideas. Use markdown for formatting.`;
     const response = await ai.models.generateContent({
-        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        // FIX: Use latest model alias.
+        model: options?.fast ? 'gemini-flash-latest' : 'gemini-2.5-pro',
         contents: { parts: [{ text: prompt }, file] },
         config: {
             safetySettings,
@@ -242,7 +247,8 @@ export const explainDocument = async (file: ImagePart, context: string, options?
 export const extractTextFromDocument = async (file: ImagePart, options?: { fast: boolean }): Promise<string> => {
     const prompt = "Diligently and thoroughly extract every single piece of text from this document. Do not miss any text, including headers, footers, titles, and text inside images or diagrams. Preserve the original formatting, including headings, lists, and paragraphs, as much as possible using markdown.";
     const response = await ai.models.generateContent({
-        model: options?.fast ? 'gemini-2.5-flash' : 'gemini-2.5-pro',
+        // FIX: Use latest model alias.
+        model: options?.fast ? 'gemini-flash-latest' : 'gemini-2.5-pro',
         contents: { parts: [{ text: prompt }, file] },
         config: {
             safetySettings,
@@ -329,7 +335,8 @@ export const generateQuiz = async (
 export const isImageAProblem = async (image: ImagePart): Promise<boolean> => {
     const prompt = "Does this image contain an academic problem, equation, or question (e.g., from a textbook, exam paper, or whiteboard)? Respond with only 'true' or 'false'.";
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        // FIX: Use latest model alias.
+        model: 'gemini-flash-latest',
         contents: { parts: [{ text: prompt }, image] },
         config: {
             safetySettings,
@@ -381,5 +388,36 @@ export const solveProblem = async (
             safetySettings,
         },
     });
+    return response.text.trim();
+};
+
+export const generateWeeklyProgressComment = async (
+    userDetails: UserDetails,
+    weeklyData: { subject: string; scheduledHours: number; trackedHours: number }[]
+): Promise<string> => {
+    const prompt = `
+        You are Blay, a friendly and supportive AI academic coach. The user's name is ${userDetails.name}.
+        Analyze the following weekly study data for Monday to Sunday, which shows scheduled hours vs. tracked (completed) hours for each subject:
+        ${JSON.stringify(weeklyData)}
+
+        Based on this data, write a short (2-3 sentences), personalized, and encouraging comment for ${userDetails.name}.
+        - If they met or exceeded their goals, praise their dedication and consistency.
+        - If they fell short on some subjects, be encouraging and gently suggest focusing on those subjects, without being critical.
+        - If they tracked time but had no goals, praise the effort and suggest setting goals for better tracking.
+        - If they didn't track any time, gently remind them to start tracking to see their progress.
+        - The tone must be positive and motivational.
+        - Address the user by their name.
+        - Do not use markdown. Respond in plain text only.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            temperature: 0.8,
+            safetySettings,
+        },
+    });
+
     return response.text.trim();
 };

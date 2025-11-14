@@ -1,14 +1,18 @@
 
+
 import React, { useMemo, useState, useEffect } from 'react';
-import { SmartPlan, ActivityType, DayOfWeek, TrackedSession } from '../types';
+import { SmartPlan, ActivityType, DayOfWeek, TrackedSession, UserDetails } from '../types';
 import { DAYS_OF_WEEK } from '../constants';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useColorTheme } from '../contexts/ColorThemeContext';
 import { timeToMinutes } from '../lib/utils';
+import { generateWeeklyProgressComment } from '../services/geminiService';
+import { GeminiIcon } from './icons/GeminiIcon';
 
 interface ProgressionProps {
   plan: SmartPlan | null;
   trackedData: TrackedSession[];
+  userDetails: UserDetails | null;
 }
 
 // Helper component for card layout
@@ -58,10 +62,12 @@ const DonutChart: React.FC<{ data: { type: string; value: number; color: string 
     );
 };
 
-const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
+const Progression: React.FC<ProgressionProps> = ({ plan, trackedData, userDetails }) => {
   const { t } = useLanguage();
   const { colorTheme } = useColorTheme();
   const [chartColors, setChartColors] = useState({ study: '', lecture: '', agenda: '', break: '', free: '' });
+  const [weeklyComment, setWeeklyComment] = useState<string>('');
+  const [isCommentLoading, setIsCommentLoading] = useState<boolean>(true);
   
   useEffect(() => {
     // This utility function creates a temporary DOM element with a given Tailwind class,
@@ -128,9 +134,32 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
       dailyTotals.set(day.day, dayTotalMinutes);
     }
     
-    // Process tracked data
+    // Process tracked data for the current week
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    // Adjust so Monday is 0 and Sunday is 6
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - diffToMonday);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999); // Include all of Sunday
+
+    const weeklyTrackedData = trackedData.filter(session => {
+        // The date string is 'YYYY-MM-DD'. A robust way to parse is to split and construct.
+        const parts = session.date.split('-').map(Number);
+        if (parts.length !== 3) return false;
+        const [year, month, day] = parts;
+        // The month is 0-indexed in the Date constructor, so we subtract 1.
+        const sessionDate = new Date(year, month - 1, day);
+        return sessionDate >= startOfWeek && sessionDate <= endOfWeek;
+    });
+
     const trackedStudyBySubject = new Map<string, number>();
-    trackedData.forEach(session => {
+    weeklyTrackedData.forEach(session => {
         trackedStudyBySubject.set(session.subject, (trackedStudyBySubject.get(session.subject) || 0) + session.durationMinutes);
     });
 
@@ -167,6 +196,32 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
     };
   }, [plan, trackedData, chartColors, t]);
 
+  useEffect(() => {
+    if (stats?.trackedVsScheduled && userDetails) {
+      const hasTrackedData = stats.trackedVsScheduled.some(item => item.trackedHours > 0);
+      
+      if (hasTrackedData) {
+        setIsCommentLoading(true);
+        generateWeeklyProgressComment(userDetails, stats.trackedVsScheduled)
+          .then(comment => {
+            setWeeklyComment(comment);
+          })
+          .catch(error => {
+            console.error("Failed to generate weekly comment:", error);
+            setWeeklyComment(''); // Or some error message
+          })
+          .finally(() => {
+            setIsCommentLoading(false);
+          });
+      } else {
+        setWeeklyComment('');
+        setIsCommentLoading(false);
+      }
+    } else {
+        setIsCommentLoading(false);
+    }
+  }, [stats?.trackedVsScheduled, userDetails]);
+
   if (!plan || !stats) {
     return (
       <div className="max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-6 md:p-10 text-center">
@@ -188,6 +243,23 @@ const Progression: React.FC<ProgressionProps> = ({ plan, trackedData }) => {
          <p className="text-gray-500 dark:text-gray-400 mt-1">{t('progression.subtitle')}</p>
        </div>
        
+       <StatsCard title={t('progression.weeklyInsight.title')}>
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0 bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-light rounded-full p-3">
+             <GeminiIcon className="w-6 h-6" />
+          </div>
+          <div>
+            {isCommentLoading ? (
+              <p className="text-gray-500 dark:text-gray-400 italic">{t('progression.weeklyInsight.loading')}</p>
+            ) : weeklyComment ? (
+              <p className="text-gray-700 dark:text-gray-300">{weeklyComment}</p>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400">{t('progression.weeklyInsight.noData')}</p>
+            )}
+          </div>
+        </div>
+      </StatsCard>
+
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <StatsCard title={t('progression.weeklyOverview')} className="lg:col-span-1">
                 <div className="space-y-4">

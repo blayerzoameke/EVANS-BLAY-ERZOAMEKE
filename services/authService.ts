@@ -1,5 +1,6 @@
 import type { UserDetails } from '../types.ts';
 import { EducationalLevel } from '../types.ts';
+import { initializeUsage } from '../lib/usageManager';
 
 // --- Centralized Storage Service ---
 
@@ -198,6 +199,7 @@ export const signUp = async (
                 return;
             }
             
+            // FIX: Added missing 'usage' property to initialize UserDetails correctly.
             const newUser: UserRecord = {
                 id: Date.now().toString(),
                 name,
@@ -206,6 +208,7 @@ export const signUp = async (
                 recoveryQuestion,
                 recoveryAnswer,
                 educationalLevel: EducationalLevel.UNDERGRADUATE,
+                usage: initializeUsage(),
             };
             
             users.push(newUser);
@@ -284,11 +287,13 @@ export const resetPassword = async (email: string, newPassword: string): Promise
 export const socialLogin = async (provider: string): Promise<UserDetails> => {
     return new Promise((resolve) => {
         setTimeout(() => {
+            // FIX: Added missing 'usage' property to initialize UserDetails correctly.
             const user: UserDetails = {
                 name: `Alex Doe`,
                 email: `alex.doe@example.com`,
                 educationalLevel: EducationalLevel.UNDERGRADUATE,
-                profilePicture: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzc1NzU3NSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==`
+                profilePicture: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzc1NzU3NSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==`,
+                usage: initializeUsage(),
             };
             
             const token = createToken(user);

@@ -1,6 +1,7 @@
 import type { UserDetails } from '../../types.ts';
 import { EducationalLevel } from '../../types.ts';
 import { globalFeedbackService } from './globalFeedbackService';
+import { initializeUsage } from '../../lib/usageManager';
 
 // --- Centralized Storage Service ---
 
@@ -202,6 +203,7 @@ export const signUp = async (
                 }
                 
                 const userId = Date.now().toString(); // Use a consistent ID
+                // FIX: Added missing 'usage' property to initialize UserDetails correctly.
                 const newUser: UserRecord = {
                     id: userId,
                     name,
@@ -210,12 +212,16 @@ export const signUp = async (
                     recoveryQuestion,
                     recoveryAnswer,
                     educationalLevel: EducationalLevel.UNDERGRADUATE,
+                    // FIX: Initialize subscription tier for new users.
+                    subscriptionTier: 'free',
+                    subscriptionStatus: 'active',
+                    usage: initializeUsage(),
                 };
                 
                 users.push(newUser);
                 saveUsers(users);
 
-                // Register user in the global feedback system to increment the count
+                // FIX: Register user in the global feedback system to increment the count
                 await globalFeedbackService.registerUser(userId, name, email);
 
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -243,13 +249,20 @@ export const login = async (email: string, password_param: string): Promise<User
                     return;
                 }
 
-                // Update activity in the global feedback system (idempotent)
+                // FIX: Update activity in the global feedback system (idempotent)
                 if(user.id && user.name && user.email) {
                     await globalFeedbackService.registerUser(user.id, user.name, user.email);
                 }
 
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { password, ...userSession } = user;
+
+                // FIX: Ensure subscription tier exists for older users for backward compatibility.
+                if (!userSession.subscriptionTier) {
+                    userSession.subscriptionTier = 'free';
+                    userSession.subscriptionStatus = 'active';
+                }
+
                 const token = createToken(userSession as UserDetails);
                 storageService.saveItem(SESSION_TOKEN_KEY, token);
 
@@ -303,11 +316,15 @@ export const resetPassword = async (email: string, newPassword: string): Promise
 export const socialLogin = async (provider: string): Promise<UserDetails> => {
     return new Promise((resolve) => {
         setTimeout(() => {
+            // FIX: Added missing 'usage' property to initialize UserDetails correctly.
             const user: UserDetails = {
                 name: `Alex Doe`,
                 email: `alex.doe@example.com`,
                 educationalLevel: EducationalLevel.UNDERGRADUATE,
-                profilePicture: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzc1NzU3NSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==`
+                profilePicture: `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzc1NzU3NSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==`,
+                subscriptionTier: 'free',
+                subscriptionStatus: 'active',
+                usage: initializeUsage(),
             };
             
             const token = createToken(user);
@@ -334,10 +351,11 @@ export const getCurrentUser = (): UserDetails | null => {
     // Legacy migration from before token system
     const oldUser = storageService.loadItem<UserDetails>('currentUser');
     if (oldUser) {
-        const newToken = createToken(oldUser);
+        const userWithTier = { ...oldUser, subscriptionTier: oldUser.subscriptionTier || 'free' } as UserDetails;
+        const newToken = createToken(userWithTier);
         storageService.saveItem(SESSION_TOKEN_KEY, newToken);
         storageService.removeItem('currentUser');
-        return oldUser;
+        return userWithTier;
     }
     
     return null;

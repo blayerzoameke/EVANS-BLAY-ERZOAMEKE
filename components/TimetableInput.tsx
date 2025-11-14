@@ -76,7 +76,7 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
                   <input id={`lec-subject-${lec.id}`} type="text" placeholder={t('timetableinput.subject')} value={lec.subject} onChange={e => updateLecture(lec.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
               </div>
                <div>
-                  <label htmlFor={`lec-location-${lec.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Location</label>
+                  <label htmlFor={`lec-location-${lec.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.location')}</label>
                   <input id={`lec-location-${lec.id}`} type="text" placeholder="e.g. Room 204" value={lec.location} onChange={e => updateLecture(lec.id, 'location', e.target.value)} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
               </div>
               <div>
@@ -133,7 +133,7 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
                 <input id={`agenda-title-${item.id}`} type="text" placeholder={t('timetableinput.activityTitle')} value={item.title} onChange={e => updateAgendaItem(item.id, 'title', e.target.value)} className={inputClasses} disabled={disabled} />
               </div>
               <div>
-                  <label htmlFor={`agenda-location-${item.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Location</label>
+                  <label htmlFor={`agenda-location-${item.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.location')}</label>
                   <input id={`agenda-location-${item.id}`} type="text" placeholder="e.g. Gym" value={item.location} onChange={e => updateAgendaItem(item.id, 'location', e.target.value)} className={inputClasses} disabled={disabled} />
               </div>
               <div>

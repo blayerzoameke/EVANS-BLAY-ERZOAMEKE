@@ -51,8 +51,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
 
     const shareData = {
       title: t('header.title'),
-// FIX: Argument of type '"about.intro"' is not assignable to parameter of type '...'. The type definition for translation keys is incomplete. Casting to 'any' as a temporary fix.
-      text: t('about.intro' as any),
+      text: t('about.intro'),
       url: appUrl,
     };
 
@@ -126,7 +125,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
                         className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
                         <LogoutIcon className="w-4 h-4" />
-                        {t('auth.logout' as any)}
+                        {t('auth.logout')}
                     </button>
                 </div>
             )}

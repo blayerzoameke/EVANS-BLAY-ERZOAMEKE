@@ -1,4 +1,5 @@
 
+
 export const translations = {
     "common.save": "Guardar",
     "common.cancel": "Cancelar",
@@ -301,6 +302,9 @@ export const translations = {
     "progression.dailyChartLabel": "Gráfico de horas programadas diarias",
     "progression.legend.tracked": "Registrado",
     "progression.legend.scheduled": "Programado",
+    "progression.weeklyInsight.title": "Análisis Semanal de Blay",
+    "progression.weeklyInsight.loading": "Analizando tu semana...",
+    "progression.weeklyInsight.noData": "¡Registra algunas sesiones de estudio esta semana para recibir comentarios de Blay!",
     "notes.search": "Buscar notas...",
     "notes.newNote": "Nueva Nota",
     "notes.subject": "Asunto",
@@ -670,5 +674,21 @@ export const translations = {
     "settings.clearSuccess": "Todos los datos han sido borrados. La aplicación se recargará ahora.",
     "settings.exportSuccess": "¡Datos exportados con éxito! Revisa tu carpeta de descargas.",
     "settings.clearSuccessTitle": "Datos Borrados Correctamente",
-    "settings.clearSuccessBody": "Todos los datos de su aplicación han sido eliminados. La aplicación se reiniciará ahora para comenzar una nueva sesión."
+    "settings.clearSuccessBody": "Todos los datos de su aplicación han sido eliminados. La aplicación se reiniciará ahora para comenzar una nueva sesión.",
+    "usage.title": "Uso del Plan Gratuito",
+    "usage.period.day": "diario",
+    "usage.period.month": "mensual",
+    "usage.period.total": "total",
+    "usage.period.tomorrow": "mañana",
+    "usage.period.nextMonth": "el próximo mes",
+    "usage.resets": "Se reinicia {period}.",
+    "pricing.feature.timetables.free": "5 horarios guardados por mes",
+    "focusedStudy.title": "Sesión de Estudio Enfocada",
+    "focusedStudy.untracked": "No Rastreado",
+    "focusedStudy.scheduled": "Programado",
+    "focusedStudy.complete": "% completado",
+    "focusedStudy.pause": "Pausa",
+    "focusedStudy.resume": "Reanudar",
+    "focusedStudy.exit": "Salir",
+    "focusedStudy.startBreak": "Iniciar Descanso"
 }
