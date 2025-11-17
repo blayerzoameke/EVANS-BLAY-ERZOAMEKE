@@ -663,11 +663,10 @@ export const ExamPrep: React.FC<ExamPrepProps> = ({
                 setGenerationState(prev => ({ ...prev, message: t('examprep.creatingQuiz') }));
                 const questions = await generateQuiz(combinedContent, numQuestions, quizType, focusArea);
                 
-                if (Array.isArray(questions) && questions.length > 0) {
+                if (questions && questions.length > 0) {
                      setQuizState({ quiz: questions, currentQuestionIndex: 0, userAnswers: [], feedback: null, summary: null });
                      setGenerationState({ isLoading: false, message: '', error: null, source: null });
                 } else {
-                     console.error("Received non-array or empty response for quiz:", questions);
                      throw new Error(t('examprep.error.noQuestions'));
                 }
             } catch (error: any) {

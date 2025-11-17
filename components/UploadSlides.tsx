@@ -998,13 +998,6 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                 </div>
             )}
           </div>
-          {!isStudyModeView && !activeSession && file && (
-            <div className="mt-6 text-center">
-                <button onClick={handleStartStudyRequest} className="px-8 py-3 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark transition-all">
-                    {t('uploadslides.startStudySession')}
-                </button>
-            </div>
-          )}
         </div>
     );
   }
@@ -1039,6 +1032,13 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
             </div>
         )}
       </div>
+      {!isStudyModeView && !activeSession && file && (
+        <div className="mt-6 text-center">
+            <button onClick={handleStartStudyRequest} className="px-8 py-3 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark transition-all">
+                {t('uploadslides.startStudySession')}
+            </button>
+        </div>
+      )}
 
       {sessionPrompt && (
           <SchedulePromptModal

@@ -1,7 +1,7 @@
 // FIX: Changed imports to use the 'compat' path for Firebase v8 compatibility.
 import { db } from './firebase';
-import * as firebase from 'firebase/app';
-import 'firebase/firestore';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 // ============================================
 // ENHANCED INTERFACES
