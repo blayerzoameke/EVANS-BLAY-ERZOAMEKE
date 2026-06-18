@@ -347,23 +347,31 @@ export const signUp = async (name: string, email: string, password_param: string
         recoveryAnswer
     };
     
-    // Register user for feedback global counts
-    await globalFeedbackService.registerUser(user.uid, name, email);
-    
-    await storageService.saveUserData(user.uid, { userDetails: newUser });
-    await storageService.saveItem(getUserDataKey(newUser), { userDetails: newUser });
-    await storageService.saveItem(SESSION_TOKEN_KEY, createToken(newUser));
+    // Register user for feedback global counts & save data in parallel
+    await Promise.all([
+        globalFeedbackService.registerUser(user.uid, name, email).catch(console.error),
+        storageService.saveUserData(user.uid, { userDetails: newUser }),
+        storageService.saveItem(getUserDataKey(newUser), { userDetails: newUser }),
+        storageService.saveItem(SESSION_TOKEN_KEY, createToken(newUser))
+    ]);
+
     return newUser;
 };
 
 export const login = async (email: string, password_param: string): Promise<UserDetails> => {
     const userCredential = await signInWithEmailAndPassword(auth, email, password_param);
     const user = userCredential.user;
-    const cloudData = await storageService.loadUserData(user.uid);
+    
+    // load local and cloud data in parallel
+    const tempUserForKeys = { id: user.uid, email: user.email || email };
+    const [cloudData, localData] = await Promise.all([
+        storageService.loadUserData(user.uid),
+        storageService.migrateEmailDataToUserId(tempUserForKeys as UserDetails)
+    ]);
+    
     const userDetails = normalizeUserDetails(user, cloudData);
     const idKey = getUserDataKey(userDetails);
     const legacyEmailKey = `${USER_KEY_PREFIX}${email}`;
-    const localData = await storageService.migrateEmailDataToUserId(userDetails);
     
     let finalData = cloudData;
     if (localData && cloudData) {
@@ -385,10 +393,14 @@ export const login = async (email: string, password_param: string): Promise<User
 
     const finalUserDetails = normalizeUserDetails(user, finalData || { userDetails });
     const savedData = { ...(finalData || {}), userDetails: finalUserDetails };
-    await storageService.saveItem(idKey, savedData);
-    await storageService.saveItem(legacyEmailKey, savedData);
-    await storageService.saveUserData(user.uid, savedData);
-    await storageService.saveItem(SESSION_TOKEN_KEY, createToken(finalUserDetails));
+
+    await Promise.all([
+        storageService.saveItem(idKey, savedData),
+        storageService.saveItem(legacyEmailKey, savedData),
+        storageService.saveUserData(user.uid, savedData),
+        storageService.saveItem(SESSION_TOKEN_KEY, createToken(finalUserDetails))
+    ]);
+
     return finalUserDetails;
 };
 
@@ -534,12 +546,6 @@ export const signInWithGoogle = async (): Promise<UserDetails> => {
         window.matchMedia?.('(display-mode: standalone)').matches;
 
     if (isStandalonePWA) {
-        const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
-        if (isIOS) {
-            throw new Error(
-                'Google Sign-In is restricted in iOS PWA standalone mode due to Apple security policies. Please sign in with your email and password of EduBlay instead.'
-            );
-        }
         await storageService.setRedirectPending();
         await signInWithRedirect(auth, provider);
         throw new Error('redirecting');

@@ -204,11 +204,11 @@ const SignUp: React.FC<SignUpProps> = ({ onLogin }) => {
             if (mode === 'signUp') {
                 const user = await signUp(formData.name, formData.email, formData.password, formData.recoveryQuestion, formData.recoveryAnswer);
                 setMessage(t('auth.signupSuccess'));
-                setTimeout(() => onLogin(user), 800);
+                onLogin(user);
             } else {
                 const user = await login(formData.email, formData.password);
                 setMessage(t('auth.loginSuccess'));
-                setTimeout(() => onLogin(user), 400);
+                onLogin(user);
             }
         } catch (err: any) {
             const msg = (err.message||'').toLowerCase();
@@ -230,7 +230,7 @@ const SignUp: React.FC<SignUpProps> = ({ onLogin }) => {
         
         signInWithGoogle().then(user => {
             setMessage(t('auth.loginSuccess') || 'Signed in with Google');
-            setTimeout(() => onLogin(user), 300);
+            onLogin(user);
         }).catch((err: any) => {
             setBusy(false);
             if (err?.message === 'redirecting') return; 

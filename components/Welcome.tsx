@@ -49,11 +49,16 @@ const Welcome: React.FC<WelcomeProps> = ({ onProceed }) => {
     const [installPrompt, setInstallPrompt] = useState<any>(null);
     const [canInstall, setCanInstall] = useState(false);
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const [showIosPrompt, setShowIosPrompt] = useState(false);
 
     useEffect(() => {
         // Check if already installed (standalone mode)
-        if (window.matchMedia('(display-mode: standalone)').matches) {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+        if (isStandalone) {
             setIsInstalled(true);
+        } else if (isIOS) {
+            // Show big prompt immediately if not installed on iOS
+            setShowIosPrompt(true);
         }
 
         setTimeout(() => setVisible(true), 80);
@@ -184,21 +189,25 @@ const Welcome: React.FC<WelcomeProps> = ({ onProceed }) => {
 
                 .w-slide-up{animation:wslideup .5s cubic-bezier(.22,1,.36,1) both;}
 
-                .w-ios-tip{
-                    background:rgba(255,255,255,.06);
-                    border:1px solid rgba(255,255,255,.12);
-                    backdrop-filter:blur(10px);
-                    border-radius:14px;
-                    padding:12px 18px;
-                    display:flex;
-                    align-items:center;
-                    gap:10px;
-                    color:rgba(255,255,255,.65);
-                    font-size:13px;
-                    font-weight:600;
-                    max-width:400px;
-                    width:100%;
-                    text-align:left;
+                .w-ios-tip {
+                    background: rgba(37, 99, 235, 0.18);
+                    border: 2px solid rgba(59, 130, 246, 0.5);
+                    backdrop-filter: blur(12px);
+                    border-radius: 20px;
+                    padding: 24px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 16px;
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 17px;
+                    font-weight: 600;
+                    margin-top: 8px;
+                    max-width: 440px;
+                    width: 100%;
+                    text-align: center;
+                    box-shadow: 0 12px 36px rgba(37, 99, 235, 0.25);
+                    animation: wglow 3s ease-in-out infinite;
                 }
             `}</style>
 
@@ -296,14 +305,22 @@ const Welcome: React.FC<WelcomeProps> = ({ onProceed }) => {
 
                         ) : isIOS ? (
                             // iOS Safari — can't trigger install programmatically, show tip instead
-                            <div className="w-ios-tip">
-                                <span style={{ fontSize:22 }}>📲</span>
-                                <span>
-                                    Tap the <strong style={{ color:'white' }}>Share</strong> button, then{' '}
-                                    <strong style={{ color:'white' }}>"Add to Home Screen"</strong> to install EduBlay.
-                                </span>
-                            </div>
-
+                            <>
+                                <div className="w-ios-tip">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+                                        <span style={{ fontSize: 32 }}>📲</span>
+                                        <span style={{ fontSize: 20, fontWeight: 900, color: 'white' }}>Install on iPhone</span>
+                                    </div>
+                                    <div style={{ lineHeight: 1.6 }}>
+                                        Tap the <strong style={{ color:'white' }}>Share</strong> icon (📤) in your Safari menu bar, then scroll down and tap{' '}
+                                        <strong style={{ color:'white' }}>"Add to Home Screen"</strong> (➕) to install EduBlay. The app works perfectly after adding it to your home screen!
+                                    </div>
+                                </div>
+                                <button onClick={onProceed}
+                                    style={{ width:'100%', padding:'14px 22px', borderRadius:17, cursor:'pointer', border:'2px solid rgba(255,255,255,.1)', background:'none', color:'rgba(255,255,255,.7)', fontSize:15, fontWeight:700, marginTop: 4 }}>
+                                    Continue in Browser
+                                </button>
+                            </>
                         ) : (
                             // Fallback — browser doesn't support install yet, show Sign In
                             <button onClick={onProceed} className="w-cta"
@@ -340,6 +357,99 @@ const Welcome: React.FC<WelcomeProps> = ({ onProceed }) => {
                         © {new Date().getFullYear()} StudyHub
                     </div>
                 </div>
+
+                {/* ── HUGE iOS Install Overlay ── */}
+                {showIosPrompt && (
+                    <div style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 9999,
+                        background: 'rgba(0,0,0,0.85)',
+                        backdropFilter: 'blur(16px)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '24px',
+                        animation: 'wfadein 0.4s ease-out forwards'
+                    }}>
+                        <div style={{
+                            background: 'linear-gradient(160deg, rgba(30,58,138,0.95), rgba(15,23,42,0.95))',
+                            border: '2px solid rgba(59,130,246,0.6)',
+                            boxShadow: '0 24px 64px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.1)',
+                            borderRadius: '32px',
+                            padding: '36px 28px',
+                            maxWidth: '460px',
+                            width: '100%',
+                            textAlign: 'center',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '24px'
+                        }}>
+                            <div style={{
+                                width: 84, height: 84, borderRadius: 24,
+                                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                boxShadow: '0 12px 32px rgba(37,99,235,0.5)',
+                                marginBottom: 8
+                            }}>
+                                <span style={{ fontSize: 36, fontWeight: 900, color: 'white', letterSpacing: '-2px' }}>EB</span>
+                            </div>
+                            
+                            <div>
+                                <h2 style={{ fontSize: '28px', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '12px' }}>
+                                    Install EduBlay App
+                                </h2>
+                                <p style={{ fontSize: '17px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.6, fontWeight: 500 }}>
+                                    For the best experience and to <strong style={{color:'white'}}>enable Google Sign-In</strong>, you must install EduBlay on your iPhone.
+                                </p>
+                            </div>
+
+                            <div style={{
+                                background: 'rgba(0,0,0,0.3)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '20px',
+                                padding: '24px',
+                                width: '100%',
+                                textAlign: 'left',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '16px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <span style={{ fontSize: 20 }}>1️⃣</span>
+                                    </div>
+                                    <span style={{ fontSize: 16, color: 'white', fontWeight: 600 }}>Tap the <strong style={{color:'#60a5fa'}}>Share</strong> icon (📤) in the Safari menu bar below.</span>
+                                </div>
+                                <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <span style={{ fontSize: 20 }}>2️⃣</span>
+                                    </div>
+                                    <span style={{ fontSize: 16, color: 'white', fontWeight: 600 }}>Scroll down and tap <strong style={{color:'#60a5fa'}}>"Add to Home Screen"</strong> (➕).</span>
+                                </div>
+                            </div>
+                            
+                            <button onClick={() => setShowIosPrompt(false)}
+                                style={{
+                                    marginTop: '8px',
+                                    padding: '16px 32px',
+                                    borderRadius: '16px',
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    color: 'rgba(255,255,255,0.6)',
+                                    fontSize: '15px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    width: '100%'
+                                }}>
+                                I already installed it / Continue in browser
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );
