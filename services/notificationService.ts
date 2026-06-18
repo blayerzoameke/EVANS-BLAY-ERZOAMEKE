@@ -31,8 +31,18 @@ class NotificationService {
         window.addEventListener('load', () => {
             this.checkPendingNotifications();
             this.scheduleInactivityNotifications();
+            // App opened → clear the home-screen badge so the count resets.
+            this.clearBadge();
         });
-        
+
+        // ── Clear badge whenever the user opens / focuses the app (WhatsApp-style) ──
+        // This is what makes the count reset: once you open the app the badge goes
+        // to 0, so the next batch of notifications naturally starts counting at 1.
+        window.addEventListener('focus', () => this.clearBadge());
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') this.clearBadge();
+        });
+
         const unlockHandler = () => {
             this.resumeAudioContext();
             if (this.isUnlocked) {
@@ -45,7 +55,7 @@ class NotificationService {
         window.addEventListener('click', unlockHandler);
         window.addEventListener('touchstart', unlockHandler);
         window.addEventListener('keydown', unlockHandler);
-        
+
         setInterval(() => this.checkPendingNotifications(), 60 * 1000);
     }
   }
@@ -55,7 +65,7 @@ class NotificationService {
       try {
         this.registration = await navigator.serviceWorker.ready;
         console.log('✅ Service Worker is ready.');
-        
+
         if ('periodicSync' in this.registration) {
             try {
                 const status = await navigator.permissions.query({ name: 'periodic-background-sync' as any });
@@ -75,6 +85,36 @@ class NotificationService {
       } catch (error) {
         console.error('❌ Service Worker failed to become ready:', error);
       }
+    }
+  }
+
+  // ── App badge helpers ─────────────────────────────────────────────────────
+  // The badge count is derived from the notifications CURRENTLY in the tray,
+  // not a running counter. So when the user clears notifications, the next one
+  // recomputes from scratch instead of continuing from the old total.
+  private async syncBadge() {
+    try {
+      if (typeof navigator === 'undefined' || !('setAppBadge' in navigator)) return;
+      if (this.registration && (this.registration as any).getNotifications) {
+        const notifs = await this.registration.getNotifications();
+        if (notifs.length > 0) {
+          await (navigator as any).setAppBadge(notifs.length);
+        } else {
+          await (navigator as any).clearAppBadge();
+        }
+      }
+    } catch {
+      // Badging API unsupported (or iOS < 16.4 / not installed) — safe to ignore.
+    }
+  }
+
+  public async clearBadge() {
+    try {
+      if (typeof navigator !== 'undefined' && 'clearAppBadge' in navigator) {
+        await (navigator as any).clearAppBadge();
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -141,19 +181,32 @@ class NotificationService {
     }
   }
 
+  // Treat empty / "Invalid Date" / "N/A" startTime as "no time" so we never
+  // render "⏰ Invalid Date" in a notification body.
+  private validTime(t?: string): string {
+    if (!t) return '';
+    const s = String(t).trim();
+    const lower = s.toLowerCase();
+    if (!s || lower === 'invalid date' || lower === 'n/a') return '';
+    return s;
+  }
+
   // Mirror the SW buildNotification logic client-side for IndexedDB persistence
   private _buildNotificationContent(payload: ActivityReminderPayload): { title: string; body: string } {
-    const { activityType, subject, venue, startTime, minutesBefore, reminderType } = payload;
+    const { activityType, subject, minutesBefore, reminderType } = payload;
+    const startTime = this.validTime(payload.startTime);
+    const clock = startTime ? `⏰ ${startTime}` : '';
     const timeLabel = minutesBefore && minutesBefore > 0 ? `in ${minutesBefore} min` : 'now';
     const name = subject || 'your session';
     const type = (activityType || '').toLowerCase();
+    const venue = payload.venue;
 
     if (reminderType === 'morning') return { title: 'Good Morning! 🌅', body: subject ? `Ready to study ${subject} today? Check your EduBlay schedule.` : 'Ready to start a productive day? Check your EduBlay agenda.' };
     if (reminderType === 'evening') return { title: 'Evening Review 🌙', body: subject ? `How did studying ${subject} go today? Review your progress on EduBlay.` : 'Review your progress today on EduBlay.' };
-    if (type === 'study') return { title: `📚 Study Time ${minutesBefore ? `in ${minutesBefore} min` : ''}`.trim(), body: `Time to study ${name}. Open EduBlay and get focused! ${startTime ? `⏰ ${startTime}` : ''}`.trim() };
-    if (type === 'lecture') return { title: `🎓 Lecture Starting ${timeLabel}`, body: venue ? `Prepare for your ${name} lecture at ${venue}. ${startTime ? `⏰ ${startTime}` : ''}`.trim() : `Prepare for your ${name} lecture. ${startTime ? `⏰ ${startTime}` : ''}`.trim() };
+    if (type === 'study') return { title: `📚 Study Time ${minutesBefore ? `in ${minutesBefore} min` : ''}`.trim(), body: `Time to study ${name}. Open EduBlay and get focused! ${clock}`.trim() };
+    if (type === 'lecture') return { title: `🎓 Lecture Starting ${timeLabel}`, body: venue ? `Prepare for your ${name} lecture at ${venue}. ${clock}`.trim() : `Prepare for your ${name} lecture. ${clock}`.trim() };
     if (type === 'break') return { title: '☕ Break Time!', body: `Time for a break from ${name}. Rest up and come back refreshed!` };
-    return { title: `⏰ Reminder: ${name}`, body: venue ? `${name} is ${timeLabel} at ${venue}. ${startTime ? `⏰ ${startTime}` : ''}`.trim() : `${name} is coming up ${timeLabel}. Open EduBlay to check.` };
+    return { title: `⏰ Reminder: ${name}`, body: venue ? `${name} is ${timeLabel} at ${venue}. ${clock}`.trim() : `${name} is coming up ${timeLabel}. Open EduBlay to check.` };
   }
 
   // ── Schedule reminders for upcoming timetable slots ───────────────────────
@@ -174,6 +227,7 @@ class NotificationService {
 
         // Parse startTime "HH:MM"
         const [hh, mm] = slot.startTime.split(':').map(Number);
+        if (isNaN(hh) || isNaN(mm)) continue; // guard against bad time strings
         const slotDate = new Date(now);
         slotDate.setHours(hh, mm, 0, 0);
 
@@ -201,7 +255,7 @@ class NotificationService {
 
   public async resumeAudioContext() {
       if (typeof window === 'undefined') return;
-      
+
       if (!this.audioContext) {
           try {
               const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -233,7 +287,7 @@ class NotificationService {
     }
 
     if (Notification.permission === 'granted') return 'granted';
-    
+
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
@@ -253,20 +307,22 @@ class NotificationService {
   async sendNotification(title: string, options: NotificationOptions = {}): Promise<void> {
     if (typeof Notification === 'undefined') return;
     if (Notification.permission !== 'granted') return;
-    
+
     const defaultOptions: any = {
         icon: '/icons/icon-192x192.png',
         badge: '/icons/icon-192x192.png',
         vibrate: [200, 100, 200],
         requireInteraction: false,
-        data: { url: window.location.href }
+        data: { url: '/' }
     };
-    
+
     const finalOptions = { ...defaultOptions, ...options };
 
     try {
         if (this.registration && this.registration.showNotification) {
             await this.registration.showNotification(title, finalOptions);
+            // Update the home-screen badge from what's actually in the tray.
+            await this.syncBadge();
         } else {
             const n = new Notification(title, finalOptions);
             n.onclick = () => { window.focus(); n.close(); };
@@ -292,7 +348,7 @@ class NotificationService {
     try {
         const ctx = this.audioContext;
         const now = ctx.currentTime;
-        
+
         const masterGain = ctx.createGain();
         masterGain.gain.value = 0.3;
         masterGain.connect(ctx.destination);
@@ -383,7 +439,7 @@ class NotificationService {
   public async scheduleInactivityNotifications() {
       const pending = await this.getPendingNotifications();
       const filtered = pending.filter(n => !n.id.startsWith('inactivity-'));
-      
+
       const db = await this.openDb();
       if (!db) return;
       try {
@@ -451,7 +507,7 @@ class NotificationService {
          }
      });
   }
-  
+
   private async getPendingNotifications(): Promise<PendingNotification[]> {
       const db = await this.openDb();
       if (!db) return [];
@@ -487,7 +543,7 @@ class NotificationService {
   async cancelAllNotifications() {
     this.pendingTimers.forEach(clearTimeout);
     this.pendingTimers = [];
-    
+
     const db = await this.openDb();
     if (!db) return;
     return new Promise<void>((resolve) => {

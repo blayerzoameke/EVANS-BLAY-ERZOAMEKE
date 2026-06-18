@@ -25,15 +25,34 @@ const getActivityType = (slot: PlanSlot): string => {
 };
 
 // ── Format time for display e.g. "10:30 AM" ───────────────────────────────
+// FIX: plan slots store time as "09:00 AM" (12h with AM/PM). The old code did
+// timeStr.split(':').map(Number) which turned "00 AM" into NaN → "Invalid Date".
+// This version handles both "09:00 AM" and 24h "13:30", and returns '' for
+// anything it can't parse (e.g. "Now", "N/A") so we never print "Invalid Date".
 const formatDisplayTime = (timeStr: string): string => {
-    try {
-        const [hh, mm] = timeStr.split(':').map(Number);
-        const d = new Date();
-        d.setHours(hh, mm, 0, 0);
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-        return timeStr;
-    }
+    if (!timeStr || typeof timeStr !== 'string') return '';
+
+    const lower = timeStr.toLowerCase().replace(/\s/g, '');
+    if (lower === 'now' || lower === 'n/a' || lower === 'invaliddate') return '';
+
+    const isPM = lower.includes('pm');
+    const isAM = lower.includes('am');
+    const timeOnly = lower.replace('am', '').replace('pm', '');
+
+    const [hStr, mStr] = timeOnly.split(':');
+    let hours = parseInt(hStr, 10);
+    const minutes = parseInt(mStr || '0', 10);
+
+    if (isNaN(hours) || isNaN(minutes)) return '';
+
+    if (isPM && hours < 12) hours += 12;
+    if (isAM && hours === 12) hours = 0;
+
+    const d = new Date();
+    d.setHours(hours, minutes, 0, 0);
+    if (isNaN(d.getTime())) return '';
+
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 const useNotificationScheduler = (plan: SmartPlan | null, settings: NotificationSettings) => {

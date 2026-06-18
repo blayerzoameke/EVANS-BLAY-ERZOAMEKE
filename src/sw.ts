@@ -38,7 +38,34 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: 'cdn-cache' })
 );
 
+// ── App badge: count = notifications currently in the tray ─────────────────
+// Deriving from getNotifications() means dismissing notifications and a fresh
+// batch the next day will start counting at 1 instead of continuing the total.
+async function syncBadge() {
+  try {
+    const nav: any = (self as any).navigator;
+    if (!nav || !('setAppBadge' in nav)) return;
+    const notifs = await self.registration.getNotifications();
+    if (notifs.length > 0) {
+      await nav.setAppBadge(notifs.length);
+    } else {
+      await nav.clearAppBadge();
+    }
+  } catch {
+    // Badging API unsupported / not installed — safe to ignore.
+  }
+}
+
 // ── Smart notification builder ─────────────────────────────────────────────
+// Guard: never render "⏰ Invalid Date". Empty / "Invalid Date" / "N/A" → no clock.
+function validTime(t?: string): string {
+  if (!t) return '';
+  const s = String(t).trim();
+  const lower = s.toLowerCase();
+  if (!s || lower === 'invalid date' || lower === 'n/a') return '';
+  return s;
+}
+
 function buildNotification(data: {
   activityType?: string;
   subject?: string;
@@ -48,11 +75,12 @@ function buildNotification(data: {
   reminderType?: string;
   studentName?: string;
 }): { title: string; body: string } {
-  const { activityType, subject, venue, startTime, minutesBefore, reminderType, studentName } = data;
+  const { activityType, subject, venue, minutesBefore, reminderType, studentName } = data;
   const name = studentName ? `Hi ${studentName}! ` : '';
   const timeLabel = minutesBefore && minutesBefore > 0 ? `in ${minutesBefore} min` : 'now';
   const at = venue ? ` at ${venue}` : '';
-  const clock = startTime ? ` ⏰ ${startTime}` : '';
+  const safeStart = validTime(data.startTime);
+  const clock = safeStart ? ` ⏰ ${safeStart}` : '';
   const subj = subject || 'your session';
   const type = (activityType || '').toLowerCase();
 
@@ -167,12 +195,15 @@ async function removePendingNotification(id: string) {
 async function checkAndFireNotifications() {
   const pending = await getPendingNotifications();
   const now = Date.now();
+  let fired = false;
   for (const notif of pending) {
     if (notif.triggerTime <= now) {
       await self.registration.showNotification(notif.title, notif.options);
       await removePendingNotification(notif.id);
+      fired = true;
     }
   }
+  if (fired) await syncBadge();
 }
 
 // ── SW Lifecycle — iOS/Chrome refresh-loop safe ────────────────────────────
@@ -205,6 +236,17 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (!event.data) return;
 
+  // Explicitly clear the badge (e.g. when the app is opened/focused)
+  if (event.data.type === 'CLEAR_BADGE') {
+    event.waitUntil((async () => {
+      try {
+        const nav: any = (self as any).navigator;
+        if (nav && 'clearAppBadge' in nav) await nav.clearAppBadge();
+      } catch { /* ignore */ }
+    })());
+    return;
+  }
+
   // Schedule a future reminder
   if (event.data.type === 'SCHEDULE_REMINDER') {
     const {
@@ -224,7 +266,7 @@ self.addEventListener('message', (event) => {
         tag: activityType ? `${activityType}-reminder` : 'daily-reminder',
         requireInteraction: true,
         data: { url: '/' },
-      });
+      }).then(() => syncBadge());
     }, delayMs);
   }
 
@@ -239,7 +281,7 @@ self.addEventListener('message', (event) => {
       tag: activityType ? `${activityType}-reminder` : 'reminder',
       requireInteraction: true,
       data: { url: '/' },
-    });
+    }).then(() => syncBadge());
   }
 });
 
@@ -251,17 +293,43 @@ self.addEventListener('sync', (event: any) => {
   if (event.tag === 'check-notifications') event.waitUntil(checkAndFireNotifications());
 });
 
-// ── Notification click ─────────────────────────────────────────────────────
+// ── Notification dismissed (swiped away) → recompute badge ─────────────────
+self.addEventListener('notificationclose', (event) => {
+  event.waitUntil(syncBadge());
+});
+
+// ── Notification click → open / focus the app ──────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+
   event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clientList) => {
-      if (clientList.length > 0) {
-        let client = clientList[0];
-        for (const c of clientList) { if (c.focused) { client = c; break; } }
-        return client.focus();
+    (async () => {
+      // The clicked notification is now gone — refresh the badge count.
+      await syncBadge();
+
+      // includeUncontrolled: true is required because the SW does not call
+      // clients.claim(), so the open PWA window is "uncontrolled" and would
+      // otherwise be invisible to matchAll — causing a stray new tab to open.
+      const clientList = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+
+      for (const client of clientList) {
+        if ('focus' in client) {
+          try {
+            if ('navigate' in client && (client as any).url && new URL((client as any).url).pathname !== targetUrl) {
+              await (client as WindowClient).navigate(targetUrl);
+            }
+          } catch { /* navigation optional */ }
+          return (client as WindowClient).focus();
+        }
       }
-      return self.clients.openWindow(event.notification.data?.url || '/');
-    })
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })()
   );
 });
