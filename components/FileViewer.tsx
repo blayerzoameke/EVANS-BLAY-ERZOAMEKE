@@ -10,7 +10,6 @@ import { LayoutVerticalIcon } from './icons/LayoutVerticalIcon';
 import { FitToPageIcon } from './icons/FitToPageIcon';
 import { FitToWidthIcon } from './icons/FitToWidthIcon';
 
-
 declare const pdfjsLib: any;
 
 interface FileViewerProps {
@@ -24,7 +23,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
     const { t } = useLanguage();
     const pdfDocRef = useRef<any>(null);
     const [numPages, setNumPages] = useState(0);
-    const [isPdfLoading, setIsPdfLoading] = useState(true);
+    const [isPdfLoading, setIsPdfLoading] = useState(false);
     const [internalZoom, setInternalZoom] = useState(1.0);
     const [visiblePages, setVisiblePages] = useState(new Set([1]));
     const [pageDimensions, setPageDimensions] = useState<{width: number, height: number}[]>([]);
@@ -33,9 +32,10 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
     const activeRenderTasks = useRef(new Map());
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const imgRef = useRef<HTMLImageElement>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const [layoutMode, setLayoutMode] = useState<'vertical' | 'horizontal'>('vertical');
-    const [zoomMode, setZoomMode] = useState<'manual' | 'fit-page' | 'fit-width'>('manual');
+    const [zoomMode, setZoomMode] = useState<'manual' | 'fit-page' | 'fit-width'>('fit-width');
 
     const isControlled = controlledZoom !== undefined && onZoomChange !== undefined;
     const zoom = isControlled ? controlledZoom : internalZoom;
@@ -115,36 +115,62 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
     }, [recalculateZoom]);
     
     useEffect(() => {
-        // Trigger recalculation if the underlying content dimensions change.
-        recalculateZoom();
+        // Small timeout lets the container finish layout before we measure it
+        const timer = setTimeout(() => recalculateZoom(), 80);
+        return () => clearTimeout(timer);
     }, [pageDimensions, recalculateZoom]);
 
 
     useEffect(() => {
         if (!file || !isPdf) return;
+        
+        setError(null);
+        if (!file.base64) {
+            setError("Document data is missing. Please re-upload the file.");
+            return;
+        }
 
         setIsPdfLoading(true);
-        const loadingTask = pdfjsLib.getDocument({ data: atob(file.base64) });
-        loadingTask.promise.then(async (pdf: any) => {
-            pdfDocRef.current = pdf;
-            setNumPages(pdf.numPages);
-
-            const dims = [];
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 1.0 });
-                dims.push({ width: viewport.width, height: viewport.height });
+        
+        try {
+            // FIX: Convert base64 string to Uint8Array which PDF.js handles reliably
+            const binaryString = window.atob(file.base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
             }
-            setPageDimensions(dims);
-            setVisiblePages(new Set([1]));
-            setIsPdfLoading(false);
 
-        }).catch((err: any) => {
-            console.error('Error loading PDF document', err);
+            const loadingTask = pdfjsLib.getDocument({ data: bytes });
+            loadingTask.promise.then(async (pdf: any) => {
+                pdfDocRef.current = pdf;
+                setNumPages(pdf.numPages);
+
+                const dims = [];
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    dims.push({ width: viewport.width, height: viewport.height });
+                }
+                setPageDimensions(dims);
+                setVisiblePages(new Set([1]));
+                setIsPdfLoading(false);
+
+            }).catch((err: any) => {
+                console.error('Error loading PDF document', err);
+                setError(`Failed to load PDF: ${err.message || 'Unknown error'}`);
+                setIsPdfLoading(false);
+            });
+        } catch (e) {
+            console.error('Base64 decoding failed', e);
+            setError("Could not decode document data. The file might be corrupted.");
             setIsPdfLoading(false);
-        });
+        }
 
         return () => {
+            if (pdfDocRef.current) {
+                pdfDocRef.current.destroy();
+            }
             pdfDocRef.current = null;
             setNumPages(0);
             setPageDimensions([]);
@@ -155,7 +181,8 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
     useEffect(() => {
         if (!isPdf || !pdfDocRef.current || pageDimensions.length === 0) return;
 
-        const basePdfScale = 1.0;
+        // Render at device pixel ratio for crisp text on Retina/HiDPI screens
+        const dpr = Math.min(window.devicePixelRatio || 1, 3);
 
         visiblePages.forEach(pageNum => {
             const pageDiv = pageRefs.current.get(pageNum);
@@ -173,11 +200,19 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
             pdfDocRef.current.getPage(pageNum).then((page: any) => {
                 const context = canvas.getContext('2d');
                 if (!context) return;
-                
-                const viewport = page.getViewport({ scale: basePdfScale * zoom });
-                
+
+                // Render at dpr× resolution so 1 PDF point = dpr device pixels → sharp on all screens
+                const viewport = page.getViewport({ scale: zoom * dpr });
+
+                canvas.width  = viewport.width;
                 canvas.height = viewport.height;
-                canvas.width = viewport.width;
+
+                // CSS size stays at zoom × original dimensions — browser scales down sharply
+                const dims = pageDimensions[pageNum - 1];
+                if (dims) {
+                    (canvas as HTMLCanvasElement).style.width  = `${dims.width  * zoom}px`;
+                    (canvas as HTMLCanvasElement).style.height = `${dims.height * zoom}px`;
+                }
 
                 const renderTask = page.render({
                     canvasContext: context,
@@ -239,6 +274,16 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
         return () => observerRef.current?.disconnect();
     }, [numPages, pageDimensions, layoutMode]);
 
+    if (error) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-red-50 dark:bg-red-950/20 rounded-lg border-2 border-dashed border-red-200 dark:border-red-800">
+                <PdfIcon className="w-16 h-16 text-red-500 mb-4 opacity-50" />
+                <h3 className="text-xl font-bold text-red-700 dark:text-red-400 mb-2">Rendering Error</h3>
+                <p className="text-red-600 dark:text-red-300 max-w-md">{error}</p>
+            </div>
+        );
+    }
+
     if (!file) {
         return (
             <div className="h-full flex items-center justify-center text-center text-gray-500 bg-gray-100 dark:bg-gray-800 rounded-lg">
@@ -247,21 +292,22 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
         );
     }
     
-    const fileUrl = URL.createObjectURL(new Blob([Uint8Array.from(atob(file.base64), c => c.charCodeAt(0))], { type: file.type }));
+    // For images, we can use simple URL.createObjectURL or data URL
+    const fileUrl = isImage && file.base64 ? `data:${file.type};base64,${file.base64}` : '';
 
     return (
-        <div className="w-full h-full bg-gray-200 dark:bg-gray-900 rounded-lg overflow-hidden relative flex flex-col">
-            {showControls && (isPdf || isImage) && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-gray-100/90 dark:bg-gray-800/90 backdrop-blur-md rounded-full shadow-lg flex items-center gap-2 p-2 border border-gray-300 dark:border-gray-700">
+        <div className="w-full h-full overflow-hidden relative flex flex-col" style={{ background: '#2c2c3a' }}>
+            {showControls && (isPdf || isImage) && !error && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-gray-900/90 backdrop-blur-md rounded-full shadow-2xl flex items-center gap-2 p-2 border border-white/10">
                     {isPdf && (
                         <>
-                             <button onClick={() => setLayoutMode(layoutMode === 'vertical' ? 'horizontal' : 'vertical')} className="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" title={layoutMode === 'vertical' ? t('fileviewer.layout.horizontal') : t('fileviewer.layout.vertical')}>
+                             <button onClick={() => setLayoutMode(layoutMode === 'vertical' ? 'horizontal' : 'vertical')} className="p-2 rounded-full text-gray-300 hover:bg-white/10" title={layoutMode === 'vertical' ? t('fileviewer.layout.horizontal') : t('fileviewer.layout.vertical')}>
                                 {layoutMode === 'vertical' ? <LayoutHorizontalIcon className="w-5 h-5" /> : <LayoutVerticalIcon className="w-5 h-5" />}
                             </button>
-                            <div className="w-px h-5 bg-gray-300 dark:bg-gray-600"></div>
+                            <div className="w-px h-5 bg-white/20"></div>
                         </>
                     )}
-                    <button onClick={handleZoomOut} className="p-1 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" title="Zoom Out"><ZoomOutIcon className="w-5 h-5" /></button>
+                    <button onClick={handleZoomOut} className="p-1 rounded-full text-gray-300 hover:bg-white/10" title="Zoom Out"><ZoomOutIcon className="w-5 h-5" /></button>
                     
                     <input 
                         type="range" 
@@ -270,20 +316,21 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
                         step="0.05" 
                         value={zoom} 
                         onChange={(e) => handleRangeZoom(parseFloat(e.target.value))} 
-                        className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-primary" 
+                        className="w-24 h-2 rounded-lg appearance-none cursor-pointer accent-primary" 
+                        style={{ background: 'rgba(255,255,255,0.15)' }}
                         aria-label="Zoom slider"
                     />
 
-                    <button onClick={handleZoomIn} className="p-1 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700" title="Zoom In"><ZoomInIcon className="w-5 h-5" /></button>
+                    <button onClick={handleZoomIn} className="p-1 rounded-full text-gray-300 hover:bg-white/10" title="Zoom In"><ZoomInIcon className="w-5 h-5" /></button>
                     
-                    <div className="w-px h-5 bg-gray-300 dark:bg-gray-600"></div>
+                    <div className="w-px h-5 bg-white/20"></div>
                     
-                    <button onClick={handleFitToPage} className={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 ${zoomMode === 'fit-page' ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`} title={t('fileviewer.zoom.fitPage')}><FitToPageIcon className="w-5 h-5" /></button>
-                    <button onClick={handleFitToWidth} className={`p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 ${zoomMode === 'fit-width' ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`} title={t('fileviewer.zoom.fitWidth')}><FitToWidthIcon className="w-5 h-5" /></button>
+                    <button onClick={handleFitToPage} className={`p-2 rounded-full hover:bg-white/10 ${zoomMode === 'fit-page' ? 'text-primary' : 'text-gray-300'}`} title={t('fileviewer.zoom.fitPage')}><FitToPageIcon className="w-5 h-5" /></button>
+                    <button onClick={handleFitToWidth} className={`p-2 rounded-full hover:bg-white/10 ${zoomMode === 'fit-width' ? 'text-primary' : 'text-gray-300'}`} title={t('fileviewer.zoom.fitWidth')}><FitToWidthIcon className="w-5 h-5" /></button>
 
-                    <div className="w-px h-5 bg-gray-300 dark:bg-gray-600"></div>
+                    <div className="w-px h-5 bg-white/20"></div>
 
-                    <button onClick={handleZoomReset} className="text-sm font-semibold px-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md" title="Reset Zoom">
+                    <button onClick={handleZoomReset} className="text-sm font-semibold px-2 text-gray-300 hover:bg-white/10 rounded-md" title="Reset Zoom">
                         {Math.round(zoom * 100)}%
                     </button>
                 </div>
@@ -291,11 +338,16 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
             {isPdf ? (
                 <>
                     {isPdfLoading && (
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-10">
-                            <div className="animate-spin w-8 h-8 border-4 border-white/30 border-t-white rounded-full"></div>
+                        <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: 'rgba(30,30,45,0.85)' }}>
+                            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '4px solid rgba(255,255,255,0.2)', borderTopColor: 'white', animation: 'spin 0.7s linear infinite' }}></div>
+                            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                         </div>
                     )}
-                    <div ref={scrollContainerRef} className={`flex-1 overflow-auto p-4 ${layoutMode === 'horizontal' ? 'flex flex-row items-center gap-4' : 'flex flex-col'}`}>
+                    <div
+                        ref={scrollContainerRef}
+                        className={`flex-1 overflow-auto ${layoutMode === 'horizontal' ? 'flex flex-row items-center gap-6' : 'flex flex-col items-center'}`}
+                        style={{ padding: '24px 20px' }}
+                    >
                         {Array.from(new Array(numPages), (_, index) => {
                             const pageNum = index + 1;
                             const dims = pageDimensions[index];
@@ -304,15 +356,24 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
                                     key={index}
                                     ref={el => { if (el) pageRefs.current.set(pageNum, el); else pageRefs.current.delete(pageNum); }}
                                     data-page-number={pageNum}
-                                    className={layoutMode === 'horizontal' ? 'h-full flex-shrink-0 flex items-center justify-center' : 'flex justify-center mb-4'}
+                                    className={layoutMode === 'horizontal' ? 'flex-shrink-0 flex items-center justify-center' : 'flex justify-center mb-6'}
                                     style={{ 
-                                        minHeight: dims ? `${(dims.height * zoom)}px` : '1000px',
-                                        ...(layoutMode === 'horizontal' && { minWidth: dims ? `${(dims.width * zoom)}px` : '700px' })
+                                        width: dims ? `${dims.width * zoom}px` : 'auto',
+                                        height: dims ? `${dims.height * zoom}px` : 'auto',
+                                        minHeight: dims ? `${dims.height * zoom}px` : '800px',
+                                        flexShrink: 0,
                                     }}
                                 >
                                     {visiblePages.has(pageNum) && (
                                         <canvas
-                                            className="shadow-lg"
+                                            style={{
+                                                display: 'block',
+                                                width: dims ? `${dims.width * zoom}px` : '100%',
+                                                height: dims ? `${dims.height * zoom}px` : 'auto',
+                                                borderRadius: 6,
+                                                boxShadow: '0 8px 40px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.4)',
+                                                background: '#fff',
+                                            }}
                                         />
                                     )}
                                 </div>
@@ -321,23 +382,40 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, zoom: controlledZoom, onZ
                     </div>
                 </>
             ) : isImage ? (
-                 <div ref={scrollContainerRef} className="w-full h-full overflow-auto flex justify-center items-center p-4">
-                    <img ref={imgRef} src={fileUrl} alt={file.name} className="max-w-none max-h-none object-contain transition-transform" style={{ width: 'auto', height: 'auto', transform: `scale(${zoom})`, transformOrigin: 'center' }} onLoad={recalculateZoom} />
+                 <div ref={scrollContainerRef} className="w-full h-full overflow-auto flex justify-center items-start" style={{ padding: 24 }}>
+                    <img
+                        ref={imgRef}
+                        src={fileUrl}
+                        alt={file.name}
+                        style={{
+                            display: 'block',
+                            maxWidth: 'none',
+                            width: 'auto',
+                            height: 'auto',
+                            transform: `scale(${zoom})`,
+                            transformOrigin: 'top center',
+                            borderRadius: 8,
+                            boxShadow: '0 8px 40px rgba(0,0,0,0.55)',
+                        }}
+                        onLoad={recalculateZoom}
+                    />
                 </div>
             ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center text-gray-700 dark:text-gray-300 p-8">
-                    {isPptx ? <PowerPointIcon className="w-24 h-24 text-orange-500 mb-4" /> : <PdfIcon className="w-24 h-24 text-red-500 mb-4" />}
-                    <h3 className="text-xl font-bold mb-2">{t('fileviewer.previewNotAvailable')}</h3>
-                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                <div className="h-full flex flex-col items-center justify-center text-center text-gray-300 p-8">
+                    {isPptx ? <PowerPointIcon className="w-24 h-24 text-orange-400 mb-4" /> : <PdfIcon className="w-24 h-24 text-red-400 mb-4" />}
+                    <h3 className="text-xl font-bold mb-2 text-white">{t('fileviewer.previewNotAvailable')}</h3>
+                    <p className="text-gray-400 mb-4">
                         {t('fileviewer.unsupportedType', { type: file.type })}
                     </p>
-                    <a 
-                        href={fileUrl} 
-                        download={file.name}
-                        className="px-4 py-2 bg-primary text-primary-text rounded-md hover:bg-primary-dark"
-                    >
-                        {t('fileviewer.downloadFile', { name: file.name })}
-                    </a>
+                    {file.base64 && (
+                        <a 
+                            href={`data:${file.type};base64,${file.base64}`} 
+                            download={file.name}
+                            className="px-4 py-2 bg-primary text-primary-text rounded-md hover:bg-primary-dark"
+                        >
+                            {t('fileviewer.downloadFile', { name: file.name })}
+                        </a>
+                    )}
                 </div>
             )}
         </div>

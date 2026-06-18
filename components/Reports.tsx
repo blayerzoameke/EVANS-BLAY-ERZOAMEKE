@@ -27,7 +27,12 @@ const Reports: React.FC<ReportsProps> = ({ userDetails, reportDraft, setReportDr
       setReportDraft(prev => ({...prev, [key]: value}));
   };
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
+    if (fileRejections?.length > 0) {
+        addToast(t('toasts.invalidImageFile') || 'Unsupported file type.', 'error');
+        return;
+    }
+
     const file = acceptedFiles[0];
     if (file) {
       if (file.size > 25 * 1024 * 1024) { // 25MB limit
@@ -38,7 +43,7 @@ const Reports: React.FC<ReportsProps> = ({ userDetails, reportDraft, setReportDr
     }
   }, [addToast, t]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false } as any);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +56,7 @@ const Reports: React.FC<ReportsProps> = ({ userDetails, reportDraft, setReportDr
     body += `-----------------\n\n`;
     if (attachment) body += t('reports.mailto.attachNotice', { fileName: attachment.name });
 
-    window.location.href = `mailto:blayerzoameke@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = `mailto:support@edublay.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setSuccessMessage(t('reports.success'));
     setReportDraft({ category: 'bug', description: '', attachment: null, contactEmail: userDetails?.email || '', contactWhatsApp: '' });
   };

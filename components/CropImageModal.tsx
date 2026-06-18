@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import { CloseIcon } from './icons/CloseIcon.tsx';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface CropImageModalProps {
     isOpen: boolean;

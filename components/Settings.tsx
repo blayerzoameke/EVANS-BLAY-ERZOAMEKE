@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ExportIcon } from './icons/ExportIcon';
@@ -5,7 +6,7 @@ import { ImportIcon } from './icons/ImportIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { DocumentIcon } from './icons/DocumentIcon';
 import ConfirmationModal from './ConfirmationModal';
-import { storageService, getCurrentUser } from '../src/services/authService';
+import { storageService, getCurrentUser } from '../services/authService';
 import type { Toast, UserDetails, SmartPlan, StoredPlan, Note, TrackedSession, UploadedMaterialInfo, View } from '../types';
 
 // Helper functions for PDF generation
@@ -114,6 +115,35 @@ const renderTrackedData = (data: TrackedSession[] | null): string => {
     `;
 };
 
+const renderTrackedDataForPrint = (data: TrackedSession[] | null): string => {
+    if (!data || data.length === 0) return '';
+    const sanitize = (str: string | undefined) => str ? str.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+
+    return `
+        <div class="section">
+            <h3>Tracked Study Sessions</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Subject</th>
+                        <th>Duration (minutes)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(session => `
+                        <tr>
+                            <td>${sanitize(session.date)}</td>
+                            <td>${sanitize(session.subject)}</td>
+                            <td>${session.durationMinutes}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+};
+
 const renderUploadedMaterials = (materials: UploadedMaterialInfo[] | null): string => {
     if (!materials || materials.length === 0) return '';
     const sanitize = (str: string | undefined) => str ? str.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
@@ -165,17 +195,16 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
     const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
     const importInputRef = React.useRef<HTMLInputElement>(null);
 
-    const isPremium = userDetails?.subscriptionTier === 'premium';
-
-    const handlePrintReport = () => {
-        const currentUser = getCurrentUser();
+    // FIX: Optimized handlePrintReport to use existing props and async storage service properly.
+    const handlePrintReport = async () => {
+        const currentUser = userDetails;
         if (!currentUser || !currentUser.email) {
             addToast("Could not find user data to export.", 'error');
             return;
         }
 
-        const allUsersData = storageService.loadItem<any>('usersData') || {};
-        const userData = allUsersData[currentUser.email];
+        const emailKey = `eb_u_data_${currentUser.email}`;
+        const userData = await storageService.loadItem<any>(emailKey);
         
         if (!userData) {
             addToast("No data found to export for the current user.", 'info');
@@ -224,7 +253,7 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
                 ${renderPlan(userData.smartPlan, 'Current Smart Plan')}
                 ${(userData.savedTimetables || []).map((p: StoredPlan) => renderPlan(p.plan, `Saved Plan: ${p.name}`)).join('')}
                 ${renderNotes(userData.notes)}
-                ${renderTrackedData(userData.trackedData)}
+                ${renderTrackedDataForPrint(userData.trackedData)}
                 ${renderUploadedMaterials(userData.uploadedMaterials)}
 
                 <script>
@@ -232,10 +261,6 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
                         setTimeout(function() {
                             window.print();
                         }, 500); // Small delay to ensure styles are applied
-                        window.onafterprint = function() {
-                            // Some browsers close automatically, others might not.
-                            // To be safe, we don't force-close immediately.
-                        }
                     }
                 </script>
             </body>
@@ -252,10 +277,6 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
     };
     
     const handleExportData = () => {
-        if (!isPremium) {
-            setShowUpgradeModal(true, t('pricing.feature.export' as any));
-            return;
-        }
         try {
             storageService.exportAllData();
             addToast(t('settings.exportSuccess' as any), 'success');
@@ -285,7 +306,6 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
     const handleConfirmClearData = () => {
         storageService.clearAllData();
         handleLogout();
-        // No need to close the modal, as the app state will reset and unmount this component.
     };
     
     return (
@@ -303,7 +323,7 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
                         <button onClick={handlePrintReport} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-sky-600 border border-transparent rounded-md shadow-sm hover:bg-sky-700">
                             <DocumentIcon className="w-4 h-4" /> {t('settings.data.printReport' as any)}
                         </button>
-                        <button onClick={handleExportData} disabled={!isPremium} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">
+                        <button onClick={handleExportData} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700">
                             <ExportIcon className="w-4 h-4" /> {t('settings.data.export' as any)}
                         </button>
                         <button onClick={handleImportClick} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700">

@@ -1,5 +1,7 @@
 // services/notificationService.ts
 
+import type { NotificationSettings } from '../types';
+
 type PendingNotification = {
     id: string;
     title: string;
@@ -7,139 +9,512 @@ type PendingNotification = {
     triggerTime: number;
 };
 
+// ── Activity reminder payload ──────────────────────────────────────────────
+export interface ActivityReminderPayload {
+    activityType?: string;  // 'study' | 'lecture' | 'break' | 'gym' | 'church' | 'agenda' | etc.
+    subject?: string;       // e.g. "MATH 461" or "Real Functions"
+    venue?: string;         // e.g. "SCB-TF34" or "Main Chapel"
+    startTime?: string;     // e.g. "10:30 AM"
+    minutesBefore?: number; // e.g. 10 (fires 10 min before)
+    reminderType?: string;  // 'morning' | 'evening' | 'general'
+}
+
 class NotificationService {
   private registration: ServiceWorkerRegistration | null = null;
   private pendingTimers: number[] = [];
+  public audioContext: AudioContext | null = null;
+  private isUnlocked = false;
 
   constructor() {
     this.init();
-    window.addEventListener('load', () => this.checkPendingNotifications());
-    setInterval(() => this.checkPendingNotifications(), 60 * 1000); // Check every minute
+    if (typeof window !== 'undefined') {
+        window.addEventListener('load', () => {
+            this.checkPendingNotifications();
+            this.scheduleInactivityNotifications();
+        });
+        
+        const unlockHandler = () => {
+            this.resumeAudioContext();
+            if (this.isUnlocked) {
+                window.removeEventListener('click', unlockHandler);
+                window.removeEventListener('touchstart', unlockHandler);
+                window.removeEventListener('keydown', unlockHandler);
+            }
+        };
+
+        window.addEventListener('click', unlockHandler);
+        window.addEventListener('touchstart', unlockHandler);
+        window.addEventListener('keydown', unlockHandler);
+        
+        setInterval(() => this.checkPendingNotifications(), 60 * 1000);
+    }
   }
 
   async init() {
-    if ('serviceWorker' in navigator) {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       try {
         this.registration = await navigator.serviceWorker.ready;
-        console.log('Service Worker is ready.');
+        console.log('✅ Service Worker is ready.');
+        
+        if ('periodicSync' in this.registration) {
+            try {
+                const status = await navigator.permissions.query({ name: 'periodic-background-sync' as any });
+                if (status.state === 'granted') {
+                    await (this.registration as any).periodicSync.register('study-reminder', {
+                        minInterval: 8 * 60 * 60 * 1000
+                    });
+                    console.log('✅ Periodic sync registered — background study reminders active.');
+                }
+            } catch (e) {
+                console.warn('Periodic sync not available:', e);
+            }
+        }
+
+        this.scheduleDailyRemindersViaSW();
+
       } catch (error) {
-        console.error('Service Worker failed to become ready:', error);
+        console.error('❌ Service Worker failed to become ready:', error);
       }
     }
   }
 
-  async requestPermission(): Promise<boolean> {
-    if (!('Notification' in window)) {
-      console.error('This browser does not support notifications.');
-      return false;
-    }
-
-    if (Notification.permission === 'granted') {
-      return true;
-    }
-    
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-        this.sendNotification('Notifications Enabled! 🎉', {
-            body: 'You will now receive reminders for your sessions.',
-            requireInteraction: false
+  // ── Schedule daily morning/evening reminders via SW ──────────────────────
+  private scheduleDailyRemindersViaSW() {
+    if (!this.registration?.active) return;
+    const now = new Date();
+    const slots: Array<{ hour: number; reminderType: string }> = [
+        { hour: 8,  reminderType: 'morning' },
+        { hour: 13, reminderType: 'general' },
+        { hour: 19, reminderType: 'evening' },
+    ];
+    for (const slot of slots) {
+        const target = new Date(now);
+        target.setHours(slot.hour, 0, 0, 0);
+        if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+        const delayMs = target.getTime() - now.getTime();
+        this.registration.active?.postMessage({
+            type: 'SCHEDULE_REMINDER',
+            delayMs,
+            reminderType: slot.reminderType,
         });
-        return true;
+    }
+  }
+
+  // ── Schedule a specific activity reminder via SW ──────────────────────────
+  // Call this when a student's timetable slot is coming up.
+  public scheduleActivityReminder(payload: ActivityReminderPayload & { delayMs: number }) {
+    const triggerTime = Date.now() + payload.delayMs;
+    const id = `activity-${payload.activityType || 'reminder'}-${triggerTime}`;
+
+    // Build the notification content using the same logic as the SW
+    const { title, body } = this._buildNotificationContent(payload);
+
+    // Save to IndexedDB so SW poll can fire it even after SW restarts
+    const notification = {
+      id,
+      title,
+      options: {
+        body,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-192x192.png',
+        tag: `${payload.activityType || 'activity'}-reminder`,
+        requireInteraction: true,
+        data: { url: '/' },
+        vibrate: [200, 100, 200],
+      } as NotificationOptions,
+      triggerTime,
+    };
+    this.savePendingNotification(notification as any);
+
+    // Also post to SW for in-session delivery (as before)
+    if (this.registration?.active) {
+      this.registration.active.postMessage({
+        type: 'SCHEDULE_REMINDER',
+        delayMs: payload.delayMs,
+        activityType: payload.activityType,
+        subject: payload.subject,
+        venue: payload.venue,
+        startTime: payload.startTime,
+        minutesBefore: payload.minutesBefore,
+        reminderType: payload.reminderType,
+      });
+    }
+  }
+
+  // Mirror the SW buildNotification logic client-side for IndexedDB persistence
+  private _buildNotificationContent(payload: ActivityReminderPayload): { title: string; body: string } {
+    const { activityType, subject, venue, startTime, minutesBefore, reminderType } = payload;
+    const timeLabel = minutesBefore && minutesBefore > 0 ? `in ${minutesBefore} min` : 'now';
+    const name = subject || 'your session';
+    const type = (activityType || '').toLowerCase();
+
+    if (reminderType === 'morning') return { title: 'Good Morning! 🌅', body: subject ? `Ready to study ${subject} today? Check your EduBlay schedule.` : 'Ready to start a productive day? Check your EduBlay agenda.' };
+    if (reminderType === 'evening') return { title: 'Evening Review 🌙', body: subject ? `How did studying ${subject} go today? Review your progress on EduBlay.` : 'Review your progress today on EduBlay.' };
+    if (type === 'study') return { title: `📚 Study Time ${minutesBefore ? `in ${minutesBefore} min` : ''}`.trim(), body: `Time to study ${name}. Open EduBlay and get focused! ${startTime ? `⏰ ${startTime}` : ''}`.trim() };
+    if (type === 'lecture') return { title: `🎓 Lecture Starting ${timeLabel}`, body: venue ? `Prepare for your ${name} lecture at ${venue}. ${startTime ? `⏰ ${startTime}` : ''}`.trim() : `Prepare for your ${name} lecture. ${startTime ? `⏰ ${startTime}` : ''}`.trim() };
+    if (type === 'break') return { title: '☕ Break Time!', body: `Time for a break from ${name}. Rest up and come back refreshed!` };
+    return { title: `⏰ Reminder: ${name}`, body: venue ? `${name} is ${timeLabel} at ${venue}. ${startTime ? `⏰ ${startTime}` : ''}`.trim() : `${name} is coming up ${timeLabel}. Open EduBlay to check.` };
+  }
+
+  // ── Schedule reminders for upcoming timetable slots ───────────────────────
+  // Pass an array of upcoming slots and it schedules reminders for each.
+  public scheduleSlotReminders(slots: Array<{
+    activityType: string;
+    subject: string;
+    venue?: string;
+    startTime: string;        // "HH:MM" 24h format
+    reminderMinutesBefore?: number; // default 10
+  }>) {
+    if (!this.registration?.active) return;
+
+    const now = new Date();
+
+    for (const slot of slots) {
+        const minutesBefore = slot.reminderMinutesBefore ?? 10;
+
+        // Parse startTime "HH:MM"
+        const [hh, mm] = slot.startTime.split(':').map(Number);
+        const slotDate = new Date(now);
+        slotDate.setHours(hh, mm, 0, 0);
+
+        // If slot already passed today, skip
+        if (slotDate.getTime() <= now.getTime()) continue;
+
+        // Fire reminder X minutes before
+        const reminderTime = slotDate.getTime() - minutesBefore * 60 * 1000;
+        const delayMs = reminderTime - now.getTime();
+        if (delayMs <= 0) continue;
+
+        // Format display time
+        const displayTime = slotDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        this.scheduleActivityReminder({
+            delayMs,
+            activityType: slot.activityType,
+            subject: slot.subject,
+            venue: slot.venue,
+            startTime: displayTime,
+            minutesBefore,
+        });
+    }
+  }
+
+  public async resumeAudioContext() {
+      if (typeof window === 'undefined') return;
+      
+      if (!this.audioContext) {
+          try {
+              const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+              if (AudioContextClass) {
+                  this.audioContext = new AudioContextClass();
+              }
+          } catch (e) {
+              console.warn('AudioContext not supported:', e);
+              return;
+          }
+      }
+
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+          try {
+              await this.audioContext.resume();
+              this.isUnlocked = true;
+          } catch (e) {
+              console.warn('⚠️ Failed to resume AudioContext:', e);
+          }
+      } else if (this.audioContext && this.audioContext.state === 'running') {
+          this.isUnlocked = true;
+      }
+  }
+
+  async requestPermission(): Promise<NotificationPermission> {
+    if (typeof Notification === 'undefined') {
+      console.warn('❌ This browser does not support notifications');
+      return 'denied';
     }
 
-    return false;
+    if (Notification.permission === 'granted') return 'granted';
+    
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            this.sendNotification('You\'re all set! 🔔', {
+                body: 'EduBlay will now remind you before lectures, study sessions, and more.',
+                requireInteraction: false
+            });
+            await this.playAlarm();
+        }
+        return permission;
+    } catch (e) {
+        console.error("Error requesting permission:", e);
+        return 'denied';
+    }
   }
 
   async sendNotification(title: string, options: NotificationOptions = {}): Promise<void> {
-    if (Notification.permission !== 'granted') {
-      console.warn('Notification permission not granted.');
-      return;
-    }
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
     
     const defaultOptions: any = {
-        icon: "data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' fill='%230284c7'%3E%3Cg%3E%3Cpath d='M19,4H18V2H16V4H8V2H6V4H5C3.89,4,3,4.9,3,6V20A2,2,0,0,0,5,22H15.1C14.41,21.14,14,20.12,14,19C14,15.69,16.69,13,20,13C20.34,13,20.68,13.05,21,13.13V6C21,4.9,20.1,4,19,4Z'/%3E%3Crect x='7' y='11' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='11' y='11' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='15' y='11' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='7' y='15' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='11' y='15' width='2' height='2' rx='0.5' fill='white'/%3E%3Cpath d='M20,15C17.24,15,15,17.24,15,20C15,22.76,17.24,25,20,25C22.76,25,25,22.76,25,20C25,17.24,22.76,15,20,15M20.5,20.25L18,21.5V18H19.5V19.9L21.5,18.9L22,19.6L20.5,20.25Z' fill='white'/%3E%3C/g%3E%3C/svg%3E",
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/icon-192x192.png',
         vibrate: [200, 100, 200],
-        data: {
-            url: window.location.origin
-        }
+        requireInteraction: false,
+        data: { url: window.location.href }
     };
     
     const finalOptions = { ...defaultOptions, ...options };
 
-    if (this.registration && this.registration.showNotification) {
-      await this.registration.showNotification(title, finalOptions);
-    } else {
-      new Notification(title, finalOptions);
+    try {
+        if (this.registration && this.registration.showNotification) {
+            await this.registration.showNotification(title, finalOptions);
+        } else {
+            const n = new Notification(title, finalOptions);
+            n.onclick = () => { window.focus(); n.close(); };
+        }
+        console.log('📬 Notification sent:', title);
+    } catch (e) {
+        console.error("❌ Error showing notification:", e);
     }
   }
 
-  scheduleNotification(title: string, options: NotificationOptions, triggerTime: number): string {
-    const id = `notif-${Date.now()}-${Math.random()}`;
+  scheduleNotification(title: string, options: NotificationOptions, triggerTime: number, customId?: string): string {
+    const id = customId || `notif-${Date.now()}-${Math.random()}`;
     const notification: PendingNotification = { id, title, options, triggerTime };
-
     this.savePendingNotification(notification);
     this.scheduleTimer(notification);
     return id;
   }
+
+  async playAlarm() {
+    await this.resumeAudioContext();
+    if (!this.audioContext) return;
+
+    try {
+        const ctx = this.audioContext;
+        const now = ctx.currentTime;
+        
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = 0.3;
+        masterGain.connect(ctx.destination);
+
+        const notes = [523.25, 659.25, 783.99];
+        notes.forEach((freq, index) => {
+            const osc = ctx.createOscillator();
+            const noteGain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const startTime = now + (index * 0.15);
+            const endTime = startTime + 1.5;
+            noteGain.gain.setValueAtTime(0, startTime);
+            noteGain.gain.linearRampToValueAtTime(1, startTime + 0.05);
+            noteGain.gain.exponentialRampToValueAtTime(0.01, endTime);
+            osc.connect(noteGain);
+            noteGain.connect(masterGain);
+            osc.start(startTime);
+            osc.stop(endTime);
+        });
+    } catch (e) {
+        console.error("❌ Audio playback failed:", e);
+    }
+  }
+
+  async playBreakStartSound() { await this.playAlarm(); }
+  async playBreakEndSound() { await this.playAlarm(); }
 
   private scheduleTimer(notification: PendingNotification) {
     const now = Date.now();
     const delay = notification.triggerTime - now;
 
     if (delay > 0) {
+        let triggerScheduled = false;
+        if (this.registration && 'showTrigger' in Notification.prototype && typeof (window as any).TimestampTrigger !== 'undefined') {
+            try {
+                (this.registration.showNotification as any)(notification.title, {
+                    ...notification.options,
+                    showTrigger: new (window as any).TimestampTrigger(notification.triggerTime)
+                });
+                triggerScheduled = true;
+            } catch (e) {
+                console.error("Error scheduling background notification:", e);
+            }
+        }
+
         const timerId = window.setTimeout(() => {
-            this.sendNotification(notification.title, notification.options);
+            if (!triggerScheduled) {
+                this.sendNotification(notification.title, notification.options);
+            }
+            this.playAlarm();
             this.removePendingNotification(notification.id);
         }, delay);
         this.pendingTimers.push(timerId);
+    } else {
+        this.sendNotification(notification.title, notification.options);
+        this.playAlarm();
     }
   }
 
-  private savePendingNotification(notification: PendingNotification) {
-    const pending = this.getPendingNotifications();
-    const updated = [...pending.filter(n => n.id !== notification.id), notification];
-    localStorage.setItem('pendingNotifications', JSON.stringify(updated));
-  }
-
-  private removePendingNotification(id: string) {
-    const pending = this.getPendingNotifications();
-    const updated = pending.filter(n => n.id !== id);
-    localStorage.setItem('pendingNotifications', JSON.stringify(updated));
-  }
-  
-  private getPendingNotifications(): PendingNotification[] {
+  private async openDb(): Promise<IDBDatabase | null> {
+    if (typeof window === 'undefined' || !window.indexedDB) return null;
+    return new Promise((resolve) => {
       try {
-        return JSON.parse(localStorage.getItem('pendingNotifications') || '[]');
-      } catch {
-        return [];
-      }
-  }
-
-  checkPendingNotifications() {
-    const pending = this.getPendingNotifications();
-    const now = Date.now();
-    const remaining: PendingNotification[] = [];
-
-    this.pendingTimers.forEach(clearTimeout);
-    this.pendingTimers = [];
-
-    pending.forEach(notif => {
-      if (notif.triggerTime <= now) {
-        this.sendNotification(notif.title, notif.options);
-      } else {
-        remaining.push(notif);
-        this.scheduleTimer(notif);
+        const req = indexedDB.open('edublay-notifications', 1);
+        req.onupgradeneeded = (e: any) => {
+          try {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('pending')) {
+              db.createObjectStore('pending', { keyPath: 'id' });
+            }
+          } catch (err) {
+            console.error('IndexedDB upgrade failed:', err);
+          }
+        };
+        req.onsuccess = (e: any) => resolve(e.target.result);
+        req.onerror = (err) => {
+          console.warn('IndexedDB open error event:', err);
+          resolve(null);
+        };
+      } catch (err) {
+        console.warn('IndexedDB open failed (synchronous error, e.g. Safari Private Mode):', err);
+        resolve(null);
       }
     });
-
-    localStorage.setItem('pendingNotifications', JSON.stringify(remaining));
   }
 
-  cancelAllNotifications() {
+  public async scheduleInactivityNotifications() {
+      const pending = await this.getPendingNotifications();
+      const filtered = pending.filter(n => !n.id.startsWith('inactivity-'));
+      
+      const db = await this.openDb();
+      if (!db) return;
+      try {
+          const tx = db.transaction('pending', 'readwrite');
+          const store = tx.objectStore('pending');
+          store.clear();
+          filtered.forEach(n => store.put(n));
+      } catch (err) {
+          console.warn('scheduleInactivityNotifications tx failed:', err);
+      }
+
+      const now = Date.now();
+      const intervals = [
+          { days: 1, title: "We miss you! 👋", body: "It's been a day since your last study session. Keep the momentum going!" },
+          { days: 3, title: "Ready to learn? 📚", body: "Don't let your progress slip. Jump back into your studies today." },
+          { days: 7, title: "It's been a week! 🚀", body: "Your goals are waiting. Open EduBlay to continue your learning journey." }
+      ];
+
+      intervals.forEach(interval => {
+          const triggerTime = now + (interval.days * 24 * 60 * 60 * 1000);
+          const id = `inactivity-${interval.days}-${Date.now()}`;
+          const notification: PendingNotification = {
+              id,
+              title: interval.title,
+              options: {
+                  body: interval.body,
+                  tag: `inactivity-${interval.days}`,
+                  icon: '/icons/icon-192x192.png'
+              },
+              triggerTime
+          };
+          this.savePendingNotification(notification);
+          this.scheduleTimer(notification);
+      });
+  }
+
+  private async savePendingNotification(notification: PendingNotification) {
+     const db = await this.openDb();
+     if (!db) return;
+     return new Promise<void>((resolve) => {
+         try {
+             const tx = db.transaction('pending', 'readwrite');
+             tx.objectStore('pending').put(notification);
+             tx.oncomplete = () => resolve();
+             tx.onerror = () => resolve();
+         } catch (err) {
+             console.warn('savePendingNotification tx failed:', err);
+             resolve();
+         }
+     });
+  }
+
+  private async removePendingNotification(id: string) {
+     const db = await this.openDb();
+     if (!db) return;
+     return new Promise<void>((resolve) => {
+         try {
+             const tx = db.transaction('pending', 'readwrite');
+             tx.objectStore('pending').delete(id);
+             tx.oncomplete = () => resolve();
+             tx.onerror = () => resolve();
+         } catch (err) {
+             console.warn('removePendingNotification tx failed:', err);
+             resolve();
+         }
+     });
+  }
+  
+  private async getPendingNotifications(): Promise<PendingNotification[]> {
+      const db = await this.openDb();
+      if (!db) return [];
+      return new Promise((resolve) => {
+          try {
+              const tx = db.transaction('pending', 'readonly');
+              const getReq = tx.objectStore('pending').getAll();
+              getReq.onsuccess = () => resolve(getReq.result || []);
+              getReq.onerror = () => resolve([]);
+          } catch (err) {
+              console.warn('getPendingNotifications tx failed:', err);
+              resolve([]);
+          }
+      });
+  }
+
+  async checkPendingNotifications() {
+    const pending = await this.getPendingNotifications();
+    const now = Date.now();
     this.pendingTimers.forEach(clearTimeout);
     this.pendingTimers = [];
-    localStorage.removeItem('pendingNotifications');
+    for (const notif of pending) {
+      if (notif.triggerTime <= now) {
+        this.sendNotification(notif.title, notif.options);
+        this.playAlarm();
+        await this.removePendingNotification(notif.id);
+      } else {
+        this.scheduleTimer(notif);
+      }
+    }
   }
+
+  async cancelAllNotifications() {
+    this.pendingTimers.forEach(clearTimeout);
+    this.pendingTimers = [];
+    
+    const db = await this.openDb();
+    if (!db) return;
+    return new Promise<void>((resolve) => {
+        try {
+            const tx = db.transaction('pending', 'readwrite');
+            const store = tx.objectStore('pending');
+            const getReq = store.getAll();
+            getReq.onsuccess = () => {
+                const all = getReq.result || [];
+                const toKeepPrefixes = ['inactivity-', 'quote-', 'rating-prompt'];
+                const toDelete = all.filter((n: any) => !toKeepPrefixes.some(p => n.id.startsWith(p)));
+                toDelete.forEach((n: any) => store.delete(n.id));
+                tx.oncomplete = () => {
+                    const toKeep = all.filter((n: any) => toKeepPrefixes.some(p => n.id.startsWith(p)));
+                    toKeep.forEach((n: any) => this.scheduleTimer(n));
+                    resolve();
+                };
+            };
+            getReq.onerror = () => resolve();
+        } catch (err) {
+            console.warn('cancelAllNotifications tx failed:', err);
+            resolve();
+        }
+    });
+  }
+
+  async testAlarm() { await this.playAlarm(); }
 }
 
 export const notificationService = new NotificationService();

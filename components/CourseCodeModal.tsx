@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { CourseCodeMap } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface CourseCodeModalProps {

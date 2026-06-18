@@ -13,19 +13,16 @@ import { LogoIcon } from './icons/LogoIcon';
 import { DAYS_OF_WEEK } from '../constants';
 import EditTimetableModal from './EditTimetableModal';
 import { RefreshIcon } from './icons/RefreshIcon';
-import { LogIcon } from './icons/LogIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import LogStudyModal from './LogStudyModal';
 import { timeToMinutes, processAndResizeImage } from '../lib/utils';
-import { initializeUsage, checkUsage } from '../lib/usageManager';
-import UsageIndicator from './UsageIndicator';
+import { initializeUsage } from '../lib/usageManager';
 
-// FIX: Added missing 'usage' property to initialize UserDetails correctly.
 const emptyUserDetails: UserDetails = { name: '', educationalLevel: EducationalLevel.UNDERGRADUATE, institution: '', country: '', email: '', programmeOfStudy: '', institutionAbbreviation: '', usage: initializeUsage() };
 
 const getDayOfWeek = (date: Date): DayOfWeek => {
-    const dayIndex = date.getDay(); // Sunday - 0, Monday - 1, ...
+    const dayIndex = date.getDay(); 
     const days: DayOfWeek[] = [DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday];
     return days[dayIndex];
 };
@@ -61,6 +58,7 @@ interface DashboardProps {
   courseCodeMap: CourseCodeMap;
   setCourseCodeMap: (map: CourseCodeMap) => void;
   onSavePlanAttempt: (planName: string) => void;
+  onDetailsConfirmed?: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -83,7 +81,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     setLearningHubState,
     courseCodeMap,
     setCourseCodeMap,
-    onSavePlanAttempt
+    onSavePlanAttempt,
+    onDetailsConfirmed
 }) => {
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [planName, setPlanName] = useState('');
@@ -93,6 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const { t } = useLanguage();
   const [currentActivity, setCurrentActivity] = useState<{ slot: PlanSlot, day: DayOfWeek, nextSlot: PlanSlot | null } | null>(null);
   const dayRefs = useRef<Record<DayOfWeek, HTMLDivElement | null>>({} as any);
+  const [isInputMode, setIsInputMode] = useState(false);
   
   const [logStudyModalState, setLogStudyModalState] = useState<{ isOpen: boolean; slot: PlanSlot | null; day: DayOfWeek | null; nextSlot: PlanSlot | null }>({ isOpen: false, slot: null, day: null, nextSlot: null });
 
@@ -164,7 +164,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         const currentSlotIndex = sortedSlots.findIndex(slot => {
             const startMinutes = timeToMinutes(slot.startTime);
             const endMinutes = timeToMinutes(slot.endTime);
-            if (endMinutes < startMinutes) { // Crosses midnight
+            if (endMinutes < startMinutes) { 
                 return nowMinutes >= startMinutes || nowMinutes < endMinutes;
             }
             return startMinutes <= nowMinutes && nowMinutes < endMinutes;
@@ -213,7 +213,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       setDashboardInputs(prev => ({ ...prev, generalGoals: goals }));
   }, [setDashboardInputs]);
   
-  const isInputSufficient = !!imageFile ||
+  const isInputSufficient = !!imageFile || !!imagePreview ||
     lectures.some(l => l.subject.trim() !== '') ||
     studyGoals.some(g => g.subject.trim() !== '') ||
     agendaItems.some(a => a.title.trim() !== '');
@@ -223,11 +223,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     const codes = new Set<string>();
     plan.forEach(day => {
         day.slots.forEach(slot => {
-            // Check the dedicated code field first
             if (slot.code) {
                 codes.add(slot.code);
             }
-            // Fallback to checking the activity name
             if (slot.type === ActivityType.LECTURE || slot.type === ActivityType.STUDY) {
                 const matches = slot.activity.match(codeRegex);
                 if (matches) {
@@ -254,7 +252,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                         return { ...slot, activity: newName.trim(), code: codeToMatch };
                     }
                 }
-                // Ensure code field is populated if found in activity
                 if (codeToMatch && !slot.code) {
                     return { ...slot, code: codeToMatch };
                 }
@@ -264,16 +261,27 @@ const Dashboard: React.FC<DashboardProps> = ({
     };
 
     const processPlanForCodes = (plan: SmartPlan, isInitialGeneration: boolean) => {
-        const extractedCodes = extractCourseCodes(plan);
-        // Only ask if it's the first generation and there are codes we don't already know.
+        let extractedCodes = extractCourseCodes(plan);
+        const isManualInput = !imageFile && !imagePreview;
+        
+        if (isManualInput) {
+            const validInputs = [
+                ...lectures.map(l => l.subject.toUpperCase()),
+                ...studyGoals.map(s => s.subject.toUpperCase())
+            ].join(' ');
+
+            extractedCodes = extractedCodes.filter(code => {
+                 return validInputs.includes(code.toUpperCase());
+             });
+        }
+
         const newCodes = extractedCodes.filter(c => !courseCodeMap[c]);
 
         if (isInitialGeneration && newCodes.length > 0) {
             setTempSmartPlan(plan);
-            setCourseCodes(extractedCodes); // Pass all codes to the modal
+            setCourseCodes(extractedCodes); 
             setIsCodeModalOpen(true);
         } else {
-            // If it's a regeneration, or all codes are known, just apply the map.
             const finalPlan = applyCourseCodeMap(plan, courseCodeMap);
             setSmartPlan(finalPlan);
         }
@@ -289,6 +297,21 @@ const Dashboard: React.FC<DashboardProps> = ({
         addToast(t('common.countryRequired'), 'error');
         return;
     }
+    
+    if (!userDetails.recoveryQuestion) {
+        addToast("Please select a security recovery question.", 'error');
+        return;
+    }
+    if (!userDetails.recoveryAnswer || !userDetails.recoveryAnswer.trim()) {
+        addToast("Please provide an answer to your security question.", 'error');
+        return;
+    }
+    
+    // Explicitly notify that details are confirmed to trigger tutorial invitation
+    if (onDetailsConfirmed) {
+        onDetailsConfirmed();
+    }
+    
     setDashboardInputs(prev => ({...prev, step: 2}));
   };
 
@@ -299,15 +322,25 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
 
     const isRegeneration = !!smartPlan;
-    setGenerationState({ isLoading: true, message: '', error: null, source: 'dashboard' });
+    const loadingMessage = isRegeneration ? "Applying your changes..." : t('dashboard.generating');
+    
+    setGenerationState({ isLoading: true, message: loadingMessage, error: null, source: 'dashboard' });
 
-    if (imageFile) {
-        setGenerationState(prev => ({ ...prev, message: t('dashboard.verifyingImage') }));
+    if (imageFile || imagePreview) {
+        setGenerationState(prev => ({ ...prev, message: isRegeneration ? "Updating plan from new inputs..." : t('dashboard.verifyingImage') }));
         try {
-            const { base64, mimeType } = await processAndResizeImage(imageFile);
-            const imagePart: ImagePart = {
-                inlineData: { data: base64, mimeType }
-            };
+            let imagePart: ImagePart;
+
+            if (imageFile) {
+                const { base64, mimeType } = await processAndResizeImage(imageFile);
+                imagePart = { inlineData: { data: base64, mimeType } };
+            } else if (imagePreview) {
+                const [meta, data] = imagePreview.split(',');
+                const mimeType = meta.split(':')[1].split(';')[0];
+                imagePart = { inlineData: { data: data, mimeType } };
+            } else {
+                 throw new Error("No image data found");
+            }
             
             if (!isRegeneration) {
                 const isTimetable = await isImageTimetable(imagePart);
@@ -318,8 +351,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                 }
             }
 
-            setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
-            const generatedPlan = await generatePlanFromImage(userDetails, studyGoals, agendaItems, generalGoals, imagePart, isRegeneration ? smartPlan : undefined);
+            setGenerationState(prev => ({ ...prev, message: isRegeneration ? "Rebuilding schedule..." : t('dashboard.generating') }));
+            const generatedPlan = await generatePlanFromImage(imagePart, studyGoals, agendaItems, generalGoals, userDetails!);
             
             const extractedLectures: Lecture[] = [];
             generatedPlan.forEach(dayPlan => {
@@ -340,6 +373,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             checkForAgendaConflicts(generatedPlan, extractedLectures, agendaItems);
             processPlanForCodes(generatedPlan, !isRegeneration);
             setGenerationState({ isLoading: false, message: '', error: null, source: null });
+            setIsInputMode(false);
 
         } catch (e) {
              const message = e instanceof Error ? e.message : String(e);
@@ -347,12 +381,13 @@ const Dashboard: React.FC<DashboardProps> = ({
              setGenerationState({ isLoading: false, message: '', error: null, source: null });
         }
     } else {
-        setGenerationState(prev => ({ ...prev, message: t('dashboard.generating') }));
+        setGenerationState(prev => ({ ...prev, message: loadingMessage }));
         try {
-            const plan = await generateSmartPlan(userDetails, lectures, studyGoals, agendaItems, generalGoals, isRegeneration ? smartPlan : undefined);
+            const plan = await generateSmartPlan(lectures, studyGoals, agendaItems, generalGoals, userDetails!);
             checkForAgendaConflicts(plan, lectures, agendaItems);
             processPlanForCodes(plan, !isRegeneration);
             setGenerationState({ isLoading: false, message: '', error: null, source: null });
+            setIsInputMode(false);
         } catch (e: any) {
             const message = e instanceof Error ? e.message : String(e);
             addToast(message || t('toasts.error.unexpected'), 'error');
@@ -375,20 +410,32 @@ const Dashboard: React.FC<DashboardProps> = ({
     setCourseCodes([]);
   };
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[], fileRejections: any[]) => {
+    if (fileRejections?.length > 0) {
+        addToast(t('toasts.invalidImageFile') || 'Unsupported file type.', 'error');
+        return;
+    }
+
     const file = acceptedFiles[0];
     if (file) {
-        if (file.size > 25 * 1024 * 1024) { // 25MB limit
+        if (file.size > 25 * 1024 * 1024) { 
             addToast(t('toasts.fileSizeTooLarge', { fileName: file.name, size: 25 }), 'error');
             return;
         }
-        setDashboardInputs(prev => ({
-            ...prev,
-            imageFile: file,
-            imagePreview: URL.createObjectURL(file),
-            lectures: [],
-            studyGoals: [],
-        }));
+        
+        try {
+            const { dataUrl } = await processAndResizeImage(file);
+            
+            setDashboardInputs(prev => ({
+                ...prev,
+                imageFile: file,
+                imagePreview: dataUrl,
+                lectures: [],
+                studyGoals: [],
+            }));
+        } catch (error) {
+            addToast("Failed to process image.", 'error');
+        }
     }
   }, [setDashboardInputs, addToast, t]);
 
@@ -400,7 +447,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     },
     multiple: false,
     disabled: generationState.isLoading || lectures.length > 0 || studyGoals.length > 0,
-  });
+  } as any);
   
   const clearImage = () => {
       setDashboardInputs(prev => ({ ...prev, imageFile: null, imagePreview: null }));
@@ -431,7 +478,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         }
     }
 
-    setLearningHubState({ file: null, analysisMode: 'none', analysisResults: { summarize: null, explain: null, read: null }, chatHistory: [], isProcessing: false });
     const now = Date.now();
     const duration = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
     const newSession: ActiveSession = {
@@ -470,12 +516,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
   
   const handleEditInputs = () => {
-    setSmartPlan(null);
+    setIsInputMode(true); 
     setDashboardInputs(prev => ({...prev, step: 2}));
   };
 
   const handleStartOver = () => {
     setSmartPlan(null);
+    setIsInputMode(false);
     setDashboardInputs({
         lectures: [],
         studyGoals: [],
@@ -496,20 +543,21 @@ const Dashboard: React.FC<DashboardProps> = ({
     const startMinutes = timeToMinutes(startTime);
     const endMinutes = timeToMinutes(endTime);
 
-    if (endMinutes < startMinutes) { // Crosses midnight
+    if (endMinutes < startMinutes) { 
         return nowMinutes >= startMinutes || nowMinutes < endMinutes;
-    } else { // Same day
+    } else { 
         return nowMinutes >= startMinutes && nowMinutes < endMinutes;
     }
   }
   
   const renderPlanCreationSteps = () => {
-    if (!userDetails) return null; // Guard clause
+    if (!userDetails) return null; 
     if (step === 1) {
         return (
             <div>
               <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">{t('dashboard.createPlanTitle')}</h2>
-              <p className="text-gray-500 dark:text-gray-400 mb-6">{t('dashboard.createPlanSubtitle')}</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-6">{t('dashboard.createPlanSubtitle')}
+              </p>
               <UserDetailsForm userDetails={userDetails} setUserDetails={setUserDetails} />
               <button onClick={handleNextStep} className="mt-6 w-full py-3 bg-primary text-primary-text font-semibold rounded-lg shadow-md hover:bg-primary-dark transition-colors">{t('common.confirm')}</button>
             </div>
@@ -517,11 +565,15 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
     
     if (step === 2) {
+        const showDropzone = !!imagePreview || (lectures.length === 0 && studyGoals.length === 0);
+        const disableManual = !!imagePreview; 
+
         return (
             <div>
                 <h3 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 text-center">{t('dashboard.step2.title')}</h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-6 text-center">{t('dashboard.step2.subtitle')}</p>
-               <div {...getRootProps()} className={`group relative p-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${!!imageFile ? 'border-green-500' : (lectures.length > 0 || studyGoals.length > 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20')} border-gray-300 dark:border-gray-600 text-center ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : ''}`}>
+               
+               <div {...getRootProps()} className={`group relative p-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${!!imagePreview ? 'border-green-500' : (lectures.length > 0 || studyGoals.length > 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20')} border-gray-300 dark:border-gray-600 text-center ${isDragActive ? 'border-green-600 bg-green-100 dark:bg-green-900/30' : ''}`}>
                  <input {...getInputProps()} />
                  {imagePreview ? (
                      <>
@@ -536,6 +588,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </>
                  )}
                </div>
+
                <div className="flex items-center my-6">
                  <div className="flex-grow border-t border-gray-300 dark:border-gray-600"></div>
                  <span className="flex-shrink mx-4 text-gray-500 font-semibold">{t('common.or')}</span>
@@ -549,7 +602,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                    studyGoals={studyGoals} setStudyGoals={setStudyGoals}
                    agendaItems={agendaItems} setAgendaItems={setAgendaItems}
                    generalGoals={generalGoals} setGeneralGoals={setGeneralGoals}
-                   manualSectionsDisabled={!!imageFile}
+                   manualSectionsDisabled={disableManual}
                />
                <button onClick={handleGeneratePlan} className="mt-8 w-full py-4 bg-primary text-primary-text font-bold text-lg rounded-xl shadow-lg hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-all" disabled={!isInputSufficient || generationState.isLoading}>
                  {generationState.isLoading ? t('dashboard.generating') : (smartPlan ? t('dashboard.regeneratePlan') : t('dashboard.generatePlan'))}
@@ -563,15 +616,9 @@ const Dashboard: React.FC<DashboardProps> = ({
       return null;
   }
 
-  const isPremium = userDetails.subscriptionTier === 'premium';
-  const timetablesUsage = checkUsage(userDetails.usage, 'timetables');
-  const uploadsUsage = checkUsage(userDetails.usage, 'uploads');
-  const quizzesUsage = checkUsage(userDetails.usage, 'quizzes');
-  const solvesUsage = checkUsage(userDetails.usage, 'solves');
-
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {smartPlan ? (
+      {smartPlan && !isInputMode ? (
         <div>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('dashboard.yourSmartPlan')}</h2>
@@ -590,11 +637,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleScrollToCurrentActivity(); } }}
                     role="button"
                     tabIndex={0}
-                    className="bg-gradient-to-br from-primary to-sky-400 dark:from-primary-dark dark:to-sky-700 rounded-2xl shadow-xl p-6 md:p-8 mb-8 text-white transition-transform duration-300 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-primary cursor-pointer"
+                    className="rounded-2xl shadow-xl p-6 md:p-8 mb-8 text-white transition-transform duration-300 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-[#0ea5e9] cursor-pointer"
+                    style={{ background: 'linear-gradient(to bottom right, #0ea5e9, #0284c7)' }}
                 >
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="font-semibold text-primary-text/80">{ isNow(currentActivity.slot.startTime, currentActivity.slot.endTime) ? t('dashboard.happeningNow') : t('dashboard.upNext')} &bull; {currentActivity.day}</p>
+                            <p className="font-semibold text-white/90">{ isNow(currentActivity.slot.startTime, currentActivity.slot.endTime) ? t('dashboard.happeningNow') : t('dashboard.upNext')} &bull; {currentActivity.day}</p>
                             <h3 className="text-3xl font-bold mt-1">{currentActivity.slot.activity}</h3>
                             <div className="flex items-center gap-2 mt-2 text-primary-text/90">
                                 <ClockIcon className="w-5 h-5" />
@@ -626,28 +674,6 @@ const Dashboard: React.FC<DashboardProps> = ({
             <LoadingOverlay isLoading={generationState.isLoading && generationState.source === 'dashboard'} message={generationState.message} />
              {renderPlanCreationSteps()}
         </div>
-      )}
-
-      {!isPremium && userDetails && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 mt-8">
-            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">{t('usage.title')}</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <UsageIndicator featureName="timetables" {...timetablesUsage} />
-                <UsageIndicator featureName="uploads" {...uploadsUsage} />
-                <UsageIndicator featureName="quizzes" {...quizzesUsage} />
-                <UsageIndicator featureName="solves" {...solvesUsage} />
-            </div>
-        </div>
-      )}
-
-      {isEditing && smartPlan && (
-        <EditTimetableModal
-            isOpen={isEditing}
-            onClose={() => setDashboardInputs(prev => ({...prev, isEditing: false}))}
-            plan={smartPlan}
-            setPlan={setSmartPlan}
-            addToast={addToast}
-        />
       )}
 
       {saveModalOpen && (

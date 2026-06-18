@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import type { Toast as ToastType } from '../types.ts';
 import { CloseIcon } from './icons/CloseIcon.tsx';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface ToastProps {
     toast: ToastType;

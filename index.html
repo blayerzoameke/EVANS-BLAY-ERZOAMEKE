@@ -2,69 +2,112 @@
 <html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg' fill='%230284c7'%3E%3Cg%3E%3Cpath d='M19,4H18V2H16V4H8V2H6V4H5C3.89,4,3,4.9,3,6V20A2,2,0,0,0,5,22H15.1C14.41,21.14,14,20.12,14,19C14,15.69,16.69,13,20,13C20.34,13,20.68,13.05,21,13.13V6C21,4.9,20.1,4,19,4Z'/%3E%3Crect x='7' y='11' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='11' y='11' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='15' y='11' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='7' y='15' width='2' height='2' rx='0.5' fill='white'/%3E%3Crect x='11' y='15' width='2' height='2' rx='0.5' fill='white'/%3E%3Cpath d='M20,15C17.24,15,15,17.24,15,20C15,22.76,17.24,25,20,25C22.76,25,25,22.76,25,20C25,17.24,22.76,15,20,15M20.5,20.25L18,21.5V18H19.5V19.9L21.5,18.9L22,19.6L20.5,20.25Z' fill='white'/%3E%3C/g%3E%3C/svg%3E">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='128' fill='%230284c7'/%3E%3Cg font-family='Arial, sans-serif' font-weight='bold' text-anchor='middle' fill='white'%3E%3Ctext x='256' y='280' font-size='220'%3EEB%3C/text%3E%3Ctext x='256' y='400' font-size='60'%3EEduBlay%3C/text%3E%3C/g%3E%3C/svg%3E">
+    <!-- manifest is injected by vite-plugin-pwa -->
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <meta name="theme-color" content="#1d4ed8" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!--
+      CHANGED: black-translucent → default
+      black-translucent makes the status bar transparent and causes content to
+      render underneath it. This causes the flash/blank issue on Chrome/Firefox
+      iPhone because:
+      1. The app briefly renders with content under the status bar
+      2. Then iOS repositions it → visual flash
+      3. On non-Safari browsers the status bar handling differs → blank screen
+
+      "default" keeps the status bar opaque and avoids these rendering conflicts.
+      Safe-area padding in Header.tsx handles the spacing correctly.
+    -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="EduBlay" />
+    <meta name="description" content="AI-powered student learning app - study smarter for free" />
+    <!--
+      viewport-fit=cover is kept for safe-area-inset support,
+      but combined with "default" status bar style above to prevent flash.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
     <title>EduBlay - Your Learning Companion</title>
-    <meta name="theme-color" content="#0284c7">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <link rel="stylesheet" href="https://aistudiocdn.com/react-image-crop@^11.0.5/dist/ReactCrop.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <!--
+      THEME FLASH PREVENTION — runs synchronously before React mounts.
+      Without this, users see a white flash before the dark theme applies.
+      Also sets background immediately to prevent white → dark flash.
+    -->
     <script>
-      // Set worker source for pdf.js. It's crucial this is configured for the library to work.
+      (function() {
+        try {
+          var saved = localStorage.getItem('theme');
+          var dark = saved === 'dark' ||
+            ((!saved || saved === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.background = '#111827';
+            document.body && (document.body.style.background = '#111827');
+          }
+        } catch(e) {}
+      })();
+    </script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://unpkg.com/react-image-crop@11.0.5/dist/ReactCrop.css" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+    <script>
       if (typeof pdfjsLib !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       }
     </script>
-    <script src="https://js.paystack.co/v1/inline.js"></script>
+    <!-- Paystack removed from global head — loaded dynamically in payment component -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @keyframes fade-in-down {
-        from {
-          opacity: 0;
-          transform: translateY(-1rem);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(-1rem); }
+        to { opacity: 1; transform: translateY(0); }
       }
-      .animate-fade-in-down {
-        animation: fade-in-down 0.5s ease-out forwards;
+      .animate-fade-in-down { animation: fade-in-down 0.5s ease-out forwards; }
+
+      /*
+       * CRITICAL iOS FIX: Use 100dvh (dynamic viewport height) not 100vh.
+       * On iOS Safari, 100vh includes the browser chrome (address bar),
+       * causing content to be hidden behind it. 100dvh correctly excludes
+       * the browser chrome and adapts when it appears/disappears.
+       *
+       * Also: min-height ensures content isn't clipped when keyboard appears.
+       */
+      html {
+        height: 100%;
+        height: -webkit-fill-available; /* iOS Safari fallback */
       }
-      :root, html[data-theme="blue"] {
-        --primary-hue: 207;
-        --secondary-hue: 260;
-        --tertiary-hue: 45;
-        --success-hue: 145;
-        --neutral-hue: 215;
+      body {
+        min-height: 100%;
+        min-height: -webkit-fill-available;
+        overscroll-behavior-y: none;
       }
-      html[data-theme="purple"] {
-        --primary-hue: 260;
-        --secondary-hue: 320;
-        --tertiary-hue: 50;
+      #root {
+        height: 100%;
+        min-height: 100dvh;
       }
-      html[data-theme="green"] {
-        --primary-hue: 145;
-        --secondary-hue: 190;
-        --tertiary-hue: 95;
+
+      /*
+       * Safe-area custom properties — available throughout the app.
+       * These account for iPhone notch, Dynamic Island, home indicator.
+       */
+      :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
       }
-      html[data-theme="orange"] {
-        --primary-hue: 25;
-        --secondary-hue: 5;
-        --tertiary-hue: 40;
-      }
-      html[data-theme="pink"] {
-        --primary-hue: 330;
-        --secondary-hue: 280;
-        --tertiary-hue: 350;
-      }
-       html[data-theme="emerald"] {
-        --primary-hue: 160;
-        --secondary-hue: 180;
-        --tertiary-hue: 140;
-      }
+
+      :root, html[data-theme="blue"] { --primary-hue: 207; --secondary-hue: 260; --tertiary-hue: 45; --success-hue: 145; --neutral-hue: 215; }
+      html[data-theme="purple"] { --primary-hue: 260; --secondary-hue: 320; --tertiary-hue: 50; }
+      html[data-theme="green"]  { --primary-hue: 145; --secondary-hue: 190; --tertiary-hue: 95; }
+      html[data-theme="orange"] { --primary-hue: 25;  --secondary-hue: 5;   --tertiary-hue: 40; }
+      html[data-theme="pink"]   { --primary-hue: 330; --secondary-hue: 280; --tertiary-hue: 350; }
+      html[data-theme="emerald"]{ --primary-hue: 160; --secondary-hue: 180; --tertiary-hue: 140; }
     </style>
     <script>
       tailwind.config = {
@@ -78,36 +121,18 @@
                 dark: 'hsl(var(--primary-hue) 85% 48%)',
                 text: 'hsl(var(--primary-hue) 100% 98%)'
               },
-              study: '#2563eb', // blue-600
-              lecture: '#7c3aed', // violet-600
-              agenda: '#ea580c', // orange-600
-              break: '#16a34a', // green-600
-              free: '#4b5563', // gray-600
+              study: '#2563eb',
+              lecture: '#7c3aed',
+              agenda: '#ea580c',
+              break: '#16a34a',
+              free: '#4b5563',
             }
           }
         }
       }
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.20.0",
-    "react-dropzone": "https://aistudiocdn.com/react-dropzone@^14.3.8",
-    "react-image-crop": "https://aistudiocdn.com/react-image-crop@^11.0.5",
-    "katex": "https://aistudiocdn.com/katex@^0.16.22",
-    "chart.js/": "https://aistudiocdn.com/chart.js@^4.5.0/",
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js",
-    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js",
-    "firebase/analytics": "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.5.0/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.553.0"
-  }
-}
-</script>
-</head>
+    <link rel="stylesheet" href="/index.css">
+  </head>
   <body class="bg-gray-100 dark:bg-gray-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

@@ -56,9 +56,9 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
     setAgendaItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const addLecture = () => setLectures(p => [...p, { id: Date.now().toString(), subject: '', day: DayOfWeek.Monday, startTime: '09:00 AM', endTime: '10:00 AM', location: '' }]);
-  const addStudyGoal = () => setStudyGoals(p => [...p, { id: Date.now().toString(), subject: '', hours: 3 }]);
-  const addAgendaItem = () => setAgendaItems(p => [...p, { id: Date.now().toString(), title: '', day: DayOfWeek.Monday, startTime: '12:00 PM', endTime: '01:00 PM', location: '' }]);
+  const addLecture = () => setLectures(p => [...p, { id: Date.now().toString() + Math.random().toString(), subject: '', day: DayOfWeek.Monday, startTime: '09:00 AM', endTime: '10:00 AM', location: '' }]);
+  const addStudyGoal = () => setStudyGoals(p => [...p, { id: Date.now().toString() + Math.random().toString(), subject: '', hours: 3 }]);
+  const addAgendaItem = () => setAgendaItems(p => [...p, { id: Date.now().toString() + Math.random().toString(), title: '', day: DayOfWeek.Monday, startTime: '12:00 PM', endTime: '01:00 PM', location: '' }]);
 
   const inputClasses = "block w-full h-10 px-4 py-2 bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg shadow-inner text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700";
   const selectClasses = `${inputClasses} pr-8`;
@@ -70,7 +70,7 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
       <Section title={t('timetableinput.lectures')}>
         <div className="space-y-4">
           {lectures.map(lec => (
-            <div key={lec.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,1fr,auto] items-end gap-4">
+            <div key={lec.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-end gap-4">
               <div className="w-full">
                   <label htmlFor={`lec-subject-${lec.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.subject')}</label>
                   <input id={`lec-subject-${lec.id}`} type="text" placeholder={t('timetableinput.subject')} value={lec.subject} onChange={e => updateLecture(lec.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
@@ -104,7 +104,7 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
       <Section title={t('timetableinput.studyGoals')}>
         <div className="space-y-4">
           {studyGoals.map(goal => (
-            <div key={goal.id} className="grid grid-cols-1 md:grid-cols-[2fr,1fr,auto] gap-4 items-end">
+            <div key={goal.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_auto] gap-4 items-end">
               <div>
                   <label htmlFor={`goal-subject-${goal.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.subjectToStudy')}</label>
                   <input id={`goal-subject-${goal.id}`} type="text" placeholder={t('timetableinput.subjectToStudy')} value={goal.subject} onChange={e => updateStudyGoal(goal.id, 'subject', e.target.value)} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
@@ -112,7 +112,7 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
               <div>
                 <label htmlFor={`goal-hours-${goal.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.hoursPerWeek')}</label>
                 <div className="flex items-center gap-2">
-                    <input id={`goal-hours-${goal.id}`} type="number" placeholder="Hours" value={goal.hours} min="1" onChange={e => updateStudyGoal(goal.id, 'hours', parseInt(e.target.value, 10))} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
+                    <input id={`goal-hours-${goal.id}`} type="number" placeholder="Hours" value={isNaN(goal.hours) ? '' : goal.hours} min="1" onChange={e => updateStudyGoal(goal.id, 'hours', parseInt(e.target.value, 10) || 0)} className={inputClasses} disabled={disabled || manualSectionsDisabled} />
                     <span className="text-sm text-gray-600 dark:text-gray-400">{t('common.hours')}</span>
                 </div>
               </div>
@@ -127,7 +127,7 @@ const TimetableInput: React.FC<TimetableInputProps> = ({
       <Section title={t('timetableinput.agenda')}>
         <div className="space-y-4">
           {agendaItems.map(item => (
-            <div key={item.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,1fr,auto] items-end gap-4">
+            <div key={item.id} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-end gap-4">
               <div className="w-full">
                 <label htmlFor={`agenda-title-${item.id}`} className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">{t('timetableinput.activityTitle')}</label>
                 <input id={`agenda-title-${item.id}`} type="text" placeholder={t('timetableinput.activityTitle')} value={item.title} onChange={e => updateAgendaItem(item.id, 'title', e.target.value)} className={inputClasses} disabled={disabled} />

@@ -27,6 +27,7 @@ const UsageIndicator: React.FC<UsageIndicatorProps> = ({
     uploads: 'pricing.feature.materials',
     quizzes: 'pricing.feature.quizzes',
     solves: 'pricing.feature.solver',
+    collaboration: 'pricing.feature.collaboration',
   };
 
   const barColor = isDepleted ? 'bg-red-500' : isLow ? 'bg-yellow-500' : 'bg-green-500';

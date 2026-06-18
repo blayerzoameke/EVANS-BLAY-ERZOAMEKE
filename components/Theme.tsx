@@ -10,24 +10,24 @@ const ThemeSettings: React.FC = () => {
     const { t } = useLanguage();
     const { colorTheme, setColorTheme } = useColorTheme();
 
-    const options: { value: Theme, labelKey: TranslationKey, descKey?: TranslationKey, gradient: string, icon: string }[] = [
+    const options: { value: Theme, labelKey: TranslationKey, descKey?: TranslationKey, gradientStyle: React.CSSProperties, icon: string }[] = [
         { 
             value: 'light', 
             labelKey: 'theme.light',
-            gradient: 'bg-gradient-to-br from-yellow-100 to-sky-200',
+            gradientStyle: { background: 'linear-gradient(to bottom right, #fef3c7, #bae6fd)' },
             icon: '☀️'
         },
         { 
             value: 'dark', 
             labelKey: 'theme.dark',
-            gradient: 'bg-gradient-to-br from-gray-700 to-gray-900',
+            gradientStyle: { background: 'linear-gradient(to bottom right, #374151, #111827)' },
             icon: '🌙'
         },
         { 
             value: 'system', 
             labelKey: 'theme.system', 
             descKey: 'theme.system.desc',
-            gradient: 'bg-gradient-to-br from-blue-500 to-purple-600',
+            gradientStyle: { background: 'linear-gradient(to bottom right, #3b82f6, #9333ea)' },
             icon: '🖥️'
         },
     ];
@@ -74,7 +74,7 @@ const ThemeSettings: React.FC = () => {
                 <div>
                     <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">{t('theme.displayMode')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {options.map(({ value, labelKey, descKey, gradient, icon }) => (
+                        {options.map(({ value, labelKey, descKey, gradientStyle, icon }) => (
                             <button
                                 key={value}
                                 onClick={() => setTheme(value)}
@@ -84,7 +84,7 @@ const ThemeSettings: React.FC = () => {
                                         : 'hover:shadow-xl'
                                 }`}
                             >
-                                <div className={`absolute inset-0 ${gradient}`}></div>
+                                <div className="absolute inset-0" style={gradientStyle}></div>
                                 <div className="relative z-10 text-center">
                                     <div className="text-4xl mb-3">{icon}</div>
                                     <p className={`font-bold text-lg drop-shadow-lg mb-2 ${value === 'light' ? 'text-gray-800' : 'text-white'}`}>

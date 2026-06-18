@@ -1,4 +1,3 @@
-import React from 'react';
 
 // FIX: Export DayOfWeek enum and remove circular import from constants.ts
 export enum DayOfWeek {
@@ -30,7 +29,9 @@ export type View =
   | 'terms'
   | 'tutorial'
   | 'notification'
-  | 'pricing'; // New view for monetization
+  | 'pricing'
+  | 'collaborative'
+  | 'history';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -46,7 +47,7 @@ export enum EducationalLevel {
 }
 
 // --- Usage Tracking Types ---
-export type FeatureName = 'timetables' | 'uploads' | 'quizzes' | 'solves';
+export type FeatureName = 'timetables' | 'uploads' | 'quizzes' | 'solves' | 'collaboration';
 
 export interface UsageRecord {
     count: number;
@@ -73,6 +74,7 @@ export interface UserDetails {
   id?: string;
   name: string;
   educationalLevel: EducationalLevel;
+  hasConfirmedDetails?: boolean; // New field to strictly enforce confirmation step
   institution?: string;
   country?: string;
   email?: string;
@@ -215,7 +217,7 @@ export interface UploadedMaterialInfo {
     uploadedAt: string;
 }
 
-export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'read' | 'chat' | 'read-focus' | 'actions';
+export type AnalysisMode = 'none' | 'summarize' | 'explain' | 'read' | 'deep' | 'chat' | 'read-focus' | 'actions';
 
 export interface LearningHubState {
     file: UploadedFile | null;
@@ -224,6 +226,7 @@ export interface LearningHubState {
         summarize: string | null;
         explain: string | null;
         read: string | null;
+        deep: string | null;
     };
     chatHistory: ChatTurn[];
     isProcessing: boolean;
@@ -241,6 +244,7 @@ export interface QuizQuestion {
   options?: string[]; // Only for MCQ
   correctAnswer: string;
   explanation: string;
+  hint?: string; // Socratic nudge — does not reveal the answer
   topic: string;
   type: QuizType;
 }
@@ -256,6 +260,26 @@ export interface QuizSummary {
     weaknesses: string[];
     recommendations: string[];
 }
+export type HistoryEntryType = 'chat' | 'quiz';
+
+export interface HistoryEntry {
+    id: string;
+    type: HistoryEntryType;
+    title: string;               // AI-generated title like Claude
+    createdAt: string;           // ISO date string
+    updatedAt: string;           // ISO date string — for sorting by most recent
+    // Chat history fields
+    chatHistory?: ChatTurn[];
+    documentName?: string;       // name of the uploaded file
+    documentContext?: string;    // subject/context extracted from file
+    // Quiz history fields
+    quiz?: QuizQuestion[];
+    userAnswers?: any[];
+    quizSummary?: QuizSummary | null;
+    quizType?: string;
+    focusArea?: string;
+}
+
 export interface ChatTurn {
     user: string;
     blay: string;
@@ -282,9 +306,26 @@ export interface GenerationState {
 export interface QuizState {
     quiz: QuizQuestion[];
     currentQuestionIndex: number;
-    userAnswers: string[];
+    userAnswers: any[];
     feedback: AnswerFeedback | null;
     summary: QuizSummary | null;
+    timerSeconds: number | null; // null = no timer
+}
+
+export interface Flashcard {
+    front: string;
+    back: string;
+    topic: string;
+    hint?: string;
+}
+
+export interface FlashcardState {
+    cards: Flashcard[];
+    currentIndex: number;
+    flipped: boolean;
+    known: number[];
+    unknown: number[];
+    sessionDone: boolean;
 }
 
 export interface DashboardInputState {
@@ -300,7 +341,7 @@ export interface DashboardInputState {
 }
 
 export interface ExamPrepState {
-    mode: 'quiz' | 'solve';
+    mode: 'quiz' | 'solve' | 'flashcard';
     // Quiz generation
     topic: string;
     numQuestions: number;
@@ -308,6 +349,11 @@ export interface ExamPrepState {
     uploadedFiles: File[];
     focusArea: string;
     isVerifying: boolean;
+    quizTimerMinutes: number; // 0 = no timer
+    numFlashcards: number;
+    quizDifficulty: 'easy' | 'moderate' | 'hard';
+    flashcardFiles: File[];
+    flashcardDifficulty: 'easy' | 'moderate' | 'hard';
     // Problem solving
     questionImage: string | null; // base64 data url
     questionText: string;
@@ -316,7 +362,9 @@ export interface ExamPrepState {
     programmingLanguage: string;
     graphInterval: string;
     graphYInterval: string;
+    graphConfig?: any | null; // Added to persist graph state
 }
+
 
 export interface ProfileEditState {
     isEditing: boolean;

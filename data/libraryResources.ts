@@ -12,14 +12,14 @@ export const libraryResources: LibraryResource[] = [
         category: 'study-techniques',
         titleKey: 'library.resources.st1.title',
         descriptionKey: 'library.resources.st1.description',
-        link: 'https://francescocirillo.com/pages/pomodoro-technique',
+        link: 'https://todoist.com/productivity-methods/pomodoro-technique',
     },
     {
         id: 'st2',
         category: 'study-techniques',
         titleKey: 'library.resources.st2.title',
         descriptionKey: 'library.resources.st2.description',
-        link: 'https://www.youtube.com/watch?v=fDbxPVn02_c',
+        link: 'https://fs.blog/feynman-technique/',
     },
     {
         id: 'st3',

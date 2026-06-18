@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import type { PlanSlot } from '../types.ts';
 import { timeToMinutes } from '../lib/utils.ts';

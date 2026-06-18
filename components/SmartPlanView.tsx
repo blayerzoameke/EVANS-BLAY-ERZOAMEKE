@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { SmartPlan, PlanSlot, Toast, UserDetails } from '../types';
 import { ActivityType, DayOfWeek } from '../types';
@@ -37,14 +38,12 @@ const AddToCalendarModal: React.FC<AddToCalendarModalProps> = ({ isOpen, onClose
     if (!isOpen || !slot || !day) return null;
 
     const startDate = getNextDateForDay(day, slot.startTime);
-    const endDate = parseTimeToDate(slot.endTime, startDate); // Ensure end date is on the same day
+    const endDate = parseTimeToDate(slot.endTime, startDate);
 
-    // Formatter for Google Calendar (YYYYMMDDTHHMMSS/YYYYMMDDTHHMMSS)
     const formatGoogleDate = (date: Date): string => {
         return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     };
     
-    // Formatter for Outlook (YYYY-MM-DDTHH:MM:SS)
     const formatOutlookDate = (date: Date): string => {
         const pad = (n: number) => n.toString().padStart(2, '0');
         const datePart = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -95,7 +94,6 @@ END:VCALENDAR`;
             addToast(t('reminders.setEmail'), 'warning');
             return;
         }
-        // Mock implementation as there is no backend
         addToast(t('reminders.emailSuccess', { email: userDetails.email }), 'info');
     };
 
@@ -136,28 +134,30 @@ END:VCALENDAR`;
                             {t('addToCalendar.email')}
                         </button>
                     </div>
-                    {!userDetails?.email && <p className="text-xs text-center text-gray-500 mt-2">{t('reminders.emailInfo')}</p>}
                 </div>
             </div>
         </div>
     );
 };
 
-const getActivityColor = (type: ActivityType) => {
-  const baseClasses = 'text-white shadow-lg border-l-4';
-  switch (type) {
-    case ActivityType.LECTURE:
+// Fixed to ensure strings from AI (even if case varies) are matched to correct Tailwind colors
+const getActivityColor = (type: string) => {
+  const baseClasses = 'text-white shadow-md border-l-4 transition-all duration-200';
+  const t = type.toLowerCase();
+  
+  switch (t) {
+    case 'lecture':
       return `${baseClasses} bg-lecture border-lecture/80`;
-    case ActivityType.STUDY:
+    case 'study':
       return `${baseClasses} bg-study border-study/80`;
-    case ActivityType.AGENDA:
+    case 'agenda':
       return `${baseClasses} bg-agenda border-agenda/80`;
-    case ActivityType.BREAK:
+    case 'break':
       return `${baseClasses} bg-break border-break/80`;
-    case ActivityType.FREE:
+    case 'free':
       return `${baseClasses} bg-free border-free/80`;
     default:
-      return `${baseClasses} bg-slate-500 border-slate-300`;
+      return `${baseClasses} bg-gray-600 border-gray-400`;
   }
 };
 
@@ -165,36 +165,36 @@ const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: s
     const { t } = useLanguage();
     const isClickable = !!(slot.link || onClick);
 
-    const cardClasses = `relative group p-4 rounded-xl shadow-md mb-4 transition-all duration-300 transform hover:shadow-xl hover:scale-105 ${getActivityColor(slot.type)} ${isClickable ? 'cursor-pointer' : 'cursor-default'} ${isCurrent ? 'ring-2 ring-primary dark:ring-primary-light' : ''}`;
+    const cardClasses = `relative group p-2.5 rounded-lg shadow-sm mb-2 transform hover:scale-[1.02] ${getActivityColor(slot.type)} ${isClickable ? 'cursor-pointer' : 'cursor-default'} ${isCurrent ? 'ring-2 ring-white/50 animate-pulse-slow' : ''}`;
     
     const content = (
         <div className={cardClasses}>
              {isCurrent && (
-                <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 text-xs font-semibold bg-red-600 px-2 py-1 rounded-full text-white shadow-md">
-                    <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 text-[10px] font-semibold bg-red-600 px-1.5 py-0.5 rounded-full text-white shadow-md">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
                     <span>{t('smartplan.live')}</span>
                 </div>
             )}
             <button 
                 onClick={(e) => { e.stopPropagation(); onAddToCalendarClick(); }}
-                className="absolute top-2 right-2 p-1.5 rounded-full bg-white/20 hover:bg-white/40 transition-colors opacity-0 group-hover:opacity-100"
+                className="absolute top-2 right-2 p-1 rounded-full bg-white/20 hover:bg-white/40 transition-colors opacity-0 group-hover:opacity-100"
                 title="Add to calendar"
             >
-                <CalendarAddIcon className="w-4 h-4 text-white" />
+                <CalendarAddIcon className="w-3 h-3 text-white" />
             </button>
-            <p className="font-bold text-base mb-1 pr-12">{slot.activity}</p>
-            {slot.code && <p className="text-sm font-mono mt-1 text-white/90 bg-black/20 px-2 py-1 rounded">{slot.code}</p>}
-            <p className="text-sm text-white/90 mt-2 font-medium">{slot.startTime} - {slot.endTime}</p>
-            {slot.location && (
-                <p className="flex items-center gap-1 text-sm text-white/90 mt-1">
-                    <LocationPinIcon className="w-4 h-4" /> {slot.location}
+            <p className="font-bold text-sm leading-tight mb-1 pr-6 break-words line-clamp-2" title={slot.activity}>{slot.activity}</p>
+            {slot.code && slot.code !== slot.activity && <p className="text-[10px] font-mono mt-0.5 text-white/90 bg-black/20 px-1.5 py-0.5 rounded inline-block uppercase">{slot.code}</p>}
+            <p className="text-xs text-white/90 mt-1 font-medium">{slot.startTime} - {slot.endTime}</p>
+            {slot.location && slot.type.toLowerCase() === 'lecture' && (
+                <p className="flex items-center gap-1 text-xs text-white/90 mt-0.5 truncate">
+                    <LocationPinIcon className="w-3 h-3 flex-shrink-0" /> {slot.location}
                 </p>
             )}
-            <p className="text-sm capitalize mt-2 font-semibold text-white/95 bg-white/20 px-2 py-1 rounded-full inline-block">{slot.type}</p>
+            <p className="text-[10px] uppercase mt-1.5 font-bold text-white/80 bg-black/10 px-1.5 py-0.5 rounded-full inline-block">{slot.type}</p>
             {tooltip && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-3 py-1.5 text-sm font-medium text-white bg-gray-900 dark:bg-black rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[180px] px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-50 pointer-events-none text-center">
                     {tooltip}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900 dark:border-t-black"></div>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900"></div>
                 </div>
             )}
         </div>
@@ -202,9 +202,15 @@ const PlanSlotCard: React.FC<{ slot: PlanSlot; onClick?: () => void; tooltip?: s
 
     if (onClick) {
         return (
-            <button onClick={onClick} className="w-full text-left block">
+            <div 
+                onClick={onClick} 
+                className="w-full text-left block" 
+                role="button" 
+                tabIndex={0} 
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+            >
                 {content}
-            </button>
+            </div>
         );
     }
     if (slot.link) {
@@ -232,7 +238,7 @@ const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick, d
   const [calendarModalState, setCalendarModalState] = useState<{ isOpen: boolean; slot: PlanSlot | null; day: DayOfWeek | null }>({ isOpen: false, slot: null, day: null });
 
     useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 60000); // Update time every minute to check for day change
+        const timer = setInterval(() => setNow(new Date()), 60000);
         return () => clearInterval(timer);
     }, []);
     
@@ -265,42 +271,44 @@ const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick, d
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
     return (
-        <div ref={el => { if(dayRefs) dayRefs.current[day] = el }} className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-xl p-6 border border-gray-200/50 dark:border-gray-700/50 h-full transition-all duration-300 hover:shadow-2xl">
-          <h3 className={`text-2xl font-bold text-center mb-6 bg-gradient-to-r ${isWeekend ? 'from-green-500 to-teal-500' : 'from-primary to-purple-600'} bg-clip-text text-transparent`}>{day}</h3>
+        <div ref={el => { if(dayRefs && dayRefs.current) dayRefs.current[day] = el }} className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-xl shadow-md p-3 border border-gray-200 dark:border-gray-700 h-full transition-all duration-300 hover:shadow-xl">
+          <h3 className={`text-lg font-extrabold text-center mb-4 pb-2 border-b dark:border-gray-700 ${isWeekend ? 'text-green-600 dark:text-green-400' : 'text-primary dark:text-primary-light'}`}>{day}</h3>
           {sortedSlots.length > 0 ? (
-            sortedSlots.map((slot, index) => {
-              const isClickable = slot.type === ActivityType.STUDY && day === currentDay && !!onStudySlotClick;
-              const tooltip = isClickable ? t('smartplan.clickToStudy') : undefined;
-              
-              let isCurrent = false;
-              if (day === currentDay) {
-                  const startMinutes = timeToMinutes(slot.startTime);
-                  const endMinutes = timeToMinutes(slot.endTime);
-                  if (endMinutes < startMinutes) { // Crosses midnight
-                      isCurrent = nowMinutes >= startMinutes || nowMinutes < endMinutes;
-                  } else {
-                      isCurrent = nowMinutes >= startMinutes && nowMinutes < endMinutes;
-                  }
-              }
-              
-              return (
-                  <PlanSlotCard 
-                      key={index} 
-                      slot={slot} 
-                      onClick={isClickable ? () => onStudySlotClick!(slot, day) : undefined} 
-                      tooltip={tooltip}
-                      isCurrent={isCurrent}
-                      onAddToCalendarClick={() => handleAddToCalendarClick(slot, day)}
-                  />
-              );
-            })
+            <div className="space-y-1">
+                {sortedSlots.map((slot, index) => {
+                const isClickable = slot.type.toLowerCase() === 'study' && day === currentDay && !!onStudySlotClick;
+                const tooltip = isClickable ? t('smartplan.clickToStudy') : undefined;
+                
+                let isCurrent = false;
+                if (day === currentDay) {
+                    const startMinutes = timeToMinutes(slot.startTime);
+                    const endMinutes = timeToMinutes(slot.endTime);
+                    if (endMinutes < startMinutes) {
+                        isCurrent = nowMinutes >= startMinutes || nowMinutes < endMinutes;
+                    } else {
+                        isCurrent = nowMinutes >= startMinutes && nowMinutes < endMinutes;
+                    }
+                }
+                
+                return (
+                    <PlanSlotCard 
+                        key={index} 
+                        slot={slot} 
+                        onClick={isClickable ? () => onStudySlotClick!(slot, day) : undefined} 
+                        tooltip={tooltip}
+                        isCurrent={isCurrent}
+                        onAddToCalendarClick={() => handleAddToCalendarClick(slot, day)}
+                    />
+                );
+                })}
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-56">
-                <div className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                        <span className="text-2xl text-gray-400">📅</span>
+            <div className="flex items-center justify-center h-32">
+                <div className="text-center opacity-60">
+                    <div className="w-10 h-10 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                        <span className="text-lg">📅</span>
                     </div>
-                    <p className="text-gray-500 dark:text-gray-400 font-medium">{t('smartplan.noActivities')}</p>
+                    <p className="text-xs font-bold uppercase tracking-tighter">{t('smartplan.noActivities')}</p>
                 </div>
             </div>
           )}
@@ -310,17 +318,15 @@ const SmartPlanView: React.FC<SmartPlanViewProps> = ({ plan, onStudySlotClick, d
   
   return (
     <div className="relative">
-      <div className="relative z-10 space-y-8">
-        {/* Weekdays Row */}
-        <div className="grid grid-flow-col auto-cols-[20rem] lg:auto-cols-fr lg:grid-flow-row lg:grid-cols-5 gap-6 overflow-x-auto pb-6 -mx-4 px-4">
+      <div className="relative z-10 space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {weekdaysData.map(({ day, slots }) => (
             <DayCard key={day} day={day} slots={slots} />
           ))}
         </div>
 
-        {/* Weekends Row */}
         <div className="flex justify-center">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full lg:w-2/5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-2/5">
             {weekendsData.map(({ day, slots }) => (
               <DayCard key={day} day={day} slots={slots} isWeekend />
             ))}

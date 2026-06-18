@@ -1,13 +1,15 @@
+
 import React, { useState } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface SessionCustomizationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (config: { studyDuration: number; breakDuration: number; breakActivity: string; breakLink: string; breakPlacement: 'during' | 'after' }) => void;
+    onConfirm: (config: { studyDuration: number; breakDuration: number; breakActivity: string; breakLink: string; breakPlacement: 'during' | 'after'; addToPlan: boolean }) => void;
     subject: string;
     defaultDuration?: number;
+    isUntracked?: boolean;
 }
 
 const breakOptions = [
@@ -18,7 +20,7 @@ const breakOptions = [
     { value: 'custom', labelKey: 'sessionCustomization.break.custom' }
 ];
 
-const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ isOpen, onClose, onConfirm, subject, defaultDuration = 50 }) => {
+const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ isOpen, onClose, onConfirm, subject, defaultDuration = 50, isUntracked = false }) => {
     const { t } = useLanguage();
     const [studyDuration, setStudyDuration] = useState(defaultDuration);
     
@@ -29,12 +31,32 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
     const [breakActivityType, setBreakActivityType] = useState('youtube');
     const [customBreakActivity, setCustomBreakActivity] = useState('');
     const [breakLink, setBreakLink] = useState('');
+    const [addToPlan, setAddToPlan] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) {
         return null;
     }
     
     const handleConfirm = () => {
+        setError(null);
+
+        if (breakLink) {
+            const lowerLink = breakLink.toLowerCase();
+            if (breakActivityType === 'youtube' && !(lowerLink.includes('youtube.com') || lowerLink.includes('youtu.be'))) {
+                setError(t('validation.invalidLinkUrl', { platform: 'YouTube' }));
+                return;
+            }
+            if (breakActivityType === 'tiktok' && !lowerLink.includes('tiktok.com')) {
+                setError(t('validation.invalidLinkUrl', { platform: 'TikTok' }));
+                return;
+            }
+            if (breakActivityType === 'music' && (lowerLink.includes('youtube.com') || lowerLink.includes('youtu.be') || lowerLink.includes('tiktok.com'))) {
+                 setError(t('validation.invalidLinkUrl', { platform: 'Music (Spotify, SoundCloud, etc.)' }));
+                 return;
+            }
+        }
+
         const finalBreakActivity = breakActivityType === 'custom' 
             ? customBreakActivity 
             : t(breakOptions.find(o => o.value === breakActivityType)?.labelKey as any) || '';
@@ -43,7 +65,8 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
             breakDuration,
             breakActivity: finalBreakActivity,
             breakLink,
-            breakPlacement
+            breakPlacement,
+            addToPlan
         });
     };
 
@@ -63,14 +86,14 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{t('sessionCustomization.title')}</h2>
                     <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
                         <CloseIcon className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="p-6 space-y-6">
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
                      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-md -mt-2">
                         <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('common.subject')}</p>
                         <p className="font-bold text-lg text-primary dark:text-primary-light truncate">{subject}</p>
@@ -117,7 +140,7 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
                             </div>
                              <div>
                                 <label htmlFor="break-activity" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.breakActivity')}</label>
-                                <select id="break-activity" value={breakActivityType} onChange={e => setBreakActivityType(e.target.value)} className={`${inputClasses} mt-1`}>
+                                <select id="break-activity" value={breakActivityType} onChange={e => { setBreakActivityType(e.target.value); setError(null); }} className={`${inputClasses} mt-1`}>
                                     {breakOptions.map(opt => <option key={opt.value} value={opt.value}>{t(opt.labelKey as any)}</option>)}
                                 </select>
                             </div>
@@ -127,9 +150,32 @@ const SessionCustomizationModal: React.FC<SessionCustomizationModalProps> = ({ i
                             {['youtube', 'tiktok', 'music'].includes(breakActivityType) && (
                                 <div>
                                     <label htmlFor="break-link" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('sessionCustomization.breakLink')}</label>
-                                    <input type="url" id="break-link" value={breakLink} onChange={e => setBreakLink(e.target.value)} placeholder={t('sessionCustomization.breakLinkPlaceholder')} className={`${inputClasses} mt-1`} />
+                                    <input 
+                                        type="url" 
+                                        id="break-link" 
+                                        value={breakLink} 
+                                        onChange={e => { setBreakLink(e.target.value); setError(null); }} 
+                                        placeholder={t('sessionCustomization.breakLinkPlaceholder')} 
+                                        className={`${inputClasses} mt-1 ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`} 
+                                    />
+                                    {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {isUntracked && (
+                        <div className="flex items-center space-x-2 pt-4 border-t dark:border-gray-700">
+                            <input
+                                type="checkbox"
+                                id="add-to-plan"
+                                checked={addToPlan}
+                                onChange={(e) => setAddToPlan(e.target.checked)}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor="add-to-plan" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {t('sessionCustomization.addToPlan')}
+                            </label>
                         </div>
                     )}
                 </div>

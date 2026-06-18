@@ -94,6 +94,17 @@ export const timeToMinutes = (time: string): number => {
     }
 };
 
+export const minutesToTime = (minutes: number): string => {
+    let h = Math.floor(minutes / 60) % 24;
+    let m = minutes % 60;
+    const isPM = h >= 12;
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    const hStr = h.toString().padStart(2, '0');
+    const mStr = m.toString().padStart(2, '0');
+    return `${hStr}:${mStr} ${isPM ? 'PM' : 'AM'}`;
+};
+
 const dayNameToIndex: Record<DayOfWeek, number> = {
     [DayOfWeek.Sunday]: 0,
     [DayOfWeek.Monday]: 1,

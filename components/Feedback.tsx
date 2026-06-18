@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
-import { globalFeedbackService } from '../src/services/globalFeedbackService';
+import { globalFeedbackService } from '../services/globalFeedbackService';
 import type { UserDetails, Toast } from '../types';
 
 // Icons
@@ -11,8 +11,6 @@ import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { DocumentIcon } from './icons/DocumentIcon';
 import { ThumbsUpIcon } from './icons/ThumbsUpIcon';
 import { SendIcon } from './icons/SendIcon';
-import { LockIcon } from './icons/LockIcon';
-
 
 interface FeedbackProps {
     userDetails: UserDetails | null;
@@ -38,6 +36,8 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
     const [likedComments, setLikedComments] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [showThankYouOverlay, setShowThankYouOverlay] = useState(false);
 
     useEffect(() => {
         setIsLoading(true);
@@ -90,7 +90,9 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
         setIsSubmitting(true);
         try {
             await globalFeedbackService.submitRating(userDetails.id, newRating);
-            addToast(t('feedback.ratingThankYou' as any), 'success');
+            setShowThankYouOverlay(true);
+            addToast('Thank you for your rating! Your feedback helps us improve EduBlay.', 'success');
+            setTimeout(() => setShowThankYouOverlay(false), 3000);
         } catch (error: any) {
             console.error("Failed to submit rating:", error);
             addToast(error.message || "Could not submit rating.", "error");
@@ -136,8 +138,20 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
 
     const getTimeAgo = (timestamp: any) => {
         if (!timestamp) return '';
+        let past;
+        
+        // Handle Firestore Timestamp
+        if (timestamp && typeof timestamp.toDate === 'function') {
+            past = timestamp.toDate();
+        } else if (timestamp instanceof Date) {
+            past = timestamp;
+        } else if (typeof timestamp === 'number') {
+            past = new Date(timestamp);
+        } else {
+            return '';
+        }
+
         const now = new Date();
-        const past = timestamp.toDate(); // Convert Firestore Timestamp to Date
         const diffMs = now.getTime() - past.getTime();
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
@@ -150,8 +164,8 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
         return past.toLocaleDateString();
     };
 
-    const StatCard: React.FC<{ icon: React.ReactNode, value: string | number, label: string, gradient: string }> = ({ icon, value, label, gradient }) => (
-        <div className={`rounded-3xl p-6 shadow-2xl ${gradient}`}>
+    const StatCard: React.FC<{ icon: React.ReactNode, value: string | number, label: string, gradient: string, bgStyle?: React.CSSProperties }> = ({ icon, value, label, gradient, bgStyle }) => (
+        <div className="rounded-3xl p-6 shadow-2xl" style={bgStyle}>
             <div className="mb-4">{icon}</div>
             <div className="text-5xl font-bold text-white mb-2">{value}</div>
             <div className="text-sm font-medium text-white/80">{label}</div>
@@ -174,14 +188,45 @@ const Feedback: React.FC<FeedbackProps> = ({ userDetails, addToast }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard icon={<DocumentIcon className="text-yellow-300" width={32} height={32} />} value={globalStats.studyMaterials} label={t('feedback.studyMaterials' as any)} gradient="bg-gradient-to-br from-slate-700 to-slate-800" />
-                <StatCard icon={<StarIcon className="text-yellow-300" width={32} height={32} />} value={globalStats.totalRatings} label={t('feedback.highlights.totalRatings' as any)} gradient="bg-gradient-to-br from-blue-600 to-blue-700" />
-                <StatCard icon={<TrendingUpIcon className="text-white" width={32} height={32} />} value={`${globalStats.satisfaction}%`} label={t('feedback.highlights.satisfaction' as any)} gradient="bg-gradient-to-br from-green-600 to-green-700" />
-                <StatCard icon={<UserIcon className="text-white" width={32} height={32} />} value={globalStats.activeUsers} label={t('feedback.highlights.activeUsers')} gradient="bg-gradient-to-br from-purple-600 to-purple-700" />
+                <StatCard
+                    icon={<DocumentIcon className="text-yellow-300" width={32} height={32} />}
+                    value={globalStats.studyMaterials}
+                    label={t('feedback.studyMaterials' as any)}
+                    gradient=""
+                    bgStyle={{ background: 'linear-gradient(to bottom right, #1e2a3a, #0f172a)' }}
+                />
+                <StatCard
+                    icon={<StarIcon className="text-yellow-300" width={32} height={32} />}
+                    value={globalStats.totalRatings}
+                    label={t('feedback.highlights.totalRatings' as any)}
+                    gradient=""
+                    bgStyle={{ background: 'linear-gradient(to bottom right, #2563eb, #1d4ed8)' }}
+                />
+                <StatCard
+                    icon={<TrendingUpIcon className="text-white" width={32} height={32} />}
+                    value={`${globalStats.satisfaction}%`}
+                    label={t('feedback.highlights.satisfaction' as any)}
+                    gradient=""
+                    bgStyle={{ background: 'linear-gradient(to bottom right, #16a34a, #15803d)' }}
+                />
+                <StatCard
+                    icon={<UserIcon className="text-white" width={32} height={32} />}
+                    value={globalStats.activeUsers}
+                    label={t('feedback.highlights.activeUsers')}
+                    gradient=""
+                    bgStyle={{ background: 'linear-gradient(to bottom right, #9333ea, #7e22ce)' }}
+                />
             </div>
 
             <div className="grid lg:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border dark:border-gray-700">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-xl border dark:border-gray-700 relative overflow-hidden">
+                    {showThankYouOverlay && (
+                        <div className="absolute inset-0 bg-primary/95 flex flex-col items-center justify-center text-white z-10 animate-fade-in-down">
+                            <StarIcon width={64} height={64} className="text-yellow-300 mb-4 animate-bounce" />
+                            <h3 className="text-3xl font-bold mb-2">Thank You!</h3>
+                            <p className="text-lg text-primary-text/90 text-center px-4">Your feedback helps us improve EduBlay.</p>
+                        </div>
+                    )}
                     <div className="flex items-center gap-3 mb-6">
                         <StarIcon className="text-yellow-400" width={28} height={28} />
                         <h2 className="text-2xl font-bold">{t('feedback.rateAppTitle' as any)}</h2>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduBlay Study Hub - Offline</title>
+    <link rel="stylesheet" href="/index.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f3f4f6; color: #1f2937; text-align: center; }
+        .container { background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); max-width: 400px; width: 90%; }
+        h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+        p { color: #6b7280; margin-bottom: 2rem; }
+        button { background-color: #0284c7; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0369a1; }
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #111827; color: #f9fafb; }
+            .container { background: #1f2937; }
+            p { color: #9ca3af; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 1.5rem auto; color: #9ca3af;">
+            <path d="M1 1l22 22"></path>
+            <path d="M16 16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"></path>
+            <path d="M19.07 4.93A10 10 0 0 0 12 2"></path>
+            <path d="M22 12a10 10 0 0 0-2.43-6.57"></path>
+            <path d="M16.5 7.5A6 6 0 0 0 12 6"></path>
+            <path d="M19 12a6 6 0 0 0-1.5-4"></path>
+            <path d="M14 9.5a2 2 0 0 0-2-2"></path>
+            <path d="M16 12a2 2 0 0 0-.5-1.5"></path>
+        </svg>
+        <h1>You are offline</h1>
+        <p>It seems there's an issue with your connection. Please check your network and try again.</p>
+        <button onclick="window.location.reload()">Try Again</button>
+    </div>
+</body>
+</html>

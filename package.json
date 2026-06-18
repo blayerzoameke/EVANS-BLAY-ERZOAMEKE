@@ -1,28 +1,40 @@
 {
-  "name": "edublay-study-hub",
+  "name": "edublay-study-hub-free-iii",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
     "@google/genai": "^1.20.0",
+    "chart.js": "^4.5.0",
+    "firebase": "^12.8.0",
+    "katex": "^0.16.22",
+    "lucide-react": "^0.553.0",
+    "mammoth": "^1.12.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
     "react-dropzone": "^14.3.8",
     "react-image-crop": "^11.0.5",
-    "katex": "^0.16.22",
-    "chart.js": "^4.5.0",
-    "firebase": "^12.5.0",
-    "lucide-react": "^0.553.0"
+    "workbox-core": "^7.4.1",
+    "workbox-expiration": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.3.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^8.0.3",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

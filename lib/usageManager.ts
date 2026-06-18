@@ -1,3 +1,4 @@
+
 import type { UserUsage, FeatureName, UsageLimit, UsageRecord } from '../types';
 
 // Define limits for each feature for the FREE TIER
@@ -6,6 +7,7 @@ const FEATURE_LIMITS: Record<FeatureName, UsageLimit> = {
   uploads: { limit: 5, period: 'month' },
   quizzes: { limit: 5, period: 'month' },
   solves: { limit: 5, period: 'day' },
+  collaboration: { limit: 2, period: 'month' },
 };
 
 /**

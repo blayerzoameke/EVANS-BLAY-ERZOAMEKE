@@ -50,6 +50,14 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
             addToast(t('profile.error.nameRequired'), 'error');
             return;
         }
+        if (!editableDetails.recoveryQuestion) {
+            addToast("Please select a security recovery question.", 'error');
+            return;
+        }
+        if (!editableDetails.recoveryAnswer || !editableDetails.recoveryAnswer.trim()) {
+            addToast("Please provide an answer to your security question.", 'error');
+            return;
+        }
         setUserDetails(editableDetails);
         setProfileEditState({ isEditing: false, details: null });
         addToast(t('toasts.profileUpdated'), 'success');
@@ -134,30 +142,35 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
                  <div className="flex flex-col items-center space-y-4 mb-8">
                     <div className="flex items-start gap-10">
-                        <div className="relative group">
-                            {displayDetails.profilePicture ? (
-                                <img src={displayDetails.profilePicture} alt={t('profile.alt.profilePicture' as any)} className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 dark:border-gray-700" />
-                            ) : (
-                                <div className="w-32 h-32 rounded-full bg-primary text-primary-text flex items-center justify-center font-bold text-5xl border-4 border-gray-200 dark:border-gray-700">
-                                    {getInitials(displayDetails.name)}
-                                </div>
-                            )}
-                            {isEditing && (
-                                <>
-                                    <button onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" aria-label={t('profile.changePictureAria')}>
-                                        <PencilIcon className="w-8 h-8" />
-                                    </button>
-                                    <input type="file" ref={fileInputRef} onChange={handlePictureUpload} className="hidden" accept="image/png, image/jpeg, image/webp" />
-                                    {displayDetails.profilePicture && (
-                                        <button
-                                            onClick={() => setEditableDetails(prev => prev ? { ...prev, profilePicture: undefined } : null)}
-                                            className="absolute -bottom-2 -right-2 bg-red-600 text-white rounded-full p-1.5 shadow-lg hover:bg-red-700 transition-colors"
-                                            aria-label={t('profile.removePictureAria' as any)}
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
+                        <div className="flex flex-col items-center">
+                            <div className="relative group">
+                                {displayDetails.profilePicture ? (
+                                    <img src={displayDetails.profilePicture} alt={t('profile.alt.profilePicture' as any)} className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 dark:border-gray-700" />
+                                ) : (
+                                    <div className="w-32 h-32 rounded-full bg-primary text-primary-text flex items-center justify-center font-bold text-5xl border-4 border-gray-200 dark:border-gray-700">
+                                        {getInitials(displayDetails.name)}
+                                    </div>
+                                )}
+                                {isEditing && (
+                                    <>
+                                        <button onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity" aria-label={t('profile.changePictureAria')}>
+                                            <PencilIcon className="w-8 h-8" />
                                         </button>
-                                    )}
-                                </>
+                                        <input type="file" ref={fileInputRef} onChange={handlePictureUpload} className="hidden" accept="image/png, image/jpeg, image/webp" />
+                                        {displayDetails.profilePicture && (
+                                            <button
+                                                onClick={() => setEditableDetails(prev => prev ? { ...prev, profilePicture: undefined } : null)}
+                                                className="absolute -bottom-2 -right-2 bg-red-600 text-white rounded-full p-1.5 shadow-lg hover:bg-red-700 transition-colors"
+                                                aria-label={t('profile.removePictureAria' as any)}
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                            {isEditing && (
+                                <span className="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Photo</span>
                             )}
                         </div>
                         <div className="flex flex-col items-center mt-4">
@@ -187,7 +200,9 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                                     </>
                                 )}
                             </div>
-                             {!isEditing && initialDetails.institutionAbbreviation && (
+                             {isEditing ? (
+                                <span className="mt-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Sch. Logo</span>
+                             ) : initialDetails.institutionAbbreviation && (
                                 <p className="text-xs font-semibold text-center text-gray-500 dark:text-gray-400 mt-2 w-24 truncate" title={initialDetails.institution}>{initialDetails.institutionAbbreviation}</p>
                             )}
                         </div>
@@ -204,9 +219,13 @@ const Profile: React.FC<ProfileProps> = ({ userDetails: initialDetails, setUserD
                  {isEditing && editableDetails ? (
                     <>
                         <UserDetailsForm userDetails={editableDetails} setUserDetails={(details) => setEditableDetails(() => details)} showExtendedFields={true} />
-                        <div className="flex justify-end gap-4 mt-6">
-                            <button onClick={handleCancel} className="px-6 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">{t('common.cancel')}</button>
-                            <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 text-white bg-green-600 rounded-md hover:bg-green-700"><SaveIcon className="w-4 h-4" /> {t('common.save')}</button>
+                        {/* Save/Cancel — sticky so they stay above the mobile bottom nav bar */}
+                        <div
+                            className="flex justify-end gap-4 mt-6 sticky bottom-0 left-0 right-0 bg-white dark:bg-gray-800 py-3 px-4 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 z-20"
+                            style={{ marginBottom: 'max(0px, env(safe-area-inset-bottom))' }}
+                        >
+                            <button onClick={handleCancel} className="px-6 py-2.5 bg-gray-200 dark:bg-gray-600 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">{t('common.cancel')}</button>
+                            <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2.5 text-white bg-green-600 rounded-lg font-medium hover:bg-green-700 transition-colors shadow-md"><SaveIcon className="w-4 h-4" /> {t('common.save')}</button>
                         </div>
                     </>
                 ) : (

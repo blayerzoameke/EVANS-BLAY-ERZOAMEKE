@@ -1,13 +1,15 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ActiveSession, Toast, TrackedSession } from '../types.ts';
 import type { View } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { PlayIcon } from './icons/PlayIcon.tsx';
 import { PauseIcon } from './icons/PauseIcon.tsx';
 import { StopIcon } from './icons/StopIcon.tsx';
 import SessionCompleteModal from './SessionCompleteModal.tsx';
 import ConfirmationModal from './ConfirmationModal.tsx';
 import { DraggableIcon } from './icons/DraggableIcon.tsx';
+import { notificationService } from '../services/notificationService.ts';
 
 interface StudyTrackerProps {
   session: ActiveSession;
@@ -78,6 +80,9 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ session, setSession, addToa
   const handleSessionEnd = (isEarlyTermination = false) => {
     setIsComplete(true);
     setSessionCompletedNaturally(!isEarlyTermination);
+    
+    // Play sound when session ends (even early)
+    notificationService.playAlarm();
 
     if (!session.isUntracked) {
       const totalDurationMs = session.endTime - session.startTime;
@@ -148,6 +153,9 @@ const StudyTracker: React.FC<StudyTrackerProps> = ({ session, setSession, addToa
             nextSlot: null,
             day: session.day,
         };
+        
+        // Play start sound for break
+        notificationService.playAlarm();
         setSession(newBreakSession);
     }
   };

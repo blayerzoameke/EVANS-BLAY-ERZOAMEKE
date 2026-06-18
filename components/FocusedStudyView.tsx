@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { ActiveSession, UploadedFile, Toast, TrackedSession, LearningHubState, PlanSlot, View, UploadedMaterialInfo } from '../types.ts';
 import { ActivityType } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { ExitIcon } from './icons/ExitIcon.tsx';
 import { PlayIcon } from './icons/PlayIcon.tsx';
 import { PauseIcon } from './icons/PauseIcon.tsx';
@@ -13,6 +13,7 @@ import UploadSlides from './UploadSlides.tsx';
 import SessionCompleteModal from './SessionCompleteModal.tsx';
 import BreakView from './BreakView.tsx';
 import { timeToMinutes } from '../lib/utils.ts';
+import { notificationService } from '../services/notificationService.ts';
 
 interface FocusedStudyViewProps {
     session: ActiveSession;
@@ -23,10 +24,26 @@ interface FocusedStudyViewProps {
     setView: (view: View) => void;
     learningHubState: LearningHubState;
     setLearningHubState: React.Dispatch<React.SetStateAction<LearningHubState>>;
+    addActivity?: (type: any, description: string, metadata?: any) => void;
 }
 
+const MOTIVATIONAL_QUOTES = [
+    { text: "Concentration is the root of all the higher abilities in man.", author: "Bruce Lee" },
+    { text: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.", author: "Aristotle" },
+    { text: "Success is the sum of small efforts, repeated day in and day out.", author: "Robert Collier" },
+    { text: "The future belongs to those who believe in the beauty of their dreams.", author: "Eleanor Roosevelt" },
+    { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" },
+    { text: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
+    { text: "Education is the passport to the future, for tomorrow belongs to those who prepare for it today.", author: "Malcolm X" },
+    { text: "Focus on being productive instead of busy.", author: "Tim Ferriss" },
+    { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+    { text: "It always seems impossible until it's done.", author: "Nelson Mandela" },
+    { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
+    { text: "Your time is limited, so don't waste it living someone else's life.", author: "Steve Jobs" },
+    { text: "Action is the foundational key to all success.", author: "Pablo Picasso" }
+];
 
-const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession, addToast, trackedData, setTrackedData, setView, learningHubState, setLearningHubState }) => {
+const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession, addToast, trackedData, setTrackedData, setView, learningHubState, setLearningHubState, addActivity }) => {
     const { t } = useLanguage();
     
     const totalDurationSeconds = useMemo(() => {
@@ -41,45 +58,20 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
     const [breakTriggered, setBreakTriggered] = useState(false);
     const [showExitConfirm, setShowExitConfirm] = useState(false);
     const [sessionCompletedNaturally, setSessionCompletedNaturally] = useState(false);
+    const [randomQuote, setRandomQuote] = useState(MOTIVATIONAL_QUOTES[0]);
     
     const pauseStartTimeRef = useRef<number>(0);
 
-    const playRingtone = useCallback(() => {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (!audioContext) return;
-        
-        const osc1 = audioContext.createOscillator();
-        const gain1 = audioContext.createGain();
-        osc1.connect(gain1);
-        gain1.connect(audioContext.destination);
-        osc1.frequency.value = 880; 
-        gain1.gain.setValueAtTime(0, audioContext.currentTime);
-        gain1.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
-        gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
-        osc1.start(audioContext.currentTime);
-        osc1.stop(audioContext.currentTime + 0.4);
-
-        const osc2 = audioContext.createOscillator();
-        const gain2 = audioContext.createGain();
-        osc2.connect(gain2);
-        gain2.connect(audioContext.destination);
-        osc2.frequency.value = 1318.51; 
-        gain2.gain.setValueAtTime(0, audioContext.currentTime + 0.1);
-        gain2.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.11);
-        gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        osc2.start(audioContext.currentTime + 0.1);
-        osc2.stop(audioContext.currentTime + 0.5);
-    }, []);
-
     useEffect(() => {
-        playRingtone();
-    }, [playRingtone]);
+        const index = Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length);
+        setRandomQuote(MOTIVATIONAL_QUOTES[index]);
+    }, []);
 
     const handleSessionEnd = useCallback((isEarlyTermination = false) => {
         if (isComplete) return; 
         setIsComplete(true);
         setSessionCompletedNaturally(!isEarlyTermination);
-        playRingtone();
+        notificationService.playAlarm();
 
         if (!session.isUntracked) {
             const timeStudiedMs = isEarlyTermination ? (totalDurationSeconds - timeLeft) * 1000 : totalDurationSeconds * 1000;
@@ -92,29 +84,20 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                     date: new Date().toISOString().split('T')[0],
                 };
                 setTrackedData([...(trackedData || []), newLog]);
+                if (addActivity) addActivity('study_session', `Completed ${durationMinutes} min study session for ${session.subject}`);
             }
         }
-    }, [isComplete, playRingtone, session, totalDurationSeconds, timeLeft, trackedData, setTrackedData]);
+    }, [isComplete, session, totalDurationSeconds, timeLeft, trackedData, setTrackedData, addActivity]);
 
     const handleStartNextBreakEarly = () => {
         if (!session.nextSlot || session.nextSlot.type !== 'break' || session.breakPlacement !== 'during') {
             addToast("No 'during-session' break is scheduled for this session.", "info");
             return;
         }
-
-        // Don't end the current session. Just trigger the break state within it.
-        // The session's total endTime already accounts for the break.
-        // By updating breakStartsAt, we just change *when* the break happens.
-        // The main timer will pause, and the break view will take over.
-        setSession({
-            ...session,
-            breakStartsAt: Date.now(),
-        });
-        
-        // Manually trigger the break UI and sound.
+        setSession({ ...session, breakStartsAt: Date.now() });
         setBreakTriggered(true);
         setIsBreakActive(true);
-        playRingtone();
+        notificationService.playAlarm();
     };
     
     const handleStartScheduledBreak = () => {
@@ -139,7 +122,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                 isUntracked: session.isUntracked,
                 postBreakView: learningHubState.file ? 'uploadslides' : undefined,
             };
-            
+            notificationService.playAlarm();
             setSession(breakSession);
         }
     };
@@ -150,16 +133,12 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
             if (breakDurationMs > 0) {
                 const breakTimeUsedMs = Date.now() - session.breakStartsAt;
                 const timeSavedMs = Math.max(0, breakDurationMs - breakTimeUsedMs);
-                setSession({
-                    ...session,
-                    endTime: session.endTime - timeSavedMs
-                });
+                setSession({ ...session, endTime: session.endTime - timeSavedMs });
             }
         }
         setIsBreakActive(false);
-        playRingtone();
-    }, [playRingtone, session, setSession]);
-
+        notificationService.playAlarm();
+    }, [session, setSession]);
 
     useEffect(() => {
         if (isPaused || isComplete || isBreakActive) return;
@@ -177,12 +156,12 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
             if (session.breakPlacement === 'during' && session.breakStartsAt && !breakTriggered && Date.now() >= session.breakStartsAt) {
                 setBreakTriggered(true);
                 setIsBreakActive(true);
-                playRingtone();
+                notificationService.playAlarm();
             }
         }, 1000);
 
         return () => clearInterval(timerId);
-    }, [session.endTime, session.breakStartsAt, isPaused, isComplete, isBreakActive, breakTriggered, handleSessionEnd, playRingtone]);
+    }, [session.endTime, session.breakStartsAt, isPaused, isComplete, isBreakActive, breakTriggered, handleSessionEnd]);
 
     const togglePause = useCallback(() => {
         setIsPaused(prev => {
@@ -212,10 +191,11 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                 type: 'break',
                 fromSlot: session.nextSlot,
                 nextSlot: null,
+                day: session.day
             };
         }
         return null;
-    }, [isBreakActive, isComplete, session.breakPlacement, session.nextSlot]);
+    }, [isBreakActive, isComplete, session.breakPlacement, session.nextSlot, session.day]);
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -227,6 +207,7 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
     
     const dummySetState = () => {};
     const learningHubFile = learningHubState.file;
+    const hasBreakButton = session.breakPlacement === 'during' && session.nextSlot?.type === 'break';
 
     const handleNavigate = (target: 'dashboard' | 'uploadslides') => {
         setIsComplete(false);
@@ -247,9 +228,84 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
     return (
         <>
             <div className="fixed inset-0 bg-white dark:bg-gray-900 z-[100] flex flex-col">
-                <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 shadow-lg">
-                    <div className="flex items-center justify-between p-4">
-                         <div className="flex items-center gap-4">
+
+                {/* ── Header ── */}
+                <header className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 shadow-lg flex-shrink-0">
+
+                    {/* ── MOBILE layout (flex-col, two rows) ── */}
+                    <div className="flex flex-col sm:hidden">
+
+                        {/* Mobile row 1: title + subject */}
+                        <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                            <BookIcon className="w-5 h-5 text-primary dark:text-primary-light flex-shrink-0" />
+                            <div className="min-w-0">
+                                <h2 className="text-sm font-bold text-gray-800 dark:text-white leading-tight">
+                                    {t('focusedStudy.title')}
+                                </h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                    {session.subject} • {session.isUntracked ? t('focusedStudy.untracked') : t('focusedStudy.scheduled')}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Mobile row 2: timer + ALL buttons always visible */}
+                        <div className="flex items-center justify-between px-3 pb-2 gap-2">
+
+                            {/* Timer */}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                                <ClockIcon className="w-4 h-4 text-primary dark:text-primary-light" />
+                                <span className="text-base font-bold text-primary dark:text-primary-light">
+                                    {formatTime(timeLeft)}
+                                </span>
+                                <span className="text-xs text-gray-500 ml-1">
+                                    {studyProgress.toFixed(0)}%
+                                </span>
+                            </div>
+
+                            {/* Buttons — always visible, icon only */}
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+
+                                {/* Pause/Resume */}
+                                <button
+                                    onClick={togglePause}
+                                    disabled={isBreakActive}
+                                    title={isPaused ? t('focusedStudy.resume') : t('focusedStudy.pause')}
+                                    className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all disabled:opacity-50 ${
+                                        isPaused
+                                            ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                                            : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
+                                    }`}
+                                >
+                                    {isPaused ? <PlayIcon className="w-5 h-5" /> : <PauseIcon className="w-5 h-5" />}
+                                </button>
+
+                                {/* Break */}
+                                {hasBreakButton && (
+                                    <button
+                                        onClick={handleStartNextBreakEarly}
+                                        disabled={isBreakActive}
+                                        title={`Start break: ${session.nextSlot?.activity}`}
+                                        className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 transition-all disabled:opacity-50"
+                                    >
+                                        <CoffeeIcon className="w-5 h-5" />
+                                    </button>
+                                )}
+
+                                {/* Exit — always visible, red so students can always find it */}
+                                <button
+                                    onClick={() => setShowExitConfirm(true)}
+                                    title={t('focusedStudy.exit')}
+                                    className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all"
+                                >
+                                    <ExitIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── DESKTOP layout (single row, unchanged) ── */}
+                    <div className="hidden sm:flex items-center justify-between p-4">
+                        <div className="flex items-center gap-4">
                             <BookIcon className="w-8 h-8 text-primary dark:text-primary-light" />
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800 dark:text-white">
@@ -270,41 +326,64 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                                     {studyProgress.toFixed(0)}{t('focusedStudy.complete')}
                                 </div>
                             </div>
-
                             <div className="flex items-center gap-3">
-                                <button onClick={togglePause} disabled={isBreakActive} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${isPaused ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-200' : 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200'} disabled:opacity-50`}>
-                                    {isPaused ? <><PlayIcon className="w-4 h-4" />{t('focusedStudy.resume')}</> : <><PauseIcon className="w-4 h-4" />{t('focusedStudy.pause')}</>}
+                                <button
+                                    onClick={togglePause}
+                                    disabled={isBreakActive}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                        isPaused
+                                            ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-200'
+                                            : 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200'
+                                    } disabled:opacity-50`}
+                                >
+                                    {isPaused
+                                        ? <><PlayIcon className="w-4 h-4" />{t('focusedStudy.resume')}</>
+                                        : <><PauseIcon className="w-4 h-4" />{t('focusedStudy.pause')}</>
+                                    }
                                 </button>
-                                {session.breakPlacement === 'during' && session.nextSlot?.type === 'break' && (
+                                {hasBreakButton && (
                                     <button
                                         onClick={handleStartNextBreakEarly}
                                         disabled={isBreakActive}
                                         className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-200 disabled:opacity-50"
-                                        title={`Start your '${session.nextSlot.activity}' break now`}
+                                        title={`Start your '${session.nextSlot?.activity}' break now`}
                                     >
                                         <CoffeeIcon className="w-4 h-4" /> {t('focusedStudy.startBreak')}
                                     </button>
                                 )}
-                                <button onClick={() => setShowExitConfirm(true)} className="flex items-center gap-2 px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all">
+                                <button
+                                    onClick={() => setShowExitConfirm(true)}
+                                    className="flex items-center gap-2 px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all"
+                                >
                                     <ExitIcon className="w-4 h-4" />
                                     {t('focusedStudy.exit')}
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 h-2">
-                        <div className="bg-primary h-2 transition-all duration-300" style={{ width: `${studyProgress}%` }} />
+
+                    {/* Progress bar */}
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5">
+                        <div className="bg-primary h-1.5 transition-all duration-300" style={{ width: `${studyProgress}%` }} />
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800 p-4">
-                     {isPaused ? (
+                {/* ── Main content ── */}
+                <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800">
+                    {isPaused ? (
                         <div className="h-full flex items-center justify-center">
-                            <div className="text-center">
-                                <div className="text-6xl mb-4">⏸️</div>
-                                <h3 className="text-2xl font-bold text-gray-600 dark:text-gray-400 mb-2">{t('focusedStudy.paused.title')}</h3>
-                                <p className="text-gray-500 dark:text-gray-500 mb-6">{t('focusedStudy.paused.body')}</p>
-                                <button onClick={togglePause} className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all mx-auto">
+                            <div className="text-center px-4">
+                                <div className="text-5xl sm:text-6xl mb-4">⏸️</div>
+                                <h3 className="text-xl sm:text-2xl font-bold text-gray-600 dark:text-gray-400 mb-2">
+                                    {t('focusedStudy.paused.title')}
+                                </h3>
+                                <p className="text-gray-500 dark:text-gray-500 mb-6 text-sm sm:text-base">
+                                    {t('focusedStudy.paused.body')}
+                                </p>
+                                <button
+                                    onClick={togglePause}
+                                    className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all mx-auto"
+                                >
                                     <PlayIcon className="w-5 h-5" />
                                     {t('focusedStudy.paused.button')}
                                 </button>
@@ -332,17 +411,22 @@ const FocusedStudyView: React.FC<FocusedStudyViewProps> = ({ session, setSession
                         />
                     ) : (
                         <div className="h-full flex items-center justify-center text-center text-gray-500 bg-gray-100 dark:bg-gray-800/50 rounded-lg">
-                            <div className="p-8">
-                                <BookIcon className="w-20 h-20 mx-auto text-gray-400 dark:text-gray-500 mb-6" />
-                                <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
+                            <div className="p-6 sm:p-8">
+                                <BookIcon className="w-16 h-16 sm:w-20 sm:h-20 mx-auto text-gray-400 dark:text-gray-500 mb-4 sm:mb-6" />
+                                <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">
                                     {t('focusedStudy.focusMode.title')}
                                 </h3>
-                                <p className="text-lg text-gray-600 dark:text-gray-400 mt-2">
+                                <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400 mt-2">
                                     {session.subject}
                                 </p>
-                                <p className="text-sm text-gray-400 dark:text-gray-500 mt-12 italic">
-                                    "{t('focusedStudy.focusMode.quote')}"
-                                </p>
+                                <div className="mt-8 sm:mt-12 max-w-lg mx-auto">
+                                    <p className="text-lg sm:text-xl font-serif italic text-gray-600 dark:text-gray-300">
+                                        "{randomQuote.text}"
+                                    </p>
+                                    <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 mt-3">
+                                        - {randomQuote.author}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}

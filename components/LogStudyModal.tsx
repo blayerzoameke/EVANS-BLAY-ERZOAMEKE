@@ -1,7 +1,7 @@
 import React from 'react';
 import type { PlanSlot } from '../types.ts';
 import { DayOfWeek } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 
 interface LogStudyModalProps {

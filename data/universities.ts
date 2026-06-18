@@ -559,7 +559,7 @@ export const universities: { name: string; country: string }[] = [
   { "name": "University of Toamasina", "country": "Madagascar" },
   { "name": "University of Fianarantsoa", "country": "Madagascar" },
   { "name": "University of Mahajanga", "country": "Madagascar" },
-  { "name": "University of Toliara", "country": "Madagascar" }
+  { "name": "University of Toliara", "country": "Madagascar" },
 
   // Argentina
   { "name": "University of Buenos Aires", "country": "Argentina" },

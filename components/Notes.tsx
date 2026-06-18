@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Note, NotesViewState } from '../types';
+import type { Note, NotesViewState, UserDetails } from '../types';
 import { StarIcon } from './icons/StarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { PlusIcon } from './icons/PlusIcon';
@@ -11,9 +11,12 @@ interface NotesProps {
     setNotes: (notes: Note[]) => void;
     notesViewState: NotesViewState;
     setNotesViewState: React.Dispatch<React.SetStateAction<NotesViewState>>;
+    userDetails?: UserDetails | null;
+    onMaterialTracked?: () => void;
+    addActivity?: (type: any, description: string, metadata?: any) => void;
 }
 
-const Notes: React.FC<NotesProps> = ({ notes, setNotes, notesViewState, setNotesViewState }) => {
+const Notes: React.FC<NotesProps> = ({ notes, setNotes, notesViewState, setNotesViewState, onMaterialTracked, addActivity }) => {
     const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
     const { t } = useLanguage();
     
@@ -41,7 +44,7 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes, notesViewState, setNotes
 
     const createNewNote = () => {
         const newNote: Note = {
-            id: Date.now().toString(),
+            id: Date.now().toString() + Math.random().toString(),
             title: t('notes.newNote'),
             content: '',
             subject: 'General',
@@ -50,6 +53,12 @@ const Notes: React.FC<NotesProps> = ({ notes, setNotes, notesViewState, setNotes
         };
         setNotes([newNote, ...notes]);
         setCurrentNoteId(newNote.id);
+        if (addActivity) addActivity('note_created', 'Created a new note');
+        
+        // Track global study material creation
+        if (onMaterialTracked) {
+            onMaterialTracked();
+        }
     };
 
     const updateNote = (field: keyof Note, value: any) => {

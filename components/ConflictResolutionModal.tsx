@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { CloseIcon } from './icons/CloseIcon.tsx';
 import type { ConflictInfo } from '../types.ts';
 

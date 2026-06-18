@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import UserDetailsForm from './UserDetailsForm.tsx';
 import { UserDetails, EducationalLevel, Toast } from '../types.ts';
-import { useLanguage } from '../contexts/LanguageContext.tsx';
+import { useLanguage } from '../contexts/LanguageContext';
 import { LogoIcon } from './icons/LogoIcon.tsx';
 import { initializeUsage } from '../lib/usageManager.ts';
 

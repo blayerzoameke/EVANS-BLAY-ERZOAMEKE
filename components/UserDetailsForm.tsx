@@ -5,6 +5,8 @@ import { countries } from '../data/countries';
 import { universities } from '../data/universities';
 import SearchableDropdown from './SearchableDropdown';
 
+const recoveryQuestions = ["recovery.q1", "recovery.q2", "recovery.q3", "recovery.q4", "recovery.q5"];
+
 interface UserDetailsFormProps {
     userDetails: UserDetails;
     setUserDetails: (details: UserDetails) => void;
@@ -76,6 +78,7 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
             <div>
                 <label htmlFor="educationalLevel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.level')}</label>
                 <select name="educationalLevel" id="educationalLevel" value={userDetails.educationalLevel} onChange={handleInputChange} className={inputClasses}>
+                    <option value={EducationalLevel.OTHER} disabled={userDetails.educationalLevel !== EducationalLevel.OTHER}>-- {t('preferences.subtitle' as any).split('.')[0]} --</option>
                     {eduLevelOptions.map(({ value, labelKey }) => (
                         <option key={value} value={value}>{t(labelKey)}</option>
                     ))}
@@ -157,6 +160,42 @@ const UserDetailsForm: React.FC<UserDetailsFormProps> = ({ userDetails, setUserD
              <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('userDetails.email')} ({t('common.optional')})</label>
                 <input type="email" name="email" id="email" value={userDetails.email || ''} onChange={handleInputChange} className={inputClasses} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div>
+                    <label htmlFor="recoveryQuestion" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t('recovery.question')} <span className="text-red-500">*</span>
+                    </label>
+                    <select 
+                        name="recoveryQuestion" 
+                        id="recoveryQuestion" 
+                        value={userDetails.recoveryQuestion || ''} 
+                        onChange={handleInputChange} 
+                        className={inputClasses}
+                        required
+                    >
+                        <option value="" disabled>-- {t('recovery.question')} --</option>
+                        {recoveryQuestions.map(q => (
+                            <option key={q} value={q}>{t(q as any)}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="recoveryAnswer" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {t('recovery.answer')} <span className="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        name="recoveryAnswer" 
+                        id="recoveryAnswer" 
+                        value={userDetails.recoveryAnswer || ''} 
+                        onChange={handleInputChange} 
+                        className={inputClasses} 
+                        placeholder={t('recovery.answer')}
+                        required
+                    />
+                </div>
             </div>
         </div>
     );

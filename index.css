@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-fade-in-down: fade-in-down 0.5s ease-out forwards;
+  
+  --color-primary-light: hsl(var(--primary-hue) 90% 60%);
+  --color-primary: hsl(var(--primary-hue) 85% 55%);
+  --color-primary-dark: hsl(var(--primary-hue) 85% 48%);
+  --color-primary-text: hsl(var(--primary-hue) 100% 98%);
+  
+  --color-study: #2563eb;
+  --color-lecture: #7c3aed;
+  --color-agenda: #ea580c;
+  --color-break: #16a34a;
+  --color-free: #4b5563;
+}
+
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-1rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+html, body, #root {
+  height: 100%;
+  overscroll-behavior-y: none;
+}
+
+:root, html[data-theme="blue"] {
+  --primary-hue: 207;
+  --secondary-hue: 260;
+  --tertiary-hue: 45;
+  --success-hue: 145;
+  --neutral-hue: 215;
+}
+html[data-theme="purple"] { --primary-hue: 260; --secondary-hue: 320; --tertiary-hue: 50; }
+html[data-theme="green"]  { --primary-hue: 145; --secondary-hue: 190; --tertiary-hue: 95; }
+html[data-theme="orange"] { --primary-hue: 25;  --secondary-hue: 5;   --tertiary-hue: 40; }
+html[data-theme="pink"]   { --primary-hue: 330; --secondary-hue: 280; --tertiary-hue: 350; }
+html[data-theme="emerald"]{ --primary-hue: 160; --secondary-hue: 180; --tertiary-hue: 140; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   EduBlay Main Content Background
+   Interactive animated background
+   ═══════════════════════════════════════════════════════════════════ */
+
+@keyframes gradient-x {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.edublay-interactive-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    -45deg,
+    hsl(var(--primary-hue) 85% 95%),
+    hsl(var(--secondary-hue) 85% 95%),
+    hsl(var(--tertiary-hue) 85% 95%),
+    hsl(var(--primary-hue) 85% 95%)
+  );
+  background-size: 400% 400%;
+  animation: gradient-x 15s ease infinite;
+  transition: background 0.5s ease;
+}
+
+.dark .edublay-interactive-bg {
+  background: linear-gradient(
+    -45deg,
+    hsl(var(--primary-hue) 85% 8%),
+    hsl(var(--secondary-hue) 85% 10%),
+    hsl(var(--tertiary-hue) 85% 8%),
+    hsl(var(--primary-hue) 85% 8%)
+  );
+  background-size: 400% 400%;
+}
+
+/* Background image layer */
+.edublay-main-bg {
+  /* Light mode: 8% — image is just barely visible, like a watermark */
+  opacity: 0.08;
+  transition: opacity 0.3s ease;
+}
+
+/* Dark mode: reduce further so dark UI cards stay readable */
+.dark .edublay-main-bg {
+  opacity: 0.05;
+}
+
+/* Dark overlay — only appears in dark mode to maintain contrast */
+.edublay-main-bg-overlay {
+  background: transparent; /* light mode — no overlay */
+}
+.dark .edublay-main-bg-overlay {
+  /* Semi-transparent dark wash over the image in dark mode */
+  background: rgba(17, 24, 39, 0.55);
+}

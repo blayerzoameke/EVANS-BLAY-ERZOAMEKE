@@ -47,7 +47,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
   }, []);
 
   const handleShare = async () => {
-    const appUrl = 'https://edublay-study-hub.web.app/';
+    const appUrl = 'https://bit.ly/EduBlaystudyhub';
 
     const shareData = {
       title: t('header.title'),
@@ -76,11 +76,29 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
   };
 
   return (
-    <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm no-print">
+    <>
+      <style>{`
+        .eb-header {
+          padding-top: 1rem;
+          padding-top: max(1rem, calc(env(safe-area-inset-top) + 0.5rem));
+          padding-left: max(1rem, calc(env(safe-area-inset-left) + 0.5rem));
+          padding-right: max(1rem, calc(env(safe-area-inset-right) + 0.5rem));
+          padding-bottom: 0.75rem;
+        }
+        .eb-hamburger {
+          min-width: 44px; min-height: 44px;
+          display: flex; align-items: center; justify-content: center;
+          margin-left: -8px; border-radius: 10px;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .eb-hamburger:active { background: rgba(0,0,0,0.06); }
+        .dark .eb-hamburger:active { background: rgba(255,255,255,0.08); }
+      `}</style>
+    <header className="relative z-10 eb-header flex items-center justify-between bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm no-print">
       <div className="flex items-center">
         <button
           onClick={toggleSidebar}
-          className="text-gray-500 dark:text-gray-400 focus:outline-none focus:text-gray-700 dark:focus:text-gray-200 lg:hidden"
+          className="eb-hamburger text-gray-500 dark:text-gray-400 focus:outline-none lg:hidden"
           aria-label={t('header.openSidebar')}
         >
           <MenuIcon className="w-6 h-6" />
@@ -118,20 +136,21 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar, userDetails, setView, ad
                         className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
                         <UserCircleIcon className="w-4 h-4" />
-                        {t('sidebar.profile')}
+                        My Profile
                     </button>
                     <button
                         onClick={handleLogout}
                         className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
                         <LogoutIcon className="w-4 h-4" />
-                        {t('auth.logout')}
+                        Log Out
                     </button>
                 </div>
             )}
         </div>
       </div>
     </header>
+    </>
   );
 };
 

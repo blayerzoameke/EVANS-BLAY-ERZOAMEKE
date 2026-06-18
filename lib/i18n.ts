@@ -38,7 +38,7 @@ export const getTranslator = (lang: Language) => (key: TranslationKey, replaceme
     
     if (typeof translation !== 'string') {
         // Fallback for keys that might not be present, to avoid runtime errors.
-        return key;
+        return "";
     }
 
     if (replacements) {
