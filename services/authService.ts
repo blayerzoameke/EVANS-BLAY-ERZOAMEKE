@@ -516,26 +516,20 @@ export const resetPassword = async (email: string): Promise<boolean> => {
 export const verifyResetCode = (code: string): Promise<string> => verifyPasswordResetCode(auth, code);
 export const confirmPasswordReset = (code: string, newPassword: string): Promise<void> => firebaseConfirmPasswordReset(auth, code, newPassword);
 
-// Detect environments where signInWithPopup is unreliable and refreshes the page.
-const shouldUseRedirectFlow = (): boolean => {
+// Redirect is ONLY correct for the Android INSTALLED app (standalone display),
+// where a popup would open the system browser and never return to the app.
+// We do NOT use redirect in mobile browsers: this project's auth domain
+// (*.firebaseapp.com) is a DIFFERENT site from the app (*.run.app), and iOS
+// blocks the cross-site storage the redirect handshake needs — so on iPhone the
+// redirect never completes and the sign-in page LOOPS. A popup delivers the
+// credential straight back to the open page, so it works on mobile browsers too.
+const isAndroidInstalledApp = (): boolean => {
     if (typeof window === 'undefined') return false;
-
     const ua = (navigator.userAgent || '').toLowerCase();
-
-    // Installed PWA (standalone display)
     const isStandalone =
         window.matchMedia?.('(display-mode: standalone)')?.matches ||
-        // iOS Safari standalone
         (navigator as any).standalone === true;
-
-    // Mobile devices (popups are flaky on iOS Safari / Android Chrome)
-    const isMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
-
-    // In-app browsers (Instagram, TikTok, Facebook, Line, WeChat, Snapchat…)
-    const isInAppBrowser =
-        /(instagram|fbav|fban|tiktok|line|wv|micromessenger|snapchat|twitter)/i.test(ua);
-
-    return isStandalone || isMobile || isInAppBrowser;
+    return isStandalone && /android/i.test(ua);
 };
 
 export const signInWithGoogle = async (): Promise<UserDetails | null> => {
@@ -544,8 +538,21 @@ export const signInWithGoogle = async (): Promise<UserDetails | null> => {
     provider.addScope('profile');
     provider.setCustomParameters({ prompt: 'select_account' });
 
-    // Mobile / PWA / in-app browser → always use redirect.
-    if (shouldUseRedirectFlow()) {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isIOS = /iphone|ipad|ipod/i.test(ua) ||
+        (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
+    const isStandalone = typeof window !== 'undefined' &&
+        (window.matchMedia?.('(display-mode: standalone)')?.matches || (navigator as any).standalone === true);
+
+    // ── iOS INSTALLED app: Google can't return into the standalone PWA ───────
+    if (isStandalone && isIOS) {
+        throw new Error(
+            "Google Sign-In isn't available inside the installed iOS app. Please sign in with your email and password instead."
+        );
+    }
+
+    // ── Android INSTALLED app: must use redirect (popup opens system browser) ─
+    if (isAndroidInstalledApp()) {
         await storageService.setRedirectPending();
         try {
             await signInWithRedirect(auth, provider);
@@ -553,21 +560,19 @@ export const signInWithGoogle = async (): Promise<UserDetails | null> => {
             await storageService.clearRedirectPending();
             throw err;
         }
-        // The browser is navigating away. Return a never-resolving promise
-        // so the calling component stays in its "loading" state and does
-        // NOT try to navigate, re-render, or call onLogin — which is what
-        // was causing the page to "refresh" mid-process.
+        // Page is navigating away — keep the caller in its loading state so it
+        // doesn't re-render or call onLogin (which looked like a "refresh").
         return new Promise<UserDetails | null>(() => {});
     }
 
-    // Desktop → try popup, fall back to redirect on failure.
+    // ── All browsers (mobile + desktop) → POPUP ──────────────────────────────
     try {
         const result = await signInWithPopup(auth, provider);
         return getOrCreateUserDetails(result.user);
     } catch (err: any) {
         const code = (err?.code || '').toLowerCase();
 
-        // User actively cancelled — bubble up, do nothing.
+        // User cancelled — bubble up silently.
         if (
             code.includes('popup-closed-by-user') ||
             code.includes('cancelled-popup-request') ||
@@ -576,15 +581,15 @@ export const signInWithGoogle = async (): Promise<UserDetails | null> => {
             throw err;
         }
 
-        // Popup blocked, COOP issue, network blip, or storage disabled →
-        // silently fall back to redirect instead of showing an error.
-        if (
-            code.includes('popup-blocked') ||
-            code.includes('cancelled-popup') ||
-            code.includes('network-request-failed') ||
-            code.includes('internal-error') ||
-            code.includes('web-storage-unsupported')
-        ) {
+        // Popup blocked. On DESKTOP we can safely fall back to redirect; on MOBILE
+        // we must NOT (redirect loops on iOS) — guide the user instead.
+        if (code.includes('popup-blocked')) {
+            const isMobile = /android|iphone|ipad|ipod|mobile/i.test(ua) || isIOS;
+            if (isMobile) {
+                throw new Error(
+                    'Your browser blocked the Google sign-in window. Please allow pop-ups for this site and try again, or sign in with your email and password.'
+                );
+            }
             await storageService.setRedirectPending();
             try {
                 await signInWithRedirect(auth, provider);
@@ -595,8 +600,8 @@ export const signInWithGoogle = async (): Promise<UserDetails | null> => {
             return new Promise<UserDetails | null>(() => {});
         }
 
-        // In-app browsers that don't support OAuth at all.
-        if (code.includes('operation-not-supported')) {
+        // In-app browsers (Instagram / TikTok / Facebook) can't do Google OAuth.
+        if (code.includes('operation-not-supported') || code.includes('web-storage-unsupported')) {
             throw new Error(
                 "Google Sign-In isn't supported in this browser. Please open EduBlay in Chrome, Safari, or Firefox — or sign in with your email and password."
             );

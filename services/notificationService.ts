@@ -19,6 +19,19 @@ export interface ActivityReminderPayload {
     reminderType?: string;  // 'morning' | 'evening' | 'general'
 }
 
+// Does this browser support OS-level scheduled notifications that fire even when
+// the app and service worker are fully closed? (Chrome / Edge / Android.)
+const supportsTrigger = (): boolean => {
+    try {
+        return typeof window !== 'undefined' &&
+            typeof Notification !== 'undefined' &&
+            'showTrigger' in Notification.prototype &&
+            typeof (window as any).TimestampTrigger !== 'undefined';
+    } catch {
+        return false;
+    }
+};
+
 class NotificationService {
   private registration: ServiceWorkerRegistration | null = null;
   private pendingTimers: number[] = [];
@@ -140,44 +153,54 @@ class NotificationService {
     }
   }
 
-  // ── Schedule a specific activity reminder via SW ──────────────────────────
-  // Call this when a student's timetable slot is coming up.
+  // ── Schedule a specific activity reminder ─────────────────────────────────
+  // Called for each upcoming timetable slot. This now schedules the notification
+  // through the OS (TimestampTrigger) so it fires even when the app and service
+  // worker are fully CLOSED — that is what restores background notifications.
   public scheduleActivityReminder(payload: ActivityReminderPayload & { delayMs: number }) {
     const triggerTime = Date.now() + payload.delayMs;
+    // Deterministic, UNIQUE id/tag per reminder. (Previously all study reminders
+    // shared one tag and silently replaced each other.)
     const id = `activity-${payload.activityType || 'reminder'}-${triggerTime}`;
 
-    // Build the notification content using the same logic as the SW
     const { title, body } = this._buildNotificationContent(payload);
 
-    // Save to IndexedDB so SW poll can fire it even after SW restarts
-    const notification = {
-      id,
-      title,
-      options: {
+    const options: NotificationOptions = {
         body,
         icon: '/icons/icon-192x192.png',
         badge: '/icons/icon-192x192.png',
-        tag: `${payload.activityType || 'activity'}-reminder`,
+        tag: id,
         requireInteraction: true,
-        data: { url: '/' },
+        data: { url: '/', activityReminder: true },
+        // @ts-ignore - vibrate is valid for SW notifications
         vibrate: [200, 100, 200],
-      } as NotificationOptions,
-      triggerTime,
     };
-    this.savePendingNotification(notification as any);
 
-    // Also post to SW for in-session delivery (as before)
-    if (this.registration?.active) {
-      this.registration.active.postMessage({
-        type: 'SCHEDULE_REMINDER',
-        delayMs: payload.delayMs,
-        activityType: payload.activityType,
-        subject: payload.subject,
-        venue: payload.venue,
-        startTime: payload.startTime,
-        minutesBefore: payload.minutesBefore,
-        reminderType: payload.reminderType,
+    // 1) Persist to IndexedDB — foreground fallback (the in-app poll fires this
+    //    while the app is open; same tag as the trigger, so no visible duplicate).
+    this.savePendingNotification({ id, title, options, triggerTime } as any);
+
+    // 2) BACKGROUND delivery via the OS — fires when everything is closed.
+    this.scheduleViaTrigger(title, options, triggerTime);
+  }
+
+  // Schedule an OS-level timed notification (Chrome/Edge/Android). On browsers
+  // without the Triggers API (e.g. iOS Safari) this is a no-op and we fall back
+  // to the IndexedDB poll while the app is open.
+  private async scheduleViaTrigger(title: string, options: NotificationOptions, triggerTime: number) {
+    try {
+      if (!supportsTrigger()) return;
+      if (!this.registration && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        this.registration = await navigator.serviceWorker.ready;
+      }
+      if (!this.registration) return;
+      await this.registration.showNotification(title, {
+        ...options,
+        // @ts-ignore - showTrigger is part of the Notification Triggers API
+        showTrigger: new (window as any).TimestampTrigger(triggerTime),
       });
+    } catch (e) {
+      console.warn('Background notification trigger could not be scheduled:', e);
     }
   }
 
@@ -218,8 +241,6 @@ class NotificationService {
     startTime: string;        // "HH:MM" 24h format
     reminderMinutesBefore?: number; // default 10
   }>) {
-    if (!this.registration?.active) return;
-
     const now = new Date();
 
     for (const slot of slots) {
@@ -543,6 +564,26 @@ class NotificationService {
   async cancelAllNotifications() {
     this.pendingTimers.forEach(clearTimeout);
     this.pendingTimers = [];
+
+    // ── Clear previously-scheduled BACKGROUND triggers ───────────────────────
+    // Triggered (pending) notifications scheduled via TimestampTrigger live in
+    // the OS, not in our timer list. We must close the old activity ones before
+    // rescheduling, or each plan update would stack duplicate background alarms.
+    try {
+        if (!this.registration && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+            this.registration = await navigator.serviceWorker.ready;
+        }
+        if (this.registration && (this.registration as any).getNotifications) {
+            const existing = await (this.registration as any).getNotifications({ includeTriggered: true });
+            for (const n of existing) {
+                if (typeof n.tag === 'string' && n.tag.startsWith('activity-')) {
+                    n.close();
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('Could not clear scheduled triggers:', err);
+    }
 
     const db = await this.openDb();
     if (!db) return;
