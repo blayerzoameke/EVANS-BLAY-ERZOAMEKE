@@ -227,7 +227,7 @@ const App: React.FC = () => {
         cloudUserData.dashboardInputs.imageFile = null;
     }
     if (auth.currentUser) {
-        await storageService.syncUserToCloud(auth.currentUser.uid, cloudUserData);
+        storageService.syncUserToCloud(auth.currentUser.uid, cloudUserData).catch(console.error);
     }
   }, [userDetails, smartPlan, savedTimetables, notes, notificationSettings, trackedData, quizState, uploadedMaterials, courseCodeMap, learningHubState, dashboardInputs]);
 
@@ -697,7 +697,7 @@ const App: React.FC = () => {
       const localUserData = await storageService.loadItem<any>(emailKey) || {};
       await storageService.saveItem(emailKey, { ...localUserData, userDetails: updatedUser });
       if (auth.currentUser) {
-          await storageService.syncUserToCloud(auth.currentUser.uid, { ...localUserData, userDetails: updatedUser });
+          storageService.syncUserToCloud(auth.currentUser.uid, { ...localUserData, userDetails: updatedUser }).catch(console.error);
       }
       
       const key = `has_seen_tutorial_invitation_${userDetails.email}`;

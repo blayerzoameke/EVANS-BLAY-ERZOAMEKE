@@ -152,12 +152,14 @@ const getOrCreateUserDetails = async (firebaseUser: FirebaseUser): Promise<UserD
     const userDetails = normalizeUserDetails(firebaseUser, cloudData);
 
     if (!cloudData?.userDetails) {
-        try { await globalFeedbackService.registerUser(firebaseUser.uid, userDetails.name, userDetails.email || ''); } catch {}
-        await storageService.saveUserData(firebaseUser.uid, { ...(cloudData || {}), userDetails });
+        globalFeedbackService.registerUser(firebaseUser.uid, userDetails.name, userDetails.email || '').catch(console.error);
+        storageService.saveUserData(firebaseUser.uid, { ...(cloudData || {}), userDetails })?.catch(console.error);
     }
 
-    await storageService.saveItem(getUserDataKey(userDetails), { ...(cloudData || {}), userDetails });
-    await storageService.saveItem(SESSION_TOKEN_KEY, createToken(userDetails));
+    await Promise.all([
+        storageService.saveItem(getUserDataKey(userDetails), { ...(cloudData || {}), userDetails }),
+        storageService.saveItem(SESSION_TOKEN_KEY, createToken(userDetails))
+    ]);
     return userDetails;
 };
 
@@ -218,8 +220,10 @@ export const storageService = {
     },
     consumeRedirectPending: async (): Promise<boolean> => {
         // Check all storage layers — clear immediately to prevent double-consume
-        const fromSession = safeSessionStorage()?.getItem(GOOGLE_REDIRECT_PENDING_KEY);
-        const fromLocal   = safeLocalStorage()?.getItem(GOOGLE_REDIRECT_PENDING_KEY);
+        let fromSession = null;
+        let fromLocal = null;
+        try { fromSession = safeSessionStorage()?.getItem(GOOGLE_REDIRECT_PENDING_KEY); } catch {}
+        try { fromLocal = safeLocalStorage()?.getItem(GOOGLE_REDIRECT_PENDING_KEY); } catch {}
         let   fromIdb     = false;
         try {
             const idbVal = await idb.get<string>(GOOGLE_REDIRECT_PENDING_KEY);
@@ -287,7 +291,10 @@ export const storageService = {
         try {
             const safeData = sanitizeForFirestore(data);
             const userRef = doc(db, 'users', userId);
-            await setDoc(userRef, safeData, { merge: true });
+            // Return promise so callers can await if needed, but errors are caught
+            return setDoc(userRef, safeData, { merge: true }).catch(err => {
+                console.error('Cloud sync background write failed:', err.message);
+            });
         } catch (error: any) {
             console.error('Cloud sync failed:', error.message);
         }
@@ -347,10 +354,12 @@ export const signUp = async (name: string, email: string, password_param: string
         recoveryAnswer
     };
     
-    // Register user for feedback global counts & save data in parallel
+    // Register user for feedback global counts (fire and forget)
+    globalFeedbackService.registerUser(user.uid, name, email).catch(console.error);
+
+    // Save local data in parallel, fire and forget for cloud
+    storageService.saveUserData(user.uid, { userDetails: newUser })?.catch(console.error);
     await Promise.all([
-        globalFeedbackService.registerUser(user.uid, name, email).catch(console.error),
-        storageService.saveUserData(user.uid, { userDetails: newUser }),
         storageService.saveItem(getUserDataKey(newUser), { userDetails: newUser }),
         storageService.saveItem(SESSION_TOKEN_KEY, createToken(newUser))
     ]);
@@ -394,10 +403,11 @@ export const login = async (email: string, password_param: string): Promise<User
     const finalUserDetails = normalizeUserDetails(user, finalData || { userDetails });
     const savedData = { ...(finalData || {}), userDetails: finalUserDetails };
 
+    // Save local data and cloud data (fire and forget for cloud)
+    storageService.saveUserData(user.uid, savedData).catch(console.error);
     await Promise.all([
         storageService.saveItem(idKey, savedData),
         storageService.saveItem(legacyEmailKey, savedData),
-        storageService.saveUserData(user.uid, savedData),
         storageService.saveItem(SESSION_TOKEN_KEY, createToken(finalUserDetails))
     ]);
 
@@ -506,67 +516,87 @@ export const resetPassword = async (email: string): Promise<boolean> => {
 export const verifyResetCode = (code: string): Promise<string> => verifyPasswordResetCode(auth, code);
 export const confirmPasswordReset = (code: string, newPassword: string): Promise<void> => firebaseConfirmPasswordReset(auth, code, newPassword);
 
-export const signInWithGoogle = async (): Promise<UserDetails> => {
+// Detect environments where signInWithPopup is unreliable and refreshes the page.
+const shouldUseRedirectFlow = (): boolean => {
+    if (typeof window === 'undefined') return false;
+
+    const ua = (navigator.userAgent || '').toLowerCase();
+
+    // Installed PWA (standalone display)
+    const isStandalone =
+        window.matchMedia?.('(display-mode: standalone)')?.matches ||
+        // iOS Safari standalone
+        (navigator as any).standalone === true;
+
+    // Mobile devices (popups are flaky on iOS Safari / Android Chrome)
+    const isMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
+
+    // In-app browsers (Instagram, TikTok, Facebook, Line, WeChat, Snapchat…)
+    const isInAppBrowser =
+        /(instagram|fbav|fban|tiktok|line|wv|micromessenger|snapchat|twitter)/i.test(ua);
+
+    return isStandalone || isMobile || isInAppBrowser;
+};
+
+export const signInWithGoogle = async (): Promise<UserDetails | null> => {
     const provider = new GoogleAuthProvider();
     provider.addScope('email');
     provider.addScope('profile');
     provider.setCustomParameters({ prompt: 'select_account' });
 
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-    const isIOS = /iphone|ipad|ipod/i.test(ua) ||
-        (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
-    const isMobile = /android|iphone|ipad|ipod/i.test(ua) || isIOS;
-    const isStandalonePWA = typeof window !== 'undefined' &&
-        (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true);
-
-    // ── Installed (home-screen) app ──────────────────────────────────────────
-    if (isStandalonePWA) {
-        if (isIOS) {
-            // The iOS installed app can't complete Google's flow (Apple restriction).
-            throw new Error(
-                "Google Sign-In isn't available inside the installed iOS app. Please sign in with your email and password instead."
-            );
-        }
-        // Android installed app: popups open the system browser and can't return,
-        // so a full-page redirect is required. Android has no iOS-style storage
-        // blocking, so the redirect completes reliably here.
+    // Mobile / PWA / in-app browser → always use redirect.
+    if (shouldUseRedirectFlow()) {
         await storageService.setRedirectPending();
-        await signInWithRedirect(auth, provider);
-        throw new Error('redirecting');
+        try {
+            await signInWithRedirect(auth, provider);
+        } catch (err) {
+            await storageService.clearRedirectPending();
+            throw err;
+        }
+        // The browser is navigating away. Return a never-resolving promise
+        // so the calling component stays in its "loading" state and does
+        // NOT try to navigate, re-render, or call onLogin — which is what
+        // was causing the page to "refresh" mid-process.
+        return new Promise<UserDetails | null>(() => {});
     }
 
-    // ── All browsers (mobile + desktop) → POPUP ──────────────────────────────
-    // We deliberately do NOT use signInWithRedirect in mobile browsers. This
-    // project's auth domain (*.firebaseapp.com) is a DIFFERENT site from the app
-    // (*.run.app), and iOS blocks the cross-site storage the redirect handshake
-    // needs — so the redirect never finishes and the sign-in page loops forever.
-    // A popup hands the credential straight back to the open page, so it works.
+    // Desktop → try popup, fall back to redirect on failure.
     try {
         const result = await signInWithPopup(auth, provider);
         return getOrCreateUserDetails(result.user);
     } catch (err: any) {
         const code = (err?.code || '').toLowerCase();
 
-        // User closed the popup — cancel silently.
-        if (code.includes('popup-closed-by-user') || code.includes('cancelled-popup-request')) {
+        // User actively cancelled — bubble up, do nothing.
+        if (
+            code.includes('popup-closed-by-user') ||
+            code.includes('cancelled-popup-request') ||
+            code.includes('user-cancelled')
+        ) {
             throw err;
         }
 
-        // Popup blocked: on DESKTOP we can safely fall back to redirect. On mobile
-        // we must NOT (it would loop on iOS) — guide the user instead.
-        if (code.includes('popup-blocked')) {
-            if (isMobile) {
-                throw new Error(
-                    'Your browser blocked the Google sign-in window. Please allow pop-ups for this site and try again, or sign in with your email and password.'
-                );
-            }
+        // Popup blocked, COOP issue, network blip, or storage disabled →
+        // silently fall back to redirect instead of showing an error.
+        if (
+            code.includes('popup-blocked') ||
+            code.includes('cancelled-popup') ||
+            code.includes('network-request-failed') ||
+            code.includes('internal-error') ||
+            code.includes('web-storage-unsupported')
+        ) {
             await storageService.setRedirectPending();
-            await signInWithRedirect(auth, provider);
-            throw new Error('redirecting');
+            try {
+                await signInWithRedirect(auth, provider);
+            } catch (redirectErr) {
+                await storageService.clearRedirectPending();
+                throw redirectErr;
+            }
+            return new Promise<UserDetails | null>(() => {});
         }
 
-        // In-app browsers (Instagram / TikTok / Facebook) can't do Google sign-in.
-        if (code.includes('operation-not-supported') || code.includes('web-storage-unsupported')) {
+        // In-app browsers that don't support OAuth at all.
+        if (code.includes('operation-not-supported')) {
             throw new Error(
                 "Google Sign-In isn't supported in this browser. Please open EduBlay in Chrome, Safari, or Firefox — or sign in with your email and password."
             );

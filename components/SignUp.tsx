@@ -221,16 +221,18 @@ const SignUp: React.FC<SignUpProps> = ({ onLogin }) => {
         } finally { setBusy(false); }
     };
 
-    const handleGoogleSignIn = () => {
+    const handleGoogleSignIn = async () => {
         if (busy) return;
         setBusy(true); 
         setErrors({}); 
         setMessage('');
         
-        signInWithGoogle().then(user => {
+        try {
+            const user = await signInWithGoogle();
+            if (!user) return; // Redirecting
             setMessage(t('auth.loginSuccess') || 'Signed in with Google');
             onLogin(user);
-        }).catch((err: any) => {
+        } catch (err: any) {
             setBusy(false);
             if (err?.message === 'redirecting') return; 
             const code = (err?.code || '').toLowerCase();
@@ -238,7 +240,7 @@ const SignUp: React.FC<SignUpProps> = ({ onLogin }) => {
                 return;
             }
             setErrors({ general: err?.message || 'Google sign-in failed.' });
-        });
+        }
     };
 
     const GoogleAuthButton: React.FC<{ label: string }> = ({ label }) => (

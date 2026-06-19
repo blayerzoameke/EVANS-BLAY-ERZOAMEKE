@@ -30,9 +30,9 @@ const safetySettings = [
 // "gemini-3-flash-preview and gemini-3.1-flash-lite have free tiers in the Gemini API.
 //  There is no free tier available for gemini-3.1-pro-preview in the Gemini API."
 
-const FLASH_MODEL = 'gemini-3.1-pro-preview';
-const PRO_MODEL   = 'gemini-3.1-pro-preview';
-const LITE_MODEL  = 'gemini-3.1-pro-preview';
+const FLASH_MODEL = 'gemini-3-flash-preview';
+const PRO_MODEL   = 'gemini-3-flash-preview';
+const LITE_MODEL  = 'gemini-3-flash-preview';
 
 // ── RETRY WRAPPER — handles 429 RESOURCE_EXHAUSTED ────────────────────────
 // Retries up to 3 times with exponential backoff: 1s → 2s → 4s

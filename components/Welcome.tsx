@@ -53,7 +53,7 @@ const Welcome: React.FC<WelcomeProps> = ({ onProceed }) => {
 
     useEffect(() => {
         // Check if already installed (standalone mode)
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+        const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches || (navigator as any).standalone;
         if (isStandalone) {
             setIsInstalled(true);
         } else if (isIOS) {

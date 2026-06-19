@@ -37,6 +37,33 @@ class ErrorBoundary extends React.Component<
         console.error('[EduBlay] Uncaught render error:', error, info);
     }
 
+    componentDidMount() {
+        if (this.state.hasError) {
+            this.attemptRecovery();
+        }
+    }
+
+    componentDidUpdate(prevProps: any, prevState: any) {
+        if (this.state.hasError && !prevState.hasError) {
+            this.attemptRecovery();
+        }
+    }
+
+    async attemptRecovery() {
+        try {
+            const recovered = sessionStorage.getItem('eb_recovered');
+            if (!recovered) {
+                sessionStorage.setItem('eb_recovered', '1');
+                if ('caches' in window) {
+                    const names = await caches.keys();
+                    await Promise.all(names.map(name => caches.delete(name)));
+                }
+                localStorage.clear();
+                window.location.reload();
+            }
+        } catch (e) {}
+    }
+
     render() {
         if (this.state.hasError) {
             return (

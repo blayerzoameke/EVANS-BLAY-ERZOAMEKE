@@ -14,10 +14,11 @@ export const PWAInstallBanner: React.FC<PWAInstallBannerProps> = ({ addToast }) 
 
     useEffect(() => {
         // Don't show if already installed as standalone PWA
-        if (window.matchMedia('(display-mode: standalone)').matches) return;
+        if (window.matchMedia?.('(display-mode: standalone)')?.matches) return;
 
         // Don't show if dismissed within 7 days
-        const dismissed = localStorage.getItem('pwa_banner_dismissed');
+        let dismissed = null;
+        try { dismissed = localStorage.getItem('pwa_banner_dismissed'); } catch {}
         if (dismissed && Date.now() - parseInt(dismissed) < 7 * 24 * 60 * 60 * 1000) return;
 
         const ua = navigator.userAgent.toLowerCase();
@@ -37,7 +38,7 @@ export const PWAInstallBanner: React.FC<PWAInstallBannerProps> = ({ addToast }) 
     }, []);
 
     const handleDismiss = () => {
-        localStorage.setItem('pwa_banner_dismissed', String(Date.now()));
+        try { localStorage.setItem('pwa_banner_dismissed', String(Date.now())); } catch {}
         setIsDismissed(true);
     };
 

@@ -49,19 +49,13 @@ setLogLevel('silent');
 
 // ── Firestore with fallback for Safari private browsing ───────────────────
 export const db = (() => {
-    const baseOptions = {
-        experimentalForceLongPolling: true,
-        experimentalAutoDetectLongPolling: false,
-    };
     try {
         return initializeFirestore(app, {
-            ...baseOptions,
             localCache: persistentLocalCache({}),
         });
     } catch {
         // Fallback: persistent cache unavailable (Safari private, some Firefox configs)
         return initializeFirestore(app, {
-            ...baseOptions,
             localCache: memoryLocalCache(),
         });
     }
