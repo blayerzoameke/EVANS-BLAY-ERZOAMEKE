@@ -8,33 +8,13 @@
     <meta name="theme-color" content="#1d4ed8" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <!--
-      CHANGED: black-translucent → default
-      black-translucent makes the status bar transparent and causes content to
-      render underneath it. This causes the flash/blank issue on Chrome/Firefox
-      iPhone because:
-      1. The app briefly renders with content under the status bar
-      2. Then iOS repositions it → visual flash
-      3. On non-Safari browsers the status bar handling differs → blank screen
-
-      "default" keeps the status bar opaque and avoids these rendering conflicts.
-      Safe-area padding in Header.tsx handles the spacing correctly.
-    -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="EduBlay" />
     <meta name="description" content="AI-powered student learning app - study smarter for free" />
-    <!--
-      viewport-fit=cover is kept for safe-area-inset support,
-      but combined with "default" status bar style above to prevent flash.
-    -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
     <title>EduBlay - Your Learning Companion</title>
 
-    <!--
-      THEME FLASH PREVENTION — runs synchronously before React mounts.
-      Without this, users see a white flash before the dark theme applies.
-      Also sets background immediately to prevent white → dark flash.
-    -->
+    <!-- THEME FLASH PREVENTION — runs synchronously before React mounts. -->
     <script>
       (function() {
         try {
@@ -60,7 +40,6 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       }
     </script>
-    <!-- Paystack removed from global head — loaded dynamically in payment component -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @keyframes fade-in-down {
@@ -69,17 +48,9 @@
       }
       .animate-fade-in-down { animation: fade-in-down 0.5s ease-out forwards; }
 
-      /*
-       * CRITICAL iOS FIX: Use 100dvh (dynamic viewport height) not 100vh.
-       * On iOS Safari, 100vh includes the browser chrome (address bar),
-       * causing content to be hidden behind it. 100dvh correctly excludes
-       * the browser chrome and adapts when it appears/disappears.
-       *
-       * Also: min-height ensures content isn't clipped when keyboard appears.
-       */
       html {
         height: 100%;
-        height: -webkit-fill-available; /* iOS Safari fallback */
+        height: -webkit-fill-available;
       }
       body {
         min-height: 100%;
@@ -91,10 +62,6 @@
         min-height: 100dvh;
       }
 
-      /*
-       * Safe-area custom properties — available throughout the app.
-       * These account for iPhone notch, Dynamic Island, home indicator.
-       */
       :root {
         --sat: env(safe-area-inset-top, 0px);
         --sar: env(safe-area-inset-right, 0px);
@@ -108,6 +75,54 @@
       html[data-theme="orange"] { --primary-hue: 25;  --secondary-hue: 5;   --tertiary-hue: 40; }
       html[data-theme="pink"]   { --primary-hue: 330; --secondary-hue: 280; --tertiary-hue: 350; }
       html[data-theme="emerald"]{ --primary-hue: 160; --secondary-hue: 180; --tertiary-hue: 140; }
+
+      /* ── iOS install screen (static, paints before any app JS) ── */
+      #eb-ios-install {
+        position: fixed; inset: 0; z-index: 2147483647;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        text-align: center;
+        padding: calc(28px + var(--sat)) 22px calc(28px + var(--sab));
+        background: linear-gradient(160deg,#0b1220 0%,#0f172a 48%,#111827 100%);
+        color: #fff; font-family: system-ui, -apple-system, sans-serif;
+        animation: ebfade .35s ease-out both; overflow-y: auto;
+      }
+      @keyframes ebfade { from{opacity:0} to{opacity:1} }
+      @keyframes ebbounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(10px)} }
+      @keyframes ebpulse { 0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,.5)} 70%{box-shadow:0 0 0 22px rgba(37,99,235,0)} }
+      #eb-ios-install .eb-logo {
+        width: 84px; height: 84px; border-radius: 24px;
+        background: linear-gradient(145deg,#3b82f6,#2563eb 60%,#1d4ed8);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 900; font-size: 30px; letter-spacing: -2px; color: #fff;
+        margin-bottom: 22px; animation: ebpulse 2.4s ease-in-out infinite;
+      }
+      #eb-ios-install h1 { font-size: 26px; font-weight: 900; line-height: 1.15; margin: 0 0 10px; max-width: 440px; }
+      #eb-ios-install h1 span { background: linear-gradient(90deg,#60a5fa,#818cf8); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+      #eb-ios-install p.sub { font-size: 15px; line-height: 1.6; color: rgba(255,255,255,.66); max-width: 380px; margin: 0 0 22px; }
+      #eb-ios-install .eb-card {
+        background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+        border-radius: 18px; padding: 20px; max-width: 400px; width: 100%;
+        text-align: left; backdrop-filter: blur(10px); margin-bottom: 18px;
+      }
+      #eb-ios-install .eb-step { display: flex; align-items: center; gap: 14px; padding: 10px 0; }
+      #eb-ios-install .eb-num {
+        flex: 0 0 30px; width: 30px; height: 30px; border-radius: 50%;
+        background: linear-gradient(135deg,#2563eb,#1d4ed8); color: #fff;
+        font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center;
+      }
+      #eb-ios-install .eb-step b { color: #fff; font-weight: 700; }
+      #eb-ios-install .eb-step span { font-size: 14.5px; color: rgba(255,255,255,.82); line-height: 1.45; }
+      #eb-ios-install .eb-share { display: inline-flex; vertical-align: middle; width: 22px; height: 22px; margin: 0 2px; }
+      #eb-ios-install .eb-warn {
+        background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.4);
+        color: #fcd34d; border-radius: 14px; padding: 12px 16px; font-size: 13.5px;
+        line-height: 1.5; max-width: 400px; width: 100%; margin-bottom: 18px; font-weight: 600;
+      }
+      #eb-ios-install .eb-arrow { font-size: 30px; color: #60a5fa; animation: ebbounce 1.6s ease-in-out infinite; margin-top: 4px; }
+      #eb-ios-install .eb-continue {
+        margin-top: 18px; background: none; border: none; color: rgba(255,255,255,.5);
+        font-size: 13px; font-weight: 600; text-decoration: underline; cursor: pointer; padding: 8px;
+      }
     </style>
     <script>
       tailwind.config = {
@@ -135,6 +150,70 @@
   </head>
   <body class="bg-gray-100 dark:bg-gray-900">
     <div id="root"></div>
+
+    <!--
+      iOS INSTALL SCREEN — runs as a plain inline script BEFORE the app bundle.
+      The app's React code is heavy and on some iPhones the browser tab is
+      discarded before it can render. This screen is pure HTML/CSS injected
+      immediately, so iPhone users ALWAYS see the "Add to Home Screen" guidance
+      the instant the page opens — even if the main app never finishes loading.
+      It never appears once installed (standalone) or on Android/desktop.
+    -->
+    <script>
+      (function () {
+        try {
+          var ua = navigator.userAgent || '';
+          var isIOS = /iphone|ipad|ipod/i.test(ua) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+          var isStandalone = window.navigator.standalone === true ||
+            (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+
+          // Only iPhone/iPad browsers that haven't installed yet.
+          if (!isIOS || isStandalone) return;
+          // If the user chose "continue in browser" this session, don't nag again.
+          try { if (sessionStorage.getItem('eb_ios_install_dismissed') === '1') return; } catch (e) {}
+
+          // On iOS, only Safari can truly add a web app to the Home Screen.
+          var isSafari = /safari/i.test(ua) && !/crios|fxios|edgios|opios|gsa/i.test(ua);
+
+          var shareSvg =
+            '<svg class="eb-share" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+
+          var warn = isSafari ? '' :
+            '<div class="eb-warn">⚠️ You\'re in another browser. On iPhone, only <b>Safari</b> can add apps to the Home Screen. Please open this page in <b>Safari</b> first, then follow the steps below.</div>';
+
+          var html =
+            '<div class="eb-logo">EB</div>' +
+            '<h1>Add <span>EduBlay</span> to your Home Screen</h1>' +
+            '<p class="sub">For the best experience on iPhone, install EduBlay. It opens full-screen and runs smoothly — no loading problems.</p>' +
+            warn +
+            '<div class="eb-card">' +
+              '<div class="eb-step"><div class="eb-num">1</div><span>Tap the <b>Share</b> button ' + shareSvg + ' in the toolbar.</span></div>' +
+              '<div class="eb-step"><div class="eb-num">2</div><span>Scroll down and tap <b>"Add to Home Screen"</b>.</span></div>' +
+              '<div class="eb-step"><div class="eb-num">3</div><span>Tap <b>"Add"</b>, then open <b>EduBlay</b> from your Home Screen.</span></div>' +
+            '</div>' +
+            (isSafari ? '<div class="eb-arrow">⬇</div>' : '') +
+            '<button class="eb-continue" id="eb-continue-btn">Continue in browser anyway</button>';
+
+          var overlay = document.createElement('div');
+          overlay.id = 'eb-ios-install';
+          overlay.innerHTML = html;
+
+          function mount() {
+            if (!document.body) { setTimeout(mount, 10); return; }
+            document.body.appendChild(overlay);
+            var btn = document.getElementById('eb-continue-btn');
+            if (btn) btn.addEventListener('click', function () {
+              try { sessionStorage.setItem('eb_ios_install_dismissed', '1'); } catch (e) {}
+              overlay.parentNode && overlay.parentNode.removeChild(overlay);
+            });
+          }
+          mount();
+        } catch (e) { /* never block the page */ }
+      })();
+    </script>
+
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
