@@ -12,11 +12,7 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
         allowedHosts: true,
-        hmr: {
-          clientPort: 443,
-          protocol: 'wss',
-          host: env.VITE_HOST || 'ais-dev-2xcgaysvxcb2zyufktlghp-411069503225.europe-west2.run.app',
-        },
+        hmr: process.env.DISABLE_HMR === 'true' ? false : { clientPort: 443, protocol: 'wss' },
       },
       plugins: [
         tailwindcss(),

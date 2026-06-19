@@ -467,14 +467,9 @@ export const getCurrentUser = async (): Promise<UserDetails | null> => {
     // single-use and calling it twice causes the second call to return null,
     // which wipes the session and sends the user back to the welcome page.
 
-    // After popup sign-in, Firebase's auth state can take 1-2 seconds to propagate
-    // even after onAuthStateChanged fires. Retry once before giving up.
     if (!auth.currentUser) {
-        await new Promise(r => setTimeout(r, 1500));
-        if (!auth.currentUser) {
-            await storageService.removeItem(SESSION_TOKEN_KEY);
-            return null;
-        }
+        await storageService.removeItem(SESSION_TOKEN_KEY);
+        return null;
     }
 
     const token = await storageService.loadItem<string>(SESSION_TOKEN_KEY);

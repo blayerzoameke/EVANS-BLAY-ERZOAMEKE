@@ -61,7 +61,6 @@ const ForgotPasswordWizard: React.FC<{
         e.preventDefault();
         if (!answerInput.trim()) { setAnswerError('Please enter your answer.'); return; }
         setAnswerBusy(true);
-        await new Promise(r => setTimeout(r, 500));
         if (recoveryQ === correctQuestion && answerInput.trim().toLowerCase() === correctAnswer) {
             setAnswerError(''); setStep('sending'); await sendResetLink();
         } else {
