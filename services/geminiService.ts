@@ -34,30 +34,69 @@ const FLASH_MODEL = 'gemini-3-flash-preview';
 const PRO_MODEL   = 'gemini-3-flash-preview';
 const LITE_MODEL  = 'gemini-3-flash-preview';
 
-// ── RETRY WRAPPER — handles 429 RESOURCE_EXHAUSTED ────────────────────────
-// Retries up to 3 times with exponential backoff: 1s → 2s → 4s
-// Also catches wrong model name errors and gives a clear message.
-const withRetry = async <T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> => {
+// ── RETRY WRAPPER — handles quota AND transient/mobile network errors ─────
+// Phones on mobile data frequently hit transient failures that laptops on
+// WiFi don't: 503 "model overloaded", 500 internal errors, dropped sockets,
+// "fetch failed", and timeouts. The old wrapper only retried 429 (quota), so
+// those mobile blips surfaced as errors even though a quick retry succeeds.
+// We now retry all of them with a short, jittered backoff so the AI works
+// reliably everywhere — and recovers silently instead of forcing a re-tap.
+const withRetry = async <T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> => {
     let lastError: any;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
             return await fn();
         } catch (err: any) {
             lastError = err;
-            const msg = (err?.message || '').toLowerCase();
-            const isQuota    = msg.includes('429') || msg.includes('resource_exhausted');
-            const isNotFound = msg.includes('not found') || msg.includes('proxying failed') || msg.includes('404');
+            const msg = (err?.message || String(err) || '').toLowerCase();
 
+            // Wrong model name / not deployed — retrying won't help, fail fast.
+            const isNotFound =
+                msg.includes('not found') ||
+                msg.includes('proxying failed') ||
+                msg.includes('404');
             if (isNotFound) {
-                throw new Error(`AI model not found. Check model name. Detail: ${err.message}`);
+                throw new Error(`AI model not found. Check model name. Detail: ${err?.message || err}`);
             }
-            if (isQuota && attempt < maxAttempts) {
-                // Exponential backoff: 1s, 2s, 4s
-                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
-                continue;
-            }
-            if (!isQuota) break;
+
+            // Quota (free-tier rate limit).
+            const isQuota = msg.includes('429') || msg.includes('resource_exhausted') || msg.includes('quota');
+
+            // Transient / network errors that are common on mobile data.
+            const isTransient =
+                msg.includes('503') || msg.includes('unavailable') || msg.includes('overloaded') ||
+                msg.includes('500') || msg.includes('internal') ||
+                msg.includes('502') || msg.includes('504') ||
+                msg.includes('fetch failed') || msg.includes('failed to fetch') ||
+                msg.includes('network') || msg.includes('networkerror') ||
+                msg.includes('timeout') || msg.includes('timed out') || msg.includes('deadline') ||
+                msg.includes('econnreset') || msg.includes('econnaborted') ||
+                msg.includes('socket') || msg.includes('xhr') ||
+                msg.includes('aborted') || msg.includes('load failed') ||
+                msg === '' || msg.includes('unknown');
+
+            const shouldRetry = (isQuota || isTransient) && attempt < maxAttempts;
+            if (!shouldRetry) break;
+
+            // Backoff: ~0.7s, 1.4s, 2.8s (capped at 6s) + jitter to avoid
+            // hammering the shared free-tier all at once.
+            const base = Math.min(700 * Math.pow(2, attempt - 1), 6000);
+            const jitter = Math.floor(Math.random() * 400);
+            await new Promise(r => setTimeout(r, base + jitter));
         }
+    }
+
+    // Out of retries — surface a clean, student-friendly message.
+    const finalMsg = (lastError?.message || '').toLowerCase();
+    if (finalMsg.includes('429') || finalMsg.includes('resource_exhausted') || finalMsg.includes('quota')) {
+        throw new Error('The AI is busy right now (free usage limit). Please wait a moment and try again.');
+    }
+    if (
+        finalMsg.includes('network') || finalMsg.includes('fetch') || finalMsg.includes('timeout') ||
+        finalMsg.includes('503') || finalMsg.includes('unavailable') || finalMsg.includes('overloaded') ||
+        finalMsg === ''
+    ) {
+        throw new Error('Connection to the AI failed. Please check your internet and try again — this is usually temporary.');
     }
     throw lastError;
 };
