@@ -517,71 +517,63 @@ export const signInWithGoogle = async (): Promise<UserDetails> => {
     provider.addScope('profile');
     provider.setCustomParameters({ prompt: 'select_account' });
 
-    // ── POPUP ALWAYS — even on mobile ────────────────────────────────────
-    //
-    // The old code detected any mobile user-agent and used signInWithRedirect.
-    // That caused the "refreshes back to welcome page" bug because:
-    //
-    //   Your app → Google → firebaseapp.com → Your app  (3-hop redirect)
-    //
-    // Every modern mobile browser (Chrome Android, Safari iOS, Firefox)
-    // uses CROSS-SITE STORAGE PARTITIONING. Each domain in that chain gets
-    // its own isolated storage bucket. Firebase stores the pending auth state
-    // in YOUR app's sessionStorage. By the time the chain completes, that
-    // sessionStorage entry is wiped. getRedirectResult() returns null.
-    // User lands on the welcome page as if they never signed in.
-    //
-    // signInWithPopup opens a CHILD TAB. Your app stays open with storage
-    // fully intact. Firebase delivers the credential directly to your open
-    // parent window — no storage hop, no partitioning problem.
-    //
-    // Popup works on: Chrome Android, Safari iOS 16.4+, Firefox, Samsung
-    // Internet, Edge — all mobile and desktop browsers.
-    //
-    // ONLY exception: installed PWA (standalone mode). Popups open in the
-    // SYSTEM browser (outside the PWA), so the callback can't reach back.
-    // Only then is redirect appropriate.
-
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isIOS = /iphone|ipad|ipod/i.test(ua) ||
+        (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
+    const isMobile = /android|iphone|ipad|ipod/i.test(ua) || isIOS;
     const isStandalonePWA = typeof window !== 'undefined' &&
-        window.matchMedia?.('(display-mode: standalone)').matches;
+        (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true);
 
+    // ── Installed (home-screen) app ──────────────────────────────────────────
     if (isStandalonePWA) {
+        if (isIOS) {
+            // The iOS installed app can't complete Google's flow (Apple restriction).
+            throw new Error(
+                "Google Sign-In isn't available inside the installed iOS app. Please sign in with your email and password instead."
+            );
+        }
+        // Android installed app: popups open the system browser and can't return,
+        // so a full-page redirect is required. Android has no iOS-style storage
+        // blocking, so the redirect completes reliably here.
         await storageService.setRedirectPending();
         await signInWithRedirect(auth, provider);
         throw new Error('redirecting');
     }
 
-    // All browser contexts — desktop AND mobile — use popup
+    // ── All browsers (mobile + desktop) → POPUP ──────────────────────────────
+    // We deliberately do NOT use signInWithRedirect in mobile browsers. This
+    // project's auth domain (*.firebaseapp.com) is a DIFFERENT site from the app
+    // (*.run.app), and iOS blocks the cross-site storage the redirect handshake
+    // needs — so the redirect never finishes and the sign-in page loops forever.
+    // A popup hands the credential straight back to the open page, so it works.
     try {
         const result = await signInWithPopup(auth, provider);
         return getOrCreateUserDetails(result.user);
     } catch (err: any) {
         const code = (err?.code || '').toLowerCase();
 
-        // User closed popup — cancel silently
+        // User closed the popup — cancel silently.
         if (code.includes('popup-closed-by-user') || code.includes('cancelled-popup-request')) {
             throw err;
         }
 
-        // Browser blocked popup — explain to the user and guide them instead of falling back to a redirect loop
+        // Popup blocked: on DESKTOP we can safely fall back to redirect. On mobile
+        // we must NOT (it would loop on iOS) — guide the user instead.
         if (code.includes('popup-blocked')) {
-            const isIOS = typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
-            if (isIOS) {
+            if (isMobile) {
                 throw new Error(
-                    'EduBlay could not open the Google sign-in window because pop-ups are blocked. Please enable pop-ups for this site (on iPhone, go to Settings -> Safari -> turn off "Block Pop-ups" and reload), or sign in with your email and password.'
-                );
-            } else {
-                throw new Error(
-                    'Pop-ups are blocked by your browser. Please allow pop-ups for EduBlay in your browser settings to sign in with Google, or use your email and password.'
+                    'Your browser blocked the Google sign-in window. Please allow pop-ups for this site and try again, or sign in with your email and password.'
                 );
             }
+            await storageService.setRedirectPending();
+            await signInWithRedirect(auth, provider);
+            throw new Error('redirecting');
         }
 
-        // In-app browser (Instagram, TikTok, Facebook) — no popup support
+        // In-app browsers (Instagram / TikTok / Facebook) can't do Google sign-in.
         if (code.includes('operation-not-supported') || code.includes('web-storage-unsupported')) {
             throw new Error(
-                'Google Sign-In is not supported in this browser. ' +
-                'Please open EduBlay in Safari or Chrome.'
+                "Google Sign-In isn't supported in this browser. Please open EduBlay in Chrome, Safari, or Firefox — or sign in with your email and password."
             );
         }
 

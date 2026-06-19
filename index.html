@@ -87,7 +87,6 @@
         animation: ebfade .35s ease-out both; overflow-y: auto;
       }
       @keyframes ebfade { from{opacity:0} to{opacity:1} }
-      @keyframes ebbounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(10px)} }
       @keyframes ebpulse { 0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,.5)} 70%{box-shadow:0 0 0 22px rgba(37,99,235,0)} }
       #eb-ios-install .eb-logo {
         width: 84px; height: 84px; border-radius: 24px;
@@ -113,14 +112,8 @@
       #eb-ios-install .eb-step b { color: #fff; font-weight: 700; }
       #eb-ios-install .eb-step span { font-size: 14.5px; color: rgba(255,255,255,.82); line-height: 1.45; }
       #eb-ios-install .eb-share { display: inline-flex; vertical-align: middle; width: 22px; height: 22px; margin: 0 2px; }
-      #eb-ios-install .eb-warn {
-        background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.4);
-        color: #fcd34d; border-radius: 14px; padding: 12px 16px; font-size: 13.5px;
-        line-height: 1.5; max-width: 400px; width: 100%; margin-bottom: 18px; font-weight: 600;
-      }
-      #eb-ios-install .eb-arrow { font-size: 30px; color: #60a5fa; animation: ebbounce 1.6s ease-in-out infinite; margin-top: 4px; }
       #eb-ios-install .eb-continue {
-        margin-top: 18px; background: none; border: none; color: rgba(255,255,255,.5);
+        margin-top: 10px; background: none; border: none; color: rgba(255,255,255,.5);
         font-size: 13px; font-weight: 600; text-decoration: underline; cursor: pointer; padding: 8px;
       }
     </style>
@@ -152,12 +145,11 @@
     <div id="root"></div>
 
     <!--
-      iOS INSTALL SCREEN — runs as a plain inline script BEFORE the app bundle.
-      The app's React code is heavy and on some iPhones the browser tab is
-      discarded before it can render. This screen is pure HTML/CSS injected
-      immediately, so iPhone users ALWAYS see the "Add to Home Screen" guidance
-      the instant the page opens — even if the main app never finishes loading.
-      It never appears once installed (standalone) or on Android/desktop.
+      iOS INSTALL SCREEN — plain inline script that runs BEFORE the app bundle, so
+      iPhone/iPad users always see "Add to Home Screen" guidance instantly, even if
+      the heavy app never finishes rendering. Works for Safari, Chrome and Firefox
+      on iOS — all of them can add the app to the Home Screen. Never shows once
+      installed (standalone) or on Android/desktop.
     -->
     <script>
       (function () {
@@ -168,32 +160,22 @@
           var isStandalone = window.navigator.standalone === true ||
             (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
 
-          // Only iPhone/iPad browsers that haven't installed yet.
           if (!isIOS || isStandalone) return;
-          // If the user chose "continue in browser" this session, don't nag again.
           try { if (sessionStorage.getItem('eb_ios_install_dismissed') === '1') return; } catch (e) {}
-
-          // On iOS, only Safari can truly add a web app to the Home Screen.
-          var isSafari = /safari/i.test(ua) && !/crios|fxios|edgios|opios|gsa/i.test(ua);
 
           var shareSvg =
             '<svg class="eb-share" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
 
-          var warn = isSafari ? '' :
-            '<div class="eb-warn">⚠️ You\'re in another browser. On iPhone, only <b>Safari</b> can add apps to the Home Screen. Please open this page in <b>Safari</b> first, then follow the steps below.</div>';
-
           var html =
             '<div class="eb-logo">EB</div>' +
             '<h1>Add <span>EduBlay</span> to your Home Screen</h1>' +
             '<p class="sub">For the best experience on iPhone, install EduBlay. It opens full-screen and runs smoothly — no loading problems.</p>' +
-            warn +
             '<div class="eb-card">' +
-              '<div class="eb-step"><div class="eb-num">1</div><span>Tap the <b>Share</b> button ' + shareSvg + ' in the toolbar.</span></div>' +
-              '<div class="eb-step"><div class="eb-num">2</div><span>Scroll down and tap <b>"Add to Home Screen"</b>.</span></div>' +
+              '<div class="eb-step"><div class="eb-num">1</div><span>Tap the <b>Share</b> ' + shareSvg + ' or <b>menu</b> button in your browser\'s toolbar.</span></div>' +
+              '<div class="eb-step"><div class="eb-num">2</div><span>Scroll and tap <b>"Add to Home Screen"</b>.</span></div>' +
               '<div class="eb-step"><div class="eb-num">3</div><span>Tap <b>"Add"</b>, then open <b>EduBlay</b> from your Home Screen.</span></div>' +
             '</div>' +
-            (isSafari ? '<div class="eb-arrow">⬇</div>' : '') +
             '<button class="eb-continue" id="eb-continue-btn">Continue in browser anyway</button>';
 
           var overlay = document.createElement('div');
