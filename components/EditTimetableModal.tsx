@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { SmartPlan, PlanSlot, Toast, DayPlan } from '../types.ts';
 import { DayOfWeek, ActivityType } from '../types.ts';
@@ -287,7 +288,7 @@ const EditTimetableModal: React.FC<EditTimetableModalProps> = ({ isOpen, onClose
         [ActivityType.FREE]:    'bg-free text-white',
     };
 
-    return (
+    return createPortal(
         <>
             <div
                 className="fixed inset-0 bg-black bg-opacity-60 flex items-start sm:items-center justify-center z-[1000] p-0 sm:p-4 no-print"
@@ -297,13 +298,15 @@ const EditTimetableModal: React.FC<EditTimetableModalProps> = ({ isOpen, onClose
                     className="bg-white dark:bg-gray-900 rounded-none sm:rounded-xl shadow-2xl w-full max-w-5xl flex flex-col h-dvh sm:h-[92vh] max-h-dvh sm:max-h-[92vh]"
                     onClick={e => e.stopPropagation()}
                 >
-                    {/* ── Header with back button ── */}
+                    
+                   {/* ── Header with back button ── */}
                     <div 
-                        className="flex items-center gap-3 px-4 pb-3 border-b dark:border-gray-700"
+                        className="sticky top-0 z-30 bg-white dark:bg-gray-900 rounded-t-none sm:rounded-t-xl flex items-center gap-3 px-4 pb-3 border-b dark:border-gray-700 flex-shrink-0"
                         style={{
-                            paddingTop: 'max(12px, calc(env(safe-area-inset-top) + 12px))'
+                            paddingTop: 'max(28px, calc(env(safe-area-inset-top, 0px) + 18px))'
                         }}
                     >
+    
                         {/* ← Go Back button — always visible, especially important on mobile */}
                         <button
                             onClick={onClose}
@@ -663,8 +666,9 @@ const EditTimetableModal: React.FC<EditTimetableModalProps> = ({ isOpen, onClose
                     confirmText={t('common.delete')}
                     confirmColor="red"
                 />
-            )}
-        </>
+           )}
+        </>,
+        document.body
     );
 };
 

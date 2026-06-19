@@ -99,7 +99,6 @@ const App: React.FC = () => {
   // If true, init() must NOT override isLoggedIn or welcomeComplete.
   const loginAlreadyHandled = React.useRef(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [dashboardShowingPlan, setDashboardShowingPlan] = useState(false);
   const [view, setView] = useState<View>('dashboard');
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -798,7 +797,7 @@ const App: React.FC = () => {
                 return <CollaborativeSession userDetails={userDetails} addToast={addToast} onActionAttempt={(a) => a()} activeCode={activeCode} setActiveCode={setActiveCode} notes={notes} setNotes={setNotes} />;
               }
               switch (view) {
-                case 'dashboard': return <Dashboard setSmartPlan={setSmartPlan} smartPlan={smartPlan} userDetails={userDetails} setUserDetails={setUserDetails} savedTimetables={savedTimetables} setSavedTimetables={setSavedTimetables} addToast={addToast} setActiveSession={setActiveSession} trackedData={trackedData} setTrackedData={setTrackedData} generationState={generationState} setGenerationState={setGenerationState} dashboardInputs={dashboardInputs} setDashboardInputs={setDashboardInputs} setView={setView} setIntendedStudyContext={setIntendedStudyContext} setLearningHubState={setLearningHubState} courseCodeMap={courseCodeMap} setCourseCodeMap={setCourseCodeMap} onSavePlanAttempt={handleSavePlanAttempt} onDetailsConfirmed={handleDetailsConfirmed} onShowingPlanChange={setDashboardShowingPlan} />;
+                case 'dashboard': return <Dashboard setSmartPlan={setSmartPlan} smartPlan={smartPlan} userDetails={userDetails} setUserDetails={setUserDetails} savedTimetables={savedTimetables} setSavedTimetables={setSavedTimetables} addToast={addToast} setActiveSession={setActiveSession} trackedData={trackedData} setTrackedData={setTrackedData} generationState={generationState} setGenerationState={setGenerationState} dashboardInputs={dashboardInputs} setDashboardInputs={setDashboardInputs} setView={setView} setIntendedStudyContext={setIntendedStudyContext} setLearningHubState={setLearningHubState} courseCodeMap={courseCodeMap} setCourseCodeMap={setCourseCodeMap} onSavePlanAttempt={handleSavePlanAttempt} onDetailsConfirmed={handleDetailsConfirmed} />;
                 case 'profile': return <Profile userDetails={userDetails} setUserDetails={setUserDetails} addToast={addToast} profileEditState={profileEditState} setProfileEditState={setProfileEditState} />;
                 case 'mytimetables': return <MyTimetables savedTimetables={savedTimetables} setSavedTimetables={setSavedTimetables} onLoadPlan={(plan) => { setSmartPlan(plan); setView('dashboard'); }} addToast={addToast} userDetails={userDetails} />;
                 case 'progression': return <Progression plan={smartPlan} trackedData={trackedData} userDetails={userDetails} />;
@@ -828,9 +827,8 @@ const App: React.FC = () => {
        {/* ── Session Help Bot ── */}
        <SessionBot view={view} userEmail={userDetails?.email} />
 
-       {/* ── Mobile Bottom Navigation Bar ── */}
-       {!['collaborative', 'uploadslides', 'examprep'].includes(view) &&
-         !(view === 'dashboard' && !dashboardShowingPlan) &&
+       {/* ── Mobile Bottom Navigation Bar — hidden on dashboard ── */}
+       {!['collaborative', 'uploadslides', 'examprep', 'dashboard'].includes(view) &&
          <MobileBottomNav view={view} setView={setView} unreadFeedbackCount={unreadFeedbackCount} />}
 
        <ConfirmationModal

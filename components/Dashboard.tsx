@@ -59,7 +59,6 @@ interface DashboardProps {
   setCourseCodeMap: (map: CourseCodeMap) => void;
   onSavePlanAttempt: (planName: string) => void;
   onDetailsConfirmed?: () => void;
-  onShowingPlanChange?: (showing: boolean) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -83,8 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     courseCodeMap,
     setCourseCodeMap,
     onSavePlanAttempt,
-    onDetailsConfirmed,
-    onShowingPlanChange
+    onDetailsConfirmed
 }) => {
   const [saveModalOpen, setSaveModalOpen] = useState(false);
   const [planName, setPlanName] = useState('');
@@ -111,13 +109,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
     return () => document.body.classList.remove('hide-bot-nav');
   }, [imageFile, imagePreview, smartPlan, isInputMode]);
-
-  // Report to the app whether the generated smart plan is currently on screen,
-  // so the bottom navigation only appears WITH the plan and is hidden during the
-  // input / generation flow (i.e. when any dashboard input button is clicked).
-  useEffect(() => {
-    onShowingPlanChange?.(!!(smartPlan && !isInputMode));
-  }, [smartPlan, isInputMode, onShowingPlanChange]);
 
   const checkForAgendaConflicts = useCallback((
     plan: SmartPlan, 
