@@ -222,6 +222,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ view, setView,
                 .mob-nav-tab-active { color: #0284c7; }
                 .mob-nav-tab-inactive { color: #6b7280; }
                 .dark .mob-nav-tab-inactive { color: #9ca3af; }
+                body.hide-bot-nav .mob-nav-bar { display: none !important; }
             `}</style>
             <nav className="mob-nav-bar lg:hidden fixed bottom-0 left-0 right-0 z-[150] bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700"
                 style={{ boxShadow: '0 -4px 24px rgba(0,0,0,0.08)' }}>

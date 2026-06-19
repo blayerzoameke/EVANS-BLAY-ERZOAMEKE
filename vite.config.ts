@@ -12,7 +12,9 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
         allowedHosts: true,
-        hmr: process.env.DISABLE_HMR === 'true' ? false : { clientPort: 443, protocol: 'wss' },
+        // Completely disable HMR websocket connection loop
+        // It causes the page to infinitely refresh every 3-7 seconds on drop 
+        hmr: false,
       },
       plugins: [
         tailwindcss(),

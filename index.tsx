@@ -59,19 +59,56 @@ class ErrorBoundary extends React.Component<
                         fontWeight: 900, fontSize: 22, color: 'white', marginBottom: 18,
                     }}>EB</div>
                     <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>EduBlay hit a snag</h1>
-                    <p style={{ fontSize: 14, color: 'rgba(255,255,255,.6)', maxWidth: 360, marginBottom: 20 }}>
-                        Something stopped the app from loading. Reloading usually fixes it.
+                    <p style={{ fontSize: 13, color: 'rgba(255,255,255,.6)', maxWidth: 360, marginBottom: 8 }}>
+                        Something stopped the app from loading.
                     </p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        style={{
-                            padding: '12px 28px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                            background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: 'white',
-                            fontSize: 15, fontWeight: 700,
-                        }}
-                    >
-                        Reload EduBlay
-                    </button>
+                    <div style={{
+                        background: 'rgba(255,100,100,0.1)',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,100,100,0.2)',
+                        color: '#fca5a5',
+                        fontSize: '12px',
+                        maxWidth: '90%',
+                        overflowWrap: 'break-word',
+                        marginBottom: 20,
+                        fontFamily: 'monospace'
+                    }}>
+                        {this.state.message || "Unknown error"}
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+                        <button
+                            onClick={() => window.location.reload()}
+                            style={{
+                                padding: '12px 28px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                                background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: 'white',
+                                fontSize: 15, fontWeight: 700,
+                            }}
+                        >
+                            Reload EduBlay
+                        </button>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    if ('caches' in window) {
+                                        const names = await caches.keys();
+                                        await Promise.all(names.map(name => caches.delete(name)));
+                                    }
+                                } catch (e) {}
+                                try { sessionStorage.clear(); } catch (e) {}
+                                try { localStorage.clear(); } catch (e) {}
+                                window.location.reload();
+                            }}
+                            style={{
+                                padding: '12px 28px', borderRadius: 12, cursor: 'pointer',
+                                background: 'transparent', color: 'rgba(255,255,255,0.7)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                fontSize: 13, fontWeight: 600,
+                            }}
+                        >
+                            Clear Cache & Reload
+                        </button>
+                    </div>
                 </div>
             );
         }

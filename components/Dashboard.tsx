@@ -98,6 +98,18 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const { lectures, studyGoals, agendaItems, generalGoals, imageFile, imagePreview, step, isEditing } = dashboardInputs;
 
+  useEffect(() => {
+    // Hide mobile nav bar when image is uploaded so the user can easily see the "Generate" button,
+    // but show it again once the plan is fully generated and displayed.
+    const isShowingPlan = smartPlan && !isInputMode;
+    if ((imageFile || imagePreview) && !isShowingPlan) {
+        document.body.classList.add('hide-bot-nav');
+    } else {
+        document.body.classList.remove('hide-bot-nav');
+    }
+    return () => document.body.classList.remove('hide-bot-nav');
+  }, [imageFile, imagePreview, smartPlan, isInputMode]);
+
   const checkForAgendaConflicts = useCallback((
     plan: SmartPlan, 
     originalLectures: Lecture[], 

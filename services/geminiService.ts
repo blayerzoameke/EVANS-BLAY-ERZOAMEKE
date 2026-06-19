@@ -30,9 +30,9 @@ const safetySettings = [
 // "gemini-3-flash-preview and gemini-3.1-flash-lite have free tiers in the Gemini API.
 //  There is no free tier available for gemini-3.1-pro-preview in the Gemini API."
 
-const FLASH_MODEL = 'gemini-3-flash-preview';       // Main model — fast, multimodal, free tier
-const PRO_MODEL   = 'gemini-3-flash-preview';       // Same as flash — Pro has NO free tier, causes 429
-const LITE_MODEL  = 'gemini-3-flash-preview';        // Ultra-fast for simple true/false checks
+const FLASH_MODEL = 'gemini-3.1-pro-preview';
+const PRO_MODEL   = 'gemini-3.1-pro-preview';
+const LITE_MODEL  = 'gemini-3.1-pro-preview';
 
 // ── RETRY WRAPPER — handles 429 RESOURCE_EXHAUSTED ────────────────────────
 // Retries up to 3 times with exponential backoff: 1s → 2s → 4s
@@ -228,7 +228,7 @@ GENERAL GOALS: ${generalGoals}
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: FLASH_MODEL,
-            contents: { parts: [{ text: prompt }, image] },
+            contents: [prompt, image],
             config: {
                 responseMimeType: 'application/json',
                 responseSchema: smartPlanSchema,
@@ -244,7 +244,7 @@ export const isImageTimetable = async (image: ImagePart): Promise<boolean> => {
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: LITE_MODEL,
-            contents: { parts: [{ text: 'Is this image a class timetable or academic schedule? Reply ONLY: true or false' }, image] },
+            contents: ['Is this image a class timetable or academic schedule? Reply ONLY: true or false', image],
             config: { safetySettings, maxOutputTokens: 5, thinkingConfig: { thinkingBudget: 0 } },
         });
         return (response.text || '').toLowerCase().includes('true');
@@ -255,7 +255,7 @@ export const isStudyMaterial = async (file: ImagePart, options?: { fast: boolean
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: LITE_MODEL,
-            contents: { parts: [{ text: 'Is this educational or academic study material (lecture notes, textbook, slides, etc.)? Reply ONLY: true or false' }, file] },
+            contents: ['Is this educational or academic study material (lecture notes, textbook, slides, etc.)? Reply ONLY: true or false', file],
             config: { safetySettings, maxOutputTokens: 5, thinkingConfig: { thinkingBudget: 0 } },
         });
         return (response.text || '').toLowerCase().includes('true');
@@ -266,7 +266,7 @@ export const isImageAProblem = async (image: ImagePart): Promise<boolean> => {
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: LITE_MODEL,
-            contents: { parts: [{ text: 'Does this image contain a math, science, or academic problem to solve? Reply ONLY: true or false' }, image] },
+            contents: ['Does this image contain a math, science, or academic problem to solve? Reply ONLY: true or false', image],
             config: { safetySettings, maxOutputTokens: 5, thinkingConfig: { thinkingBudget: 0 } },
         });
         return (response.text || '').toLowerCase().includes('true');
@@ -277,7 +277,7 @@ export const getDocumentContext = async (file: ImagePart, options?: { fast: bool
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: LITE_MODEL,
-            contents: { parts: [{ text: 'In 10 words or less, what subject/topic is this document about? Be specific (e.g. "Calculus: Integration by Parts").' }, file] },
+            contents: ['In 10 words or less, what subject/topic is this document about? Be specific (e.g. "Calculus: Integration by Parts").', file],
             config: { safetySettings, maxOutputTokens: 30, thinkingConfig: { thinkingBudget: 0 } },
         });
         return (response.text || 'study material').trim();
@@ -333,7 +333,7 @@ Use markdown. Be exhaustive. This is a premium academic analysis.`;
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: FLASH_MODEL,
-            contents: { parts: [{ text: prompt }, file] },
+            contents: [prompt, file],
             config: { safetySettings, maxOutputTokens: 6000 },
         });
         return (response.text || '').trim();
@@ -344,15 +344,13 @@ export const verifyAndExtract = async (file: ImagePart): Promise<{ isValid: bool
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: FLASH_MODEL,
-            contents: {
-                parts: [
-                    { text: `Respond with a JSON object ONLY: {"valid": true/false, "text": "<extracted content>"}
+            contents: [
+                `Respond with a JSON object ONLY: {"valid": true/false, "text": "<extracted content>"}
 - "valid": true if this is educational/academic material, false otherwise
 - "text": if valid=true, transcribe ALL text from every page/slide preserving structure; if valid=false, set to ""
-- No markdown, no backticks, raw JSON only` },
-                    file
-                ]
-            },
+- No markdown, no backticks, raw JSON only`,
+                file
+            ],
             config: { safetySettings, maxOutputTokens: 16000, thinkingConfig: { thinkingBudget: 0 } },
         });
         try {
@@ -403,7 +401,7 @@ Use markdown formatting. Be thorough, accurate, and exam-focused.`;
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: FLASH_MODEL,
-            contents: { parts: [{ text: prompt }, file] },
+            contents: [prompt, file],
             config: { safetySettings, maxOutputTokens: 3000, thinkingConfig: { thinkingBudget: 0 } },
         });
         return (response.text || '').trim();
@@ -441,7 +439,7 @@ Be warm, encouraging, and extremely clear. Use markdown formatting.`;
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: FLASH_MODEL,
-            contents: { parts: [{ text: prompt }, file] },
+            contents: [prompt, file],
             config: { safetySettings, maxOutputTokens: 3000, thinkingConfig: { thinkingBudget: 0 } },
         });
         return (response.text || '').trim();
@@ -452,12 +450,10 @@ export const extractTextFromDocument = async (file: ImagePart, options?: { fast:
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: FLASH_MODEL,
-            contents: {
-                parts: [
-                    { text: "Transcribe ALL text from this document. Preserve headings, bullets, formulas, and labels. Separate pages with: --- Page N ---. Output ONLY the transcription." },
-                    file
-                ]
-            },
+            contents: [
+                "Transcribe ALL text from this document. Preserve headings, bullets, formulas, and labels. Separate pages with: --- Page N ---. Output ONLY the transcription.",
+                file
+            ],
             config: { safetySettings, maxOutputTokens: 16000, thinkingConfig: { thinkingBudget: 0 } },
         });
         return (response.text || '').trim();
@@ -630,7 +626,7 @@ ${graphYInterval ? `Y-Range requested: ${graphYInterval}` : ''}.`;
     return withRetry(async () => {
         const response = await ai.models.generateContent({
             model: FLASH_MODEL,
-            contents: { parts },
+            contents: parts,
             config: {
                 safetySettings,
                 thinkingConfig: { thinkingBudget: 0 },

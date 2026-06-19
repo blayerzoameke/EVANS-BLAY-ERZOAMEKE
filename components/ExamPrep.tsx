@@ -571,7 +571,7 @@ Look at this image which contains the student's handwritten answer.
 Evaluate it and respond ONLY with a JSON object: {"extractedText": "what you read from the image", "isCorrect": true/false, "score": 0-100, "feedback": "brief marking feedback"}`;
                 const response = await ai.models.generateContent({
                     model: 'gemini-3.1-pro-preview',
-                    contents: { parts: [{ text: prompt }, imagePart] },
+                    contents: [prompt, imagePart],
                 });
                 const text = (response.text || '').trim().replace(/```json|```/g, '');
                 const result = JSON.parse(text);
