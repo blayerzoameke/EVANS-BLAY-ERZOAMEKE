@@ -293,6 +293,44 @@ self.addEventListener('sync', (event: any) => {
   if (event.tag === 'check-notifications') event.waitUntil(checkAndFireNotifications());
 });
 
+// ── Web Push Event Listener (wakes up the service worker when app is closed) ──
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  event.waitUntil(
+    (async () => {
+      try {
+        let payload: any = {};
+        try {
+          payload = event.data.json();
+        } catch {
+          payload = { title: 'EduBlay Update', body: event.data.text() };
+        }
+
+        const title = payload.title || 'EduBlay Update';
+        const body = payload.body || 'New study material or schedule is available!';
+        const icon = payload.icon || '/icons/icon-192x192.png';
+        const badge = payload.badge || '/icons/icon-192x192.png';
+        const tag = payload.tag || 'push-notification';
+        const url = payload.url || '/';
+
+        await self.registration.showNotification(title, {
+          body,
+          icon,
+          badge,
+          tag,
+          requireInteraction: true,
+          data: { url },
+        });
+
+        await syncBadge();
+      } catch (err) {
+        console.error('Error handling push event in service worker:', err);
+      }
+    })()
+  );
+});
+
 // ── Notification dismissed (swiped away) → recompute badge ─────────────────
 self.addEventListener('notificationclose', (event) => {
   event.waitUntil(syncBadge());

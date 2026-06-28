@@ -544,15 +544,8 @@ export const signInWithGoogle = async (): Promise<UserDetails | null> => {
     const isStandalone = typeof window !== 'undefined' &&
         (window.matchMedia?.('(display-mode: standalone)')?.matches || (navigator as any).standalone === true);
 
-    // ── iOS INSTALLED app: Google can't return into the standalone PWA ───────
-    if (isStandalone && isIOS) {
-        throw new Error(
-            "Google Sign-In isn't available inside the installed iOS app. Please sign in with your email and password instead."
-        );
-    }
-
-    // ── Android INSTALLED app: must use redirect (popup opens system browser) ─
-    if (isAndroidInstalledApp()) {
+    // ── iOS or Android INSTALLED app: must use redirect ──────────────────────
+    if (isStandalone && (isIOS || isAndroidInstalledApp())) {
         await storageService.setRedirectPending();
         try {
             await signInWithRedirect(auth, provider);

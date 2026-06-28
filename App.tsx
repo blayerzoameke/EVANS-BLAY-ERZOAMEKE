@@ -830,7 +830,7 @@ const App: React.FC = () => {
        <SessionBot view={view} userEmail={userDetails?.email} />
 
        {/* ── Mobile Bottom Navigation Bar — hidden on dashboard ── */}
-       {!['collaborative', 'uploadslides', 'examprep', 'dashboard'].includes(view) &&
+       {!['collaborative', 'uploadslides', 'examprep', 'dashboard', 'settings', 'theme', 'language', 'notification'].includes(view) &&
          <MobileBottomNav view={view} setView={setView} unreadFeedbackCount={unreadFeedbackCount} />}
 
        <ConfirmationModal

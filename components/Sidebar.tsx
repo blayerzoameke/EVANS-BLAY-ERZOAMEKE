@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { View, UserDetails } from '../types';
 import { LogoIcon } from './icons/LogoIcon';
 import { CloseIcon } from './icons/CloseIcon';
@@ -18,6 +18,26 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen, userDetails, unreadFeedbackCount = 0 }) => {
   const { t } = useLanguage();
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [appUpdateAvailable, setAppUpdateAvailable] = useState(() => {
+    try {
+      return localStorage.getItem('eb_app_update_available') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const checkUpdate = () => {
+      try {
+        setAppUpdateAvailable(localStorage.getItem('eb_app_update_available') === 'true');
+      } catch (e) {
+        // Safe fallback
+      }
+    };
+    checkUpdate();
+    const interval = setInterval(checkUpdate, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleSection = (sectionId: string) => {
     setOpenSection(prev => (prev === sectionId ? null : sectionId));
@@ -81,6 +101,11 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen, userD
       >
         <span>{t(item.nameKey)}</span>
         <div className="flex items-center gap-1.5">
+          {item.id === 'settings' && appUpdateAvailable && (
+              <span className="flex items-center justify-center px-1.5 py-0.5 text-[8px] font-extrabold bg-indigo-500 text-white rounded-full tracking-wider uppercase animate-pulse shrink-0">
+                  UPDATE
+              </span>
+          )}
           {item.id === 'collaborative' && (
               <span className="flex items-center justify-center px-1.5 py-0.5 text-[9px] font-black bg-emerald-500 text-white rounded-full tracking-wide uppercase" style={{ letterSpacing: '0.08em' }}>
                   NEW
@@ -122,6 +147,7 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen, userD
   }> = ({ titleKey, sectionId, items }) => {
     const isOpen = openSection === sectionId;
     const hasGroupBadge = items.some(item => item.id === 'feedback' && unreadFeedbackCount > 0);
+    const hasUpdateBadge = sectionId === 'app' && appUpdateAvailable;
 
     return (
         <div>
@@ -133,6 +159,9 @@ const Sidebar: React.FC<SidebarProps> = ({ view, setView, isOpen, setOpen, userD
                     <span>{t(titleKey)}</span>
                     {!isOpen && hasGroupBadge && (
                         <div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
+                    )}
+                    {!isOpen && hasUpdateBadge && (
+                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>
                     )}
                 </div>
                 <ChevronDownIcon className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />

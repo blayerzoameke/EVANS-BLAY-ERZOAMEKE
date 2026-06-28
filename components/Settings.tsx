@@ -1,10 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ExportIcon } from './icons/ExportIcon';
 import { ImportIcon } from './icons/ImportIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { DocumentIcon } from './icons/DocumentIcon';
+import { RefreshCw } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 import { storageService, getCurrentUser } from '../services/authService';
 import { appUpdateService } from '../services/appUpdateService';
@@ -195,6 +196,26 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
     const { t } = useLanguage();
     const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
     const importInputRef = React.useRef<HTMLInputElement>(null);
+    const [hasUpdateAvailable, setHasUpdateAvailable] = useState(() => {
+        try {
+            return localStorage.getItem('eb_app_update_available') === 'true';
+        } catch {
+            return false;
+        }
+    });
+    const [isAppUpdating, setIsAppUpdating] = useState(false);
+
+    useEffect(() => {
+        const check = () => {
+            try {
+                setHasUpdateAvailable(localStorage.getItem('eb_app_update_available') === 'true');
+            } catch (e) {
+                // Ignore
+            }
+        };
+        const timer = setInterval(check, 3000);
+        return () => clearInterval(timer);
+    }, []);
 
     // FIX: Optimized handlePrintReport to use existing props and async storage service properly.
     const handlePrintReport = async () => {
@@ -359,9 +380,59 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
                             Current Version: v{appUpdateService.getCurrentLocalVersion()}
                         </span>
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Update EduBlay app to get the latest features and fixes.
-                    </p>
+                    {hasUpdateAvailable ? (
+                        <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/50 rounded-lg p-4 space-y-3">
+                            <div className="flex items-start gap-2.5">
+                                <span className="p-1.5 bg-indigo-500/10 text-indigo-500 rounded-lg shrink-0">
+                                    <RefreshCw className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400" />
+                                </span>
+                                <div>
+                                    <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">EduBlay App Update is Available!</h4>
+                                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 mt-0.5">
+                                        A newer version of the application is available. Click below to install the update, clear any cached old features, and reload.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    setIsAppUpdating(true);
+                                    try {
+                                        const targetVersion = localStorage.getItem('eb_app_update_version') || '2.0.1';
+                                        localStorage.setItem('eb_last_updated_confirmed_version', targetVersion);
+                                        if ('serviceWorker' in navigator) {
+                                            const registrations = await navigator.serviceWorker.getRegistrations();
+                                            for (const reg of registrations) {
+                                                await reg.unregister();
+                                            }
+                                        }
+                                        if ('caches' in window) {
+                                            const keys = await caches.keys();
+                                            await Promise.all(keys.map(key => caches.delete(key)));
+                                        }
+                                        localStorage.removeItem('pwa_update_available');
+                                        localStorage.removeItem('eb_app_update_available');
+                                        sessionStorage.removeItem('eb_update_dismissed');
+                                        sessionStorage.removeItem('eb_banner_hidden_until');
+                                        addToast("Updating app and clearing cache...", "info");
+                                        setTimeout(() => {
+                                            window.location.reload();
+                                        }, 1000);
+                                    } catch (e) {
+                                        window.location.reload();
+                                    }
+                                }}
+                                disabled={isAppUpdating}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${isAppUpdating ? 'animate-spin' : ''}`} />
+                                {isAppUpdating ? 'Installing Update...' : 'Install Update Now'}
+                            </button>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Update EduBlay app to get the latest features and fixes.
+                        </p>
+                    )}
                     <div className="flex flex-col sm:flex-row gap-3 pt-1">
                         <button 
                             onClick={async () => {

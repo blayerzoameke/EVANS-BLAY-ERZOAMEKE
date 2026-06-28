@@ -55,8 +55,12 @@ export const AppUpdateNotification: React.FC<AppUpdateNotificationProps> = ({ on
       if (firestoreData.currentVersion && firestoreData.currentVersion !== localVer) {
         setHasUpdate(true);
         setUpdateDetails(firestoreData);
+        localStorage.setItem('eb_app_update_available', 'true');
+        localStorage.setItem('eb_app_update_version', firestoreData.currentVersion);
       } else {
         setHasUpdate(false);
+        localStorage.removeItem('eb_app_update_available');
+        localStorage.removeItem('eb_app_update_version');
       }
     });
 
@@ -207,7 +211,7 @@ export const AppUpdateNotification: React.FC<AppUpdateNotificationProps> = ({ on
                 </span>
               </div>
               <p className="leading-tight font-semibold tracking-wide drop-shadow-sm">
-                Click to update EduBlay now for new features.
+                EduBlay has been updated! Click "Update Now" to apply, or update anytime in App Settings (under the "Application" dropdown in the sidebar).
               </p>
             </div>
             <div className="flex items-center gap-2.5 shrink-0 mt-1 md:mt-0 justify-center">
@@ -259,8 +263,8 @@ export const AppUpdateNotification: React.FC<AppUpdateNotificationProps> = ({ on
           <div className="inline-flex p-2.5 bg-white/10 rounded-xl mb-3 animate-pulse">
             <ArrowUpCircle className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-xl font-black tracking-tight">App Update Available</h2>
-          <p className="text-indigo-100 text-xs mt-1">Get the latest performance fixes & clear errors</p>
+          <h2 className="text-xl font-black tracking-tight">EduBlay has been updated!</h2>
+          <p className="text-indigo-100 text-xs mt-1">EduBlay app has been updated! Click to update, or update later.</p>
         </div>
 
         {/* Modal content */}
