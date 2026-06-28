@@ -7,6 +7,7 @@ import { TrashIcon } from './icons/TrashIcon';
 import { DocumentIcon } from './icons/DocumentIcon';
 import ConfirmationModal from './ConfirmationModal';
 import { storageService, getCurrentUser } from '../services/authService';
+import { appUpdateService } from '../services/appUpdateService';
 import type { Toast, UserDetails, SmartPlan, StoredPlan, Note, TrackedSession, UploadedMaterialInfo, View } from '../types';
 
 // Helper functions for PDF generation
@@ -340,6 +341,57 @@ const Settings: React.FC<SettingsProps> = ({ addToast, handleLogout, userDetails
                     <div className="pt-4 mt-4 border-t dark:border-gray-700">
                         <button onClick={() => setShowClearDataConfirm(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700">
                             <TrashIcon className="w-4 h-4" /> {t('settings.data.clear')}
+                        </button>
+                    </div>
+                </div>
+
+                {/* ── Real-time App Update Simulator Card ── */}
+                <div className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow space-y-4 border border-indigo-500/20">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                            <span className="flex h-2.5 w-2.5 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+                            </span>
+                            App Update
+                        </h3>
+                        <span className="text-xs bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-md font-mono font-bold">
+                            Current Version: v{appUpdateService.getCurrentLocalVersion()}
+                        </span>
+                    </div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Update EduBlay app to get the latest features and fixes.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                        <button 
+                            onClick={async () => {
+                                try {
+                                    await appUpdateService.triggerUpdateInFirestore("2.0.1", "EduBlay v2.0.1 is here! This release removes old features causing errors, cleans browser caching, and refreshes your session.", true);
+                                    addToast("Simulated update pushed! All active users will get the update notification.", "success");
+                                } catch (e) {
+                                    addToast("Failed to simulate update.", "error");
+                                }
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-lg shadow-md hover:bg-indigo-50 dark:hover:bg-slate-800/50 transition-all active:scale-95 cursor-pointer"
+                        >
+                            Click to update app
+                        </button>
+                        <button 
+                            onClick={async () => {
+                                try {
+                                    await appUpdateService.triggerUpdateInFirestore("2.0.0", "Reset", false);
+                                    addToast("System is up to date.", "info");
+                                    sessionStorage.removeItem("eb_update_dismissed");
+                                    localStorage.removeItem("pwa_update_available");
+                                    localStorage.removeItem("eb_last_updated_confirmed_version");
+                                    window.location.reload();
+                                } catch (e) {
+                                    addToast("Failed to reset.", "error");
+                                }
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-all active:scale-95 cursor-pointer text-center"
+                        >
+                            Reset to v2.0.0
                         </button>
                     </div>
                 </div>

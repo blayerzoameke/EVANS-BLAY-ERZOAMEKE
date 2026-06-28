@@ -46,6 +46,7 @@ import ConfirmationModal from './components/ConfirmationModal';
 import History from './components/History';
 import SessionBot from './components/SessionBot';
 import { MobileBottomNav } from './components/PWAMobile';
+import { AppUpdateNotification } from './components/AppUpdateNotification';
 
 const USER_KEY_PREFIX = 'eb_u_data_';
 
@@ -774,6 +775,7 @@ const App: React.FC = () => {
       )}
       <Sidebar view={view} setView={setView} isOpen={sidebarOpen} setOpen={setSidebarOpen} userDetails={userDetails} unreadFeedbackCount={unreadFeedbackCount} />
       <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <AppUpdateNotification onLogout={handleLogout} isLoggedIn={isLoggedIn} />
         {showNotifPrompt && <NotificationPrompt settings={notificationSettings} setSettings={setNotificationSettings} />}
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} userDetails={userDetails} setView={setView} addToast={addToast} handleLogout={handleLogout} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8" style={{ position: 'relative', background: 'transparent' }}>

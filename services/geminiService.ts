@@ -510,6 +510,57 @@ export const chatWithDocumentStream = async (
     context: string,
     smartPlan?: SmartPlan | null
 ) => {
+    // Check for simple greetings
+    const cleanMsg = userMessage.trim().toLowerCase().replace(/[.,!?]/g, '');
+    const isSsup = cleanMsg === 'sap' || cleanMsg === 'sup' || cleanMsg === 'ssup' || cleanMsg.startsWith('ssup ') || cleanMsg.startsWith('sup ') || cleanMsg.startsWith('sap ');
+    const isGoodMorning = cleanMsg.includes('morning');
+    const isGoodAfternoon = cleanMsg.includes('afternoon');
+    const isGoodEvening = cleanMsg.includes('evening');
+    const isHowAreYou = cleanMsg.includes('how are you') || cleanMsg.includes("how's it going") || cleanMsg.includes('how you doing');
+    
+    const greetingWords = [
+        'hi', 'hello', 'hey', 'sap', 'ssup', 'sup', 'yo', 'hullo', 'wasup', 'wazzup', 'whats up',
+        'good morning', 'good afternoon', 'good evening', 'good night', 'how are you', "how's it going", "how is it going", "how you doing", "how are you doing", "hola", "bonjour"
+    ];
+    
+    const startsOrEndsWithGreeting = greetingWords.some(g => cleanMsg === g || cleanMsg.startsWith(g + ' ') || cleanMsg.endsWith(' ' + g));
+    
+    if (startsOrEndsWithGreeting || cleanMsg.length <= 4) {
+        let reply = "Hello! I'm ready to help you study. What would you like to focus on today?";
+        if (isSsup) {
+            reply = "Ssup! Ready to study and crush some academic goals? Ask me anything about your document!";
+        } else if (isGoodMorning) {
+            reply = "Good morning! Hope you're ready for a productive study session today. What's on your mind?";
+        } else if (isGoodAfternoon) {
+            reply = "Good afternoon! Ready to continue studying? Let's make this session count!";
+        } else if (isGoodEvening) {
+            reply = "Good evening! Happy to see you studying tonight. How can I help you understand your materials?";
+        } else if (isHowAreYou) {
+            reply = "I'm doing great, thank you! Ready and eager to help you master your study materials. What shall we tackle first?";
+        } else {
+            const greetings = [
+                "Hello! I'm ready to help you study. What would you like to focus on today?",
+                "Hi there! Let's conquer your study materials. How can I assist you right now?",
+                "Good day! I'm here to help you summarize, explain, or chat about your document. Ask away!",
+                "Hey! Hope your day is going well. Ready to dive into some learning?"
+            ];
+            reply = greetings[userMessage.length % greetings.length];
+        }
+
+        // Return a mock async iterator/generator to simulate streaming
+        const mockStream = {
+            async *[Symbol.asyncIterator]() {
+                const words = reply.split(' ');
+                for (let i = 0; i < words.length; i++) {
+                    const chunkText = words[i] + (i === words.length - 1 ? '' : ' ');
+                    yield { text: chunkText };
+                    await new Promise(resolve => setTimeout(resolve, 35));
+                }
+            }
+        };
+        return mockStream as any;
+    }
+
     const chatHistory = history.map(turn => ([
         { role: 'user', parts: [{ text: turn.user }] },
         { role: 'model', parts: [{ text: turn.blay }] }
@@ -522,16 +573,17 @@ ${smartPlan ? `STUDENT'S STUDY SCHEDULE: ${JSON.stringify(smartPlan)}` : ''}
 
 YOUR CORE BEHAVIOUR:
 1. Always answer based on the uploaded document first. If the question goes beyond it, draw on your full knowledge but say so.
-2. Give structured, thorough answers. Use headers, bullet points, numbered steps, and tables where they aid clarity.
-3. Use LaTeX for ALL mathematical expressions. For visual math rendering, use inline ($...$) or block ($$...$$). 
+2. For greetings or extremely short questions (e.g., "hi", "hello", "sap", "hey", "how are you"), or casual queries demanding a quick reply, respond dynamically with a short, warm, natural 1-sentence or 2-sentence greeting or brief answer. Do NOT dump paragraphs, headers, tables, or complex formatting for simple greetings or casual small talk.
+3. For deep study questions or topic explanations, give structured, thorough answers. Use headers, bullet points, numbered steps, and tables where they aid clarity.
+4. Use LaTeX for ALL mathematical expressions. For visual math rendering, use inline ($...$) or block ($$...$$). 
    CRITICAL FOR LATEX CODE: If the user asks for "LaTeX code" to copy/paste/compile, or if you are outputting a full LaTeX document/script, you MUST wrap it completely inside a markdown code block (i.e. \`\`\`latex \n <code here> \n\`\`\`). This ensures it renders in a black background with a copy button for the student.
-4. When explaining concepts, always: define the term → give an example → connect it to the bigger picture.
-5. If a student seems confused, break your explanation into even smaller steps and use a different analogy.
-6. Proactively anticipate follow-up questions and address them.
-7. When relevant, link concepts to exam strategies (e.g., "In an exam, this question would likely ask you to...").
-8. Be encouraging but honest. If an answer is wrong, explain exactly why and guide the student to the correct reasoning.
-9. If the student asks for a quiz, create 3–5 targeted questions based on the document.
-10. Keep track of what the student has asked so far in this session and build on it.
+5. When explaining concepts, always: define the term → give an example → connect it to the bigger picture.
+6. If a student seems confused, break your explanation into even smaller steps and use a different analogy.
+7. Proactively anticipate follow-up questions and address them.
+8. When relevant, link concepts to exam strategies (e.g., "In an exam, this question would likely ask you to...").
+9. Be encouraging but honest. If an answer is wrong, explain exactly why and guide the student to the correct reasoning.
+10. If the student asks for a quiz, create 3–5 targeted questions based on the document.
+11. Keep track of what the student has asked so far in this session and build on it.
 
 TONE: Friendly, confident, expert. Like a brilliant older sibling who is also a professor.`;
 

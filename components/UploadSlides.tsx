@@ -437,7 +437,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   onAttemptUpload,
   onSaveChatToHistory,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [chatInput, setChatInput] = useState('');
   
   const [readAloudState, setReadAloudState] = useState<ReadAloudState>('idle');
@@ -453,6 +453,7 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const keepaliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const speechCharIndexRef = useRef(0);
+  const isStoppedRef = useRef(false);
   const notesScrollRef = useRef<HTMLDivElement>(null);
 
   const [sessionPrompt, setSessionPrompt] = useState<{ slot: PlanSlot, nextSlot: PlanSlot | null, day: DayOfWeek } | null>(null);
@@ -494,21 +495,26 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
   };
 
   const handlePlay = useCallback((startIndex = 0) => {
+    isStoppedRef.current = false;
     const fullText = analysisResults.read;
     if (!fullText || fullText.length <= startIndex) return;
 
     const textToRead = fullText.substring(startIndex);
 
-    if (speechSynthesis.speaking || speechSynthesis.pending) {
-      speechSynthesis.cancel();
-      // Small delay for iOS to fully reset
-      setTimeout(() => speakChunked(textToRead, startIndex), 300);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      if (speechSynthesis.speaking || speechSynthesis.pending) {
+        speechSynthesis.cancel();
+        // Small delay for iOS to fully reset
+        setTimeout(() => speakChunked(textToRead, startIndex), 300);
+      } else {
+        speakChunked(textToRead, startIndex);
+      }
     } else {
-      speakChunked(textToRead, startIndex);
+      addToast("Your browser does not support Speech Synthesis.", "error");
     }
 
     setReadAloudState('playing');
-  }, [analysisResults.read, readingSpeed, readingVolume]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [analysisResults.read, readingSpeed, readingVolume, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const speakChunked = useCallback((textToRead: string, globalStartIndex: number) => {
     const chunks = splitIntoChunks(textToRead);
@@ -541,6 +547,10 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     };
 
     const speakNext = () => {
+      if (isStoppedRef.current) {
+        stopKeepalive();
+        return;
+      }
       if (chunkIndex >= chunks.length) {
         stopKeepalive();
         setReadAloudState('interactive');
@@ -560,22 +570,25 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
       utterance.rate = readingSpeed;
       utterance.volume = readingVolume;
 
-      // Pick best available English voice
+      // Pick best available voice matching current language
       const voices = speechSynthesis.getVoices();
+      const langPrefix = language || 'en';
       const preferred =
-        voices.find(v => v.lang.startsWith('en') && v.localService) ||
+        voices.find(v => v.lang.toLowerCase().startsWith(langPrefix.toLowerCase()) && v.localService) ||
+        voices.find(v => v.lang.toLowerCase().startsWith(langPrefix.toLowerCase())) ||
         voices.find(v => v.lang.startsWith('en')) ||
         voices[0];
       if (preferred) utterance.voice = preferred;
 
       utterance.onboundary = (event) => {
+        if (isStoppedRef.current) return;
         const absoluteCharIndex = charOffset + event.charIndex;
         setHighlightCharIndex(absoluteCharIndex);
         speechCharIndexRef.current = absoluteCharIndex;
       };
 
       utterance.onend = () => {
-        if (utteranceRef.current === null) { stopKeepalive(); return; }
+        if (isStoppedRef.current || utteranceRef.current === null) { stopKeepalive(); return; }
         charOffset += chunk.length + 1;
         chunkIndex++;
         // Slightly longer delay on iOS prevents audio session from expiring
@@ -586,13 +599,14 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
         if (e.error === 'interrupted') return; // we cancelled — expected
         console.warn('SpeechSynthesis error:', e.error);
         if (e.error === 'not-allowed') {
-          // User hasn't interacted yet — show a message
           stopKeepalive();
           setReadAloudState('interactive');
+          addToast("Read Aloud is blocked by browser iframe security. Please click 'Open in New Tab' at the top-right of your screen to run EduBlay standalone, where Read Aloud works perfectly!", "error");
         } else if (e.error === 'network') {
           // Network voice failed — retry with local voice
           stopKeepalive();
           setTimeout(() => {
+            if (isStoppedRef.current) return;
             const localVoice = speechSynthesis.getVoices().find(v => v.localService);
             if (localVoice) {
               utterance.voice = localVoice;
@@ -615,48 +629,58 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
     // Ensure voices are loaded (async on first call, especially on Android)
     const voices = speechSynthesis.getVoices();
     if (voices.length > 0) {
+      if (isStoppedRef.current) return;
       utteranceRef.current = {} as SpeechSynthesisUtterance;
       speakNext();
     } else {
       // Voices not loaded yet — wait for them
       speechSynthesis.onvoiceschanged = () => {
         speechSynthesis.onvoiceschanged = null;
+        if (isStoppedRef.current) return;
         utteranceRef.current = {} as SpeechSynthesisUtterance;
         speakNext();
       };
       // Hard fallback: if onvoiceschanged never fires (some Android browsers)
       setTimeout(() => {
+        if (isStoppedRef.current) return;
         if (utteranceRef.current === null) {
           utteranceRef.current = {} as SpeechSynthesisUtterance;
           speakNext();
         }
       }, 1200);
     }
-  }, [readingSpeed, readingVolume]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [readingSpeed, readingVolume, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const handleResume = useCallback(() => {
-      if (speechSynthesis.paused) {
-        speechSynthesis.resume();
-        setReadAloudState('playing');
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        if (speechSynthesis.paused) {
+          speechSynthesis.resume();
+          setReadAloudState('playing');
+        }
       }
   }, []);
 
   const handlePause = useCallback(() => {
-      if (speechSynthesis.speaking) {
-        speechSynthesis.pause();
-        setReadAloudState('paused');
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        if (speechSynthesis.speaking) {
+          speechSynthesis.pause();
+          setReadAloudState('paused');
+        }
       }
   }, []);
 
   const handleStop = useCallback(() => {
+      isStoppedRef.current = true;
       utteranceRef.current = null; // signal to speakNext to abort
       if (keepaliveRef.current !== null) {
         clearInterval(keepaliveRef.current);
         keepaliveRef.current = null;
       }
-      if (speechSynthesis.speaking || speechSynthesis.paused || speechSynthesis.pending) {
-        speechSynthesis.cancel();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        if (speechSynthesis.speaking || speechSynthesis.paused || speechSynthesis.pending) {
+          speechSynthesis.cancel();
+        }
       }
       setReadAloudState('interactive');
       speechCharIndexRef.current = 0;
@@ -1269,7 +1293,15 @@ const UploadSlides: React.FC<UploadSlidesProps> = ({
                         >
                             {/* Panel header */}
                             <div className="flex-shrink-0 flex items-center justify-between px-5 py-2.5 border-b border-gray-100" style={{ background: '#f8f9ff' }}>
-                                <span className="text-xs font-black text-indigo-400 uppercase tracking-widest">📝 Study Notes</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black text-indigo-400 uppercase tracking-widest">📝 Study Notes</span>
+                                    <div className="group relative flex items-center">
+                                        <span className="cursor-help text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Audio Tip</span>
+                                        <div className="absolute left-0 top-6 hidden group-hover:block bg-slate-900 text-white text-xs rounded-xl p-3.5 w-72 shadow-2xl z-50 leading-relaxed font-normal normal-case border border-slate-800">
+                                            If you cannot hear any sound, it is because browser iframe policies block speech synthesis in embedded previews. Click the <strong className="text-primary font-extrabold">"Open in New Tab"</strong> button at the top-right of your screen to play it perfectly!
+                                        </div>
+                                    </div>
+                                </div>
                                 {readAloudState === 'playing' && (
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-xs font-bold text-primary animate-pulse">● Reading aloud…</span>

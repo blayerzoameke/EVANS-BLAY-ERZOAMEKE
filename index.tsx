@@ -180,7 +180,10 @@ if (isInIframe || isPreviewHost) {
         // after login. immediate:false lets SW update on next natural page load.
         immediate: false,
         onNeedRefresh() {
-            // New SW available — apply silently on next visit, no forced reload
+            // New SW available — store flag and dispatch custom event
+            localStorage.setItem('pwa_update_available', 'true');
+            window.dispatchEvent(new Event('pwa_update_detected'));
+            console.log('[PWA] Update detected! New service worker available.');
         },
         onOfflineReady() {
             console.log('[PWA] EduBlay ready to work offline ✅');
